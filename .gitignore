@@ -1,0 +1,4 @@
+*.png
+*.docx
+figures/
+.ipynb_checkpoints/

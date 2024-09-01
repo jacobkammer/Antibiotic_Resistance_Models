@@ -1,0 +1,5 @@
+2024-08-28
+
+1. Change y axis to log scale - done
+2. Start drug dosing 48 hours after infection begins
+3. Change drug from vanco to linezolid after 4 days
