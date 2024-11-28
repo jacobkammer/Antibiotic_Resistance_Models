@@ -1,4 +1,5 @@
 *.png
 *.docx
 figures/
+old_models/
 .ipynb_checkpoints/
