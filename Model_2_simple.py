@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
 def combined_pk_pd_model(
-    EC_50_vanco=0.8,
-    EC_50_linez=2.0,
+    EC_50_vanco,
+    EC_50_linez,
     initial_sensitive=50,
     initial_resistant=50,
     no_drug_period=48,
@@ -69,7 +69,7 @@ def combined_pk_pd_model(
             conc_vanco_t = vanco[t_idx]
             conc_linez_t = linez[t_idx]
             
-            # Calculate drug effects with Hill function
+            # Calculate drug effects with Hill coefficient of 2
             vanco_effect_sensitive = max_drug_effect_vanco * (conc_vanco_t**2 / (conc_vanco_t**2 + EC_50_vanco_sensitive**2))
             linez_effect_sensitive = max_drug_effect_linez * (conc_linez_t**2 / (conc_linez_t**2 + EC_50_linez_sensitive**2))
             linez_effect_resistant = max_drug_effect_linez * 0.8 * (conc_linez_t**2 / (conc_linez_t**2 + EC_50_linez_resistant**2))
