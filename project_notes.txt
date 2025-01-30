@@ -6,3 +6,9 @@
 4. rewrite parameters for death rate sensitive and resistant to be defined by a vector that changes the value from zero in the first 48 hours in the vancomycin model to values > zero
 5. Linezolid model almost complete.  functions for both parameter values created.  12 hours delay after discontinuing vancomycin before linezolid started
 6. Need to change initial concentrations to reflect the bacterial count at the end of the vancomycin model
+
+
+01/27/2025
+Vancomycin serum concentrations:
+reference range for vancomycin trough levels is 5-15 mcg/mL
+reference range for vancomycin peak levels is 20-40 mcg/mL
