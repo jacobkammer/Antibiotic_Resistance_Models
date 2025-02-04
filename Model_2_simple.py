@@ -6,16 +6,16 @@ def combined_pk_pd_model(
     EC_50_vanco,
     EC_50_linez,
     initial_sensitive=50,
-    initial_resistant=50,
-    no_drug_period=48,
-    total_time=216  # 48h drug-free + 72h vanco + 96h linez
+    initial_resistant=5,
+    no_drug_period=72,
+    total_time=312  # 72h drug-free + 72h vanco + 168h linez
 ):
     # Drug parameters
-    vanco_dose = 1000  # mg
+    vanco_dose = 1500  # mg
     linez_dose = 800  # mg
     volume = 50  # L
     vanco_half_life = 4  # hours(normal kidney: 4 - 6 hours)
-    linez_half_life = 5  # hours(normal kidney: 5 - 7 hours)
+    linez_half_life = 5  # hours
     
     # Calculate elimination rates
     ke_vanco = np.log(2) / vanco_half_life
@@ -29,29 +29,31 @@ def combined_pk_pd_model(
     linez = np.zeros_like(t, dtype=float)
     
     # Add doses and calculate concentrations
-    # Vancomycin: 500mg q12h for 72h starting at 48h
+    # Vancomycin: 1500mg q12h for 72h starting at 72h
     vanco_conc = vanco_dose / volume
     for dose_time in range(no_drug_period, no_drug_period+72, 12):
         idx = dose_time
         vanco[idx:] += vanco_conc * np.exp(-ke_vanco * (t[idx:] - t[idx]))
     
-    # Linezolid: 800mg q6h for 96h starting at 120h
+    # Linezolid: 800mg q6h for 168h starting at 144h
     linez_conc = linez_dose / volume
-    for dose_time in range(no_drug_period+72, no_drug_period+72+96, 6):
+    for dose_time in range(no_drug_period+72, no_drug_period+72+168, 6):
         idx = dose_time
         linez[idx:] += linez_conc * np.exp(-ke_linez * (t[idx:] - t[idx]))
     
     # Population dynamics parameters
-    rho_sensitive = 0.03  # Base growth rate for sensitive bacteria
+    rho_sensitive = 0.028  # Base growth rate for sensitive bacteria
     rho_resistant = 0.024  # Lower growth rate for resistant bacteria (fitness cost=20%)
-    delta_sensitive = 0.006  # Death rate for sensitive bacteria
+    delta_sensitive = 0.012  # Increased death rate for sensitive bacteria
     delta_resistant = 0.004  # Lower death rate for resistant bacteria 
-    max_drug_effect_vanco = 0.9
+    max_drug_effect_vanco = 0.98  # Nearly complete maximum effect for vancomycin on sensitive
+    max_drug_effect_vanco_resistant = 0.2  # Very low maximum effect on resistant bacteria
     max_drug_effect_linez = 0.9
     k = 1e5  # Carrying capacity
     
-    # EC50 values for resistant strain
-    EC_50_vanco_sensitive = EC_50_vanco * 0.5  # Sensitive bacteria need less vancomycin
+    # EC50 values
+    EC_50_vanco_sensitive = EC_50_vanco * 0.15  # Make sensitive bacteria much more susceptible to vancomycin
+    EC_50_vanco_resistant = EC_50_vanco * 8.0   # Make resistant bacteria much less susceptible to vancomycin
     EC_50_linez_both = EC_50_linez  # Same linezolid effect for both populations
     
     def population_ode(t, y):
@@ -72,11 +74,12 @@ def combined_pk_pd_model(
             
             # Calculate drug effects with Hill coefficient of 2
             vanco_effect_sensitive = max_drug_effect_vanco * (conc_vanco_t / (conc_vanco_t + EC_50_vanco_sensitive))
+            vanco_effect_resistant = max_drug_effect_vanco_resistant * (conc_vanco_t / (conc_vanco_t + EC_50_vanco_resistant))
             linez_effect = max_drug_effect_linez * (conc_linez_t / (conc_linez_t + EC_50_linez_both))
             
             # Cap total inhibition at 1.0 to prevent negative growth
             total_inhibition_sensitive = min(1.0, vanco_effect_sensitive + linez_effect)
-            total_inhibition_resistant = min(1.0, linez_effect)
+            total_inhibition_resistant = min(1.0, vanco_effect_resistant + linez_effect)
         
         # Population dynamics with logistic growth and drug inhibition
         dSdt = rho_sensitive * S * (1 - (S + R) / k) * (1 - total_inhibition_sensitive) - delta_sensitive * S
@@ -147,8 +150,10 @@ def combined_pk_pd_model(
     # Plot drug effects
     plt.figure(figsize=(15, 5))
     vanco_effect_sensitive = max_drug_effect_vanco * (vanco**2 / (vanco**2 + EC_50_vanco_sensitive**2))
+    vanco_effect_resistant = max_drug_effect_vanco_resistant * (vanco**2 / (vanco**2 + EC_50_vanco_resistant**2))
     linez_effect = max_drug_effect_linez * (linez**2 / (linez**2 + EC_50_linez_both**2))
-    plt.plot(t, vanco_effect_sensitive, label='Vancomycin Effect')
+    plt.plot(t, vanco_effect_sensitive, label='Vancomycin Effect on Sensitive')
+    plt.plot(t, vanco_effect_resistant, label='Vancomycin Effect on Resistant')
     plt.plot(t, linez_effect, label='Linezolid Effect (Both populations)')
     plt.axvline(x=no_drug_period, color='g', linestyle='--', label='Start Vancomycin')
     plt.axvline(x=no_drug_period+72, color='r', linestyle='--', label='Start Linezolid')
@@ -162,7 +167,8 @@ def combined_pk_pd_model(
     plt.figure(figsize=(15, 5))
     
     # Calculate total drug effects
-    total_effect = np.zeros_like(t)
+    total_effect_sensitive = np.zeros_like(t)
+    total_effect_resistant = np.zeros_like(t)
     for i, time in enumerate(t):
         if time <= no_drug_period:
             continue
@@ -173,14 +179,17 @@ def combined_pk_pd_model(
         conc_vanco_t = vanco[t_idx]
         conc_linez_t = linez[t_idx]
         
-        vanco_effect = max_drug_effect_vanco * (conc_vanco_t / (conc_vanco_t + EC_50_vanco_sensitive))
+        vanco_effect_sensitive = max_drug_effect_vanco * (conc_vanco_t / (conc_vanco_t + EC_50_vanco_sensitive))
+        vanco_effect_resistant = max_drug_effect_vanco_resistant * (conc_vanco_t / (conc_vanco_t + EC_50_vanco_resistant))
         linez_effect = max_drug_effect_linez * (conc_linez_t / (conc_linez_t + EC_50_linez_both))
         
-        total_effect[i] = min(1.0, vanco_effect + linez_effect)
+        total_effect_sensitive[i] = min(1.0, vanco_effect_sensitive + linez_effect)
+        total_effect_resistant[i] = min(1.0, vanco_effect_resistant + linez_effect)
     
-    plt.plot(t, total_effect, 'g-', label='Drug Effect')
+    plt.plot(t, total_effect_sensitive, 'g-', label='Drug Effect on Sensitive')
+    plt.plot(t, total_effect_resistant, 'r-', label='Drug Effect on Resistant')
     plt.plot(t, solution.y[0] / np.max(solution.y[0]), 'b--', label='Normalized Sensitive Pop.')
-    plt.plot(t, solution.y[1] / np.max(solution.y[1]), 'r--', label='Normalized Resistant Pop.')
+    plt.plot(t, solution.y[1] / np.max(solution.y[1]), 'k--', label='Normalized Resistant Pop.')
     plt.title('Drug Effect vs Normalized Population')
     plt.xlabel('Time (hours)')
     plt.ylabel('Relative Value')
@@ -194,7 +203,7 @@ def combined_pk_pd_model(
     print("\nModel Summary:")
     print("--------------")
     print(f"Vancomycin: {vanco_dose}mg every 12h for 72h (start: {no_drug_period}h)")
-    print(f"Linezolid: {linez_dose}mg every 6h for 96h (start: {no_drug_period+72}h)")
+    print(f"Linezolid: {linez_dose}mg every 6h for 168h (start: {no_drug_period+72}h)")
     print(f"\nHalf-lives:")
     print(f"Vancomycin: {vanco_half_life} hours")
     print(f"Linezolid: {linez_half_life} hours")
@@ -212,5 +221,5 @@ if __name__ == '__main__':
     solution, time, vanco, linez = combined_pk_pd_model(
         EC_50_vanco=4.0,
         EC_50_linez=0.5,
-        no_drug_period=48
+        no_drug_period=72
     )
