@@ -1,0 +1,371 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.ticker import ScalarFormatter
+from scipy.integrate import solve_ivp
+
+class AntibioticPKPDModel:
+    """
+    A pharmacokinetic-pharmacodynamic (PK-PD) model for antibiotic treatments.
+    
+    This model simulates:
+    - Pharmacokinetics: Single-compartment model for IV antibiotics
+    - Pharmacodynamics: Bacterial population dynamics under antibiotic pressure
+    - Multiple antibiotic administration with sequential treatment options
+    - Both sensitive and resistant bacterial populations
+    """
+    
+    def __init__(self):
+        """Initialize the PK-PD model with default parameters."""
+        # Default simulation parameters
+        self.antibiotics = []
+        self.simulation_time = 0
+        
+    def add_antibiotic(self, name, dose, interval, duration, start_time, 
+                      elimination_rate, volume_distribution, max_effect, 
+                      ec50_sensitive, ec50_resistant=None, hill_coefficient=1):
+        """
+        Add an antibiotic to the treatment regimen.
+        
+        Parameters:
+        ----------
+        name : str
+            Name of the antibiotic
+        dose : float
+            Dose in mg
+        interval : float
+            Dosing interval in hours
+        duration : float
+            Total duration of antibiotic administration in hours
+        start_time : float
+            Time to start this antibiotic (hours from simulation start)
+        elimination_rate : float
+            Elimination rate constant (1/hour)
+        volume_distribution : float
+            Volume of distribution in liters
+        max_effect : float
+            Maximum effect of the antibiotic (0-1)
+        ec50_sensitive : float
+            Concentration at which 50% max effect is achieved for sensitive bacteria
+        ec50_resistant : float, optional
+            Concentration at which 50% max effect is achieved for resistant bacteria
+            If None, defaults to a very high value (resistance)
+        hill_coefficient : float, optional
+            Hill coefficient for the dose-response curve steepness
+        """
+        if ec50_resistant is None:
+            # Default: resistant bacteria are 50x less susceptible
+            ec50_resistant = ec50_sensitive * 50
+            
+        self.antibiotics.append({
+            'name': name,
+            'dose': dose,
+            'interval': interval,
+            'duration': duration,
+            'start_time': start_time,
+            'elimination_rate': elimination_rate,
+            'volume_distribution': volume_distribution,
+            'max_effect': max_effect,
+            'ec50_sensitive': ec50_sensitive,
+            'ec50_resistant': ec50_resistant,
+            'hill_coefficient': hill_coefficient
+        })
+        
+        # Update simulation time if needed
+        end_time = start_time + duration
+        if end_time > self.simulation_time:
+            self.simulation_time = end_time
+    
+    def calculate_concentrations(self, time_points):
+        """
+        Calculate antibiotic concentrations at specified time points.
+        
+        Parameters:
+        ----------
+        time_points : array-like
+            Time points at which to calculate concentrations
+            
+        Returns:
+        -------
+        dict
+            Dictionary with antibiotic names as keys and concentration arrays as values
+        """
+        concentrations = {}
+        
+        for antibiotic in self.antibiotics:
+            name = antibiotic['name']
+            dose = antibiotic['dose']
+            interval = antibiotic['interval']
+            duration = antibiotic['duration']
+            start_time = antibiotic['start_time']
+            ke = antibiotic['elimination_rate']
+            vd = antibiotic['volume_distribution']
+            
+            # Initialize concentration array
+            conc = np.zeros_like(time_points)
+            
+            # Calculate concentrations for each dose
+            for dose_time in np.arange(start_time, start_time + duration, interval):
+                # Apply IV bolus model: C(t) = (Dose/V) * e^(-ke*t)
+                mask = time_points >= dose_time
+                t_since_dose = time_points[mask] - dose_time
+                conc[mask] += (dose / vd) * np.exp(-ke * t_since_dose)
+            
+            concentrations[name] = conc
+            
+        return concentrations
+    
+    def simulate(self, initial_sensitive=1e6, initial_resistant=1e2, 
+                growth_rate_sensitive=0.5, fitness_cost=0.3,
+                death_rate_sensitive=0.02, death_rate_resistant=0.05,
+                carrying_capacity=1e9, time_points=None):
+        """
+        Simulate bacterial dynamics under antibiotic treatment.
+        
+        Parameters:
+        ----------
+        initial_sensitive : float
+            Initial population of sensitive bacteria
+        initial_resistant : float
+            Initial population of resistant bacteria
+        growth_rate_sensitive : float
+            Growth rate of sensitive bacteria (per hour)
+        fitness_cost : float
+            Fitness cost of resistance (0-1)
+        death_rate_sensitive : float
+            Natural death rate of sensitive bacteria (per hour)
+        death_rate_resistant : float
+            Natural death rate of resistant bacteria (per hour)
+        carrying_capacity : float
+            Maximum population size (carrying capacity)
+        time_points : array-like, optional
+            Specific time points for simulation, if None creates a time array
+            
+        Returns:
+        -------
+        tuple
+            (time_points, solution, concentrations)
+            - time_points: Array of time points
+            - solution: ODE solution object with bacterial populations
+            - concentrations: Dictionary of antibiotic concentrations
+        """
+        # Ensure we have enough simulation time
+        if self.simulation_time == 0:
+            raise ValueError("No antibiotics added. Add antibiotics before simulation.")
+        
+        # Add a buffer after the last antibiotic ends
+        total_time = self.simulation_time * 1.5
+        
+        # Create time points if not provided
+        if time_points is None:
+            time_points = np.linspace(0, total_time, int(total_time) + 1)
+            
+        # Calculate all antibiotic concentrations
+        concentrations = self.calculate_concentrations(time_points)
+        
+        # Calculate growth rate for resistant bacteria
+        growth_rate_resistant = growth_rate_sensitive * (1 - fitness_cost)
+        
+        def bacterial_dynamics(t, y):
+            """ODE system for bacterial population dynamics."""
+            S, R = y  # Sensitive and Resistant populations
+            
+            # Interpolate drug concentrations at current time
+            current_conc = {name: np.interp(t, time_points, conc) 
+                           for name, conc in concentrations.items()}
+            
+            # Calculate total drug effects using the Hill equation
+            effect_sensitive = 0
+            effect_resistant = 0
+            
+            for antibiotic in self.antibiotics:
+                name = antibiotic['name']
+                conc = current_conc[name]
+                
+                # Skip if concentration is negligible
+                if conc < 1e-6:
+                    continue
+                    
+                # Calculate drug effects using Hill equation
+                effect_s = self._hill_equation(
+                    conc, 
+                    antibiotic['ec50_sensitive'],
+                    antibiotic['max_effect'],
+                    antibiotic['hill_coefficient']
+                )
+                
+                effect_r = self._hill_equation(
+                    conc, 
+                    antibiotic['ec50_resistant'],
+                    antibiotic['max_effect'],
+                    antibiotic['hill_coefficient']
+                )
+                
+                # Use maximum effect for multiple antibiotics
+                effect_sensitive = max(effect_sensitive, effect_s)
+                effect_resistant = max(effect_resistant, effect_r)
+            
+            # Calculate logistic growth with antibiotic inhibition
+            total_population = S + R
+            dSdt = growth_rate_sensitive * S * (1 - total_population/carrying_capacity) * (1 - effect_sensitive) - death_rate_sensitive * S
+            dRdt = growth_rate_resistant * R * (1 - total_population/carrying_capacity) * (1 - effect_resistant) - death_rate_resistant * R
+            
+            return [dSdt, dRdt]
+        
+        # Initial conditions
+        y0 = [initial_sensitive, initial_resistant]
+        
+        # Solve ODE system with solver parameters for stiff equations
+        solution = solve_ivp(
+            bacterial_dynamics,
+            [time_points[0], time_points[-1]],
+            y0,
+            t_eval=time_points,
+            method='BDF',  # Method suitable for stiff equations
+            rtol=1e-5,     # Relative tolerance
+            atol=1e-8      # Absolute tolerance
+        )
+        
+        return time_points, solution, concentrations
+    
+    def _hill_equation(self, concentration, ec50, max_effect, hill_coefficient=1):
+        """
+        Calculate drug effect using the Hill equation.
+        
+        Parameters:
+        ----------
+        concentration : float
+            Drug concentration
+        ec50 : float
+            Concentration producing 50% of max effect
+        max_effect : float
+            Maximum possible effect (0-1)
+        hill_coefficient : float
+            Hill coefficient for curve steepness
+            
+        Returns:
+        -------
+        float
+            Drug effect (0-1)
+        """
+        if concentration <= 0:
+            return 0
+        return max_effect * (concentration**hill_coefficient) / (ec50**hill_coefficient + concentration**hill_coefficient)
+    
+    def plot_results(self, time_points, solution, concentrations):
+        """
+        Plot simulation results with both logarithmic and linear bacterial population plots.
+        
+        Parameters:
+        ----------
+        time_points : array-like
+            Time points of the simulation
+        solution : ODE solution
+            Solution from the simulate method
+        concentrations : dict
+            Dictionary of antibiotic concentrations
+        """
+        # Create figure 1 with log scale and antibiotic concentrations
+        plt.figure(1, figsize=(10, 8))
+        
+        # First subplot for log scale bacterial populations
+        plt.subplot(2, 1, 1)
+        plt.semilogy(time_points, solution.y[0], 'b-', label='Sensitive')
+        plt.semilogy(time_points, solution.y[1], 'r-', label='Resistant')
+        plt.ylabel('Bacterial Count (CFU, log scale)')
+        plt.title('Bacterial Populations (Logarithmic Scale)')
+        plt.legend(loc='best')
+        
+        # Add vertical lines for treatment transitions
+        for ab in self.antibiotics:
+            plt.axvline(x=ab['start_time'], color='gray', linestyle='--', alpha=0.7)
+            plt.text(ab['start_time'] + 2, plt.ylim()[1] * 0.9, f"{ab['name']} start", 
+                    fontsize=8, rotation=90, va='top')
+        
+        # Second subplot for antibiotic concentrations
+        plt.subplot(2, 1, 2, sharex=plt.gca())
+        colors = ['g', 'purple']
+        for i, (name, conc) in enumerate(concentrations.items()):
+            plt.plot(time_points, conc, label=name, color=colors[i])
+            
+            # Add EC50 horizontal lines
+            for antibiotic in self.antibiotics:
+                if antibiotic['name'] == name:
+                    plt.axhline(y=antibiotic['ec50_sensitive'], linestyle='--', 
+                             color=colors[i], alpha=0.5)
+        
+        plt.xlabel('Time (hours)')
+        plt.ylabel('Concentration (mg/L)')
+        plt.title('Antibiotic Concentrations')
+        plt.legend(loc='best')
+        
+        plt.tight_layout()
+        
+        # Figure 2: Simple linear scale bacterial populations
+        plt.figure(2, figsize=(10, 6))
+        plt.plot(time_points, solution.y[0], 'b-', label='Sensitive')
+        plt.plot(time_points, solution.y[1], 'r-', label='Resistant') 
+        
+        # Set y-axis limit to match carrying capacity
+        plt.ylim(0, 1e8)
+        
+        plt.xlabel('Time (hours)')
+        plt.ylabel('Bacterial Count')
+        plt.title('Bacterial Populations')
+        plt.legend()
+        
+# Example usage
+if __name__ == "__main__":
+    # Create model instance
+    model = AntibioticPKPDModel()
+    
+    # Add sequential antibiotics
+    # First antibiotic (e.g., vancomycin)
+    model.add_antibiotic(
+        name="Vancomycin",
+        dose=2000,                # Increased from 1500 mg for higher peak concentrations
+        interval=8,               # Decreased from 12 hours to 8 hours for more frequent dosing
+        duration=96,              # Extended from 72 to 96 hours
+        start_time=0,             # Keep start time the same
+        elimination_rate=0.173,   # Keep elimination rate the same
+        volume_distribution=50,   # Keep volume of distribution the same
+        max_effect=0.9,          # Increased from 0.9 to 0.95 for greater maximum killing effect
+        ec50_sensitive=0.1,       # Effective but not too small to cause numerical issues
+        ec50_resistant=100,       # Keep EC50 for resistant bacteria the same
+        hill_coefficient=2.0      # Increased from 2.0 to 4.0 for much steeper dose-response curve
+    )
+    
+    # Second antibiotic (e.g., linezolid) - starts after first one
+    # Modified linezolid parameters
+    model.add_antibiotic(
+        name="Linezolid",
+        dose=1200,                # Increased from 750 mg to 1200 mg
+        interval=6,               # Decreased from 8 hours to 6 hours
+        duration=168,             # Extended from 120 to 168 hours
+        start_time=96,            # Updated to match the end of first antibiotic
+        elimination_rate=0.1,     # Decreased from 0.116 to slow elimination 
+        volume_distribution=40,   # Keep volume of distribution the same
+        max_effect=0.9,         # Further increased from 0.99 to maximum possible
+        ec50_sensitive=0.6,       # Keep the same
+        ec50_resistant=0.1,      # Further decreased from 0.1 to 0.05 for even more effective killing
+        hill_coefficient=2.0      # Keep the same high value
+    )
+    
+    # Run simulation with extended time to capture full treatment period plus recovery
+    # Total time: 96h (vancomycin) + 168h (linezolid) + 48h (post-treatment) = 312h
+    time_points, solution, concentrations = model.simulate(
+        initial_sensitive=1e6,            # Keep initial sensitive population the same
+        initial_resistant=1e3,            # Keep initial resistant population the same
+        growth_rate_sensitive=0.3,        # Keep growth rate the same
+        fitness_cost=0.15,                # Reduced from 0.2 to 0.15 (less fitness cost)
+        death_rate_sensitive=0.03,        # Keep death rate for sensitive bacteria the same
+        death_rate_resistant=0.025,       # Keep death rate for resistant bacteria the same
+        carrying_capacity=1e8,            # Decreased from 1e9 to 1e8 to limit maximum population
+        time_points=np.linspace(0, 312, 1000) 
+    )
+    
+    # Plot results
+    model.plot_results(time_points, solution, concentrations)
+    
+    # Display plots with explicit blocking to keep them open
+    print("Displaying plots. Close plot windows to exit program.")
+    plt.show(block=True)
