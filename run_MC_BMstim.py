@@ -1,0 +1,365 @@
+import numpy as np
+from scipy.integrate import odeint
+import matplotlib.pyplot as plt
+import seaborn as sns
+import importlib.util
+import os
+import warnings
+warnings.filterwarnings('ignore')
+
+# --- Dynamically load BMstimulationModel.py ---
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(THIS_DIR, 'BMstimulationModel.py')
+
+spec = importlib.util.spec_from_file_location('BMstimulationModel', MODEL_PATH)
+bm_model = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(bm_model)
+
+PharmacokineticModel = bm_model.PharmacokineticModel
+ImmuneResponse = bm_model.ImmuneResponse
+dual_reservoir_model = bm_model.dual_reservoir_model
+
+print('Starting Monte Carlo for dual-reservoir model (BMstimulationModel.py)')
+print('=' * 70)
+
+# Reproducibility
+np.random.seed(42)
+
+# --- Base parameters (aligned with BMstimulationModel.py) ---
+base_params = {
+    # Blood carrying capacity and reservoir capacity
+    'B_max_blood': 4e12,
+    'K_res_total': 1e6,
+    # Blood bacteria
+    'rho_S': 1.47,
+    'rho_R': 1.47,
+    'delta': 0.179,
+    # Reservoir bacteria
+    'rho_res_S': 1.47,
+    'rho_res_R': 1.47,
+    'delta_res': 0.179,
+    # PD
+    'Emax_v': 1.74,
+    'Emax_l': 1.97,
+    'EC50_V': 0.245,
+    'EC50_L': 0.56,
+    # Exchange (same for S and R)
+    'f_r_b': 0.02,    # reservoir -> blood
+    'f_b_r': 0.0002,  # blood -> reservoir
+}
+
+# --- Simulation settings ---
+n_simulations = 500
+cv = 0.13  # coefficient of variation
+total_h = 600
+vanco_start = 300
+
+# time grid
+t_eval = np.linspace(0, total_h, 800)
+
+# --- Storage ---
+S_b_results = []
+R_b_results = []
+S_res_results = []
+R_res_results = []
+N_results = []
+
+# Boxplot times (align to new grid)
+boxplot_times = [10, 25,  300, 400, 500]
+boxplot_indices = [np.argmin(np.abs(t_eval - t)) for t in boxplot_times]
+
+S_b_box = {t: [] for t in boxplot_times}
+R_b_box = {t: [] for t in boxplot_times}
+S_res_box = {t: [] for t in boxplot_times}
+R_res_box = {t: [] for t in boxplot_times}
+N_box = {t: [] for t in boxplot_times}
+
+print(f"\nRunning {n_simulations} simulations with {cv*100:.0f}% parameter variation...")
+print('-' * 40)
+
+successful_runs = 0
+for sim in range(n_simulations):
+    if sim % 20 == 0:
+        print(f"Progress: {sim}/{n_simulations} simulations completed...")
+
+    # Sample parameters (log-normal for positive)
+    params = {}
+    for key, value in base_params.items():
+        if key in ['EC50_V', 'EC50_L', 'f_r_b', 'f_b_r']:
+            params[key] = np.random.lognormal(np.log(value), cv/2)
+        else:
+            params[key] = np.random.lognormal(np.log(value), cv)
+
+    # Initialize models
+    pk = PharmacokineticModel()
+    immune_model = ImmuneResponse(N0=5000, rho_slope=1e-8)
+
+    # PK variability (mild)
+    pk.van_dose = max(100, np.random.normal(pk.van_dose, pk.van_dose * cv/4))
+    pk.lzd_dose = max(100, np.random.normal(pk.lzd_dose, pk.lzd_dose * cv/4))
+
+    lzd_start = vanco_start + pk.van_duration
+
+    van_func = pk.concentration_function('vancomycin', total_h, vanco_start)
+    lzd_func = pk.concentration_function('linezolid', total_h, lzd_start)
+
+    # Initial conditions [S_b, R_b, S_res, R_res, N]
+    y0_base = [1e1, 1e1, 1e3, 1e3, immune_model.N0]
+    # Log-normal sampling for bacteria, normal for N0
+    y0 = [max(1, np.random.lognormal(np.log(y0_base[i]), cv/2)) for i in range(4)]
+    y0.append(max(500, np.random.normal(y0_base[4], y0_base[4]*cv/4)))
+
+    try:
+        solution = odeint(
+            dual_reservoir_model,
+            y0,
+            t_eval,
+            args=(params, van_func, lzd_func, immune_model),
+            rtol=1e-6,
+            atol=1e-9,
+            mxstep=5000,
+        )
+
+        # Store (clip bacteria for log plots only later)
+        S_b_results.append(np.clip(solution[:, 0], 1, None))
+        R_b_results.append(np.clip(solution[:, 1], 1, None))
+        S_res_results.append(np.clip(solution[:, 2], 1, None))
+        R_res_results.append(np.clip(solution[:, 3], 1, None))
+        N_results.append(solution[:, 4])
+
+        # Boxplot collections (log10 for bacteria)
+        for i, t in enumerate(boxplot_times):
+            idx = boxplot_indices[i]
+            S_b_box[t].append(np.log10(max(solution[idx, 0], 1)))
+            R_b_box[t].append(np.log10(max(solution[idx, 1], 1)))
+            S_res_box[t].append(np.log10(max(solution[idx, 2], 1)))
+            R_res_box[t].append(np.log10(max(solution[idx, 3], 1)))
+            N_box[t].append(solution[idx, 4])
+        successful_runs += 1
+    except Exception:
+        # skip failed simulations
+        continue
+
+print(f"\nSimulation complete! {successful_runs}/{n_simulations} runs successful.")
+
+# Convert lists to arrays
+S_b_results = np.array(S_b_results)
+R_b_results = np.array(R_b_results)
+S_res_results = np.array(S_res_results)
+R_res_results = np.array(R_res_results)
+N_results = np.array(N_results)
+
+print('\nGenerating visualizations...')
+plt.style.use('seaborn-v0_8-darkgrid')
+
+# Helper to compute percentile bands
+def percentile_bands(arr):
+    return (
+        np.percentile(arr, 50, axis=0),
+        np.percentile(arr, 25, axis=0),
+        np.percentile(arr, 75, axis=0),
+        np.percentile(arr, 5, axis=0),
+        np.percentile(arr, 95, axis=0),
+    )
+
+lzd_start = vanco_start + pk.van_duration  # from last pk used; only for plotting ref
+
+# --- Plot 1: Sensitive Blood (S_b) ---
+S_med, S_p25, S_p75, S_p5, S_p95 = percentile_bands(S_b_results)
+figS, axS = plt.subplots(figsize=(12, 7))
+axS.semilogy(t_eval, S_med, color='blue', linewidth=2.5, label='S_b Median')
+axS.fill_between(t_eval, S_p25, S_p75, color='blue', alpha=0.35, label='S_b 25-75%')
+axS.fill_between(t_eval, S_p5, S_p95, color='blue', alpha=0.18, label='S_b 5-95%')
+axS.axvline(vanco_start, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
+axS.axvline(lzd_start, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
+axS.set_xlabel('Time (hours)')
+axS.set_ylabel('Sensitive Blood Bacteria (CFU/mL)')
+axS.set_title('Sensitive Blood Bacteria - Monte Carlo')
+axS.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
+axS.legend(loc='best')
+axS.set_ylim([1e0, 1e13])
+plt.tight_layout()
+plt.savefig('mc0920_S_b.png', dpi=300, bbox_inches='tight')
+print('  Saved: mc0920_S_b.png')
+plt.show()
+
+# --- Plot 2: Resistant Blood (R_b) ---
+R_med, R_p25, R_p75, R_p5, R_p95 = percentile_bands(R_b_results)
+figR, axR = plt.subplots(figsize=(12, 7))
+axR.semilogy(t_eval, R_med, color='orange', linewidth=2.5, label='R_b Median')
+axR.fill_between(t_eval, R_p25, R_p75, color='orange', alpha=0.35, label='R_b 25-75%')
+axR.fill_between(t_eval, R_p5, R_p95, color='orange', alpha=0.18, label='R_b 5-95%')
+axR.axvline(vanco_start, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
+axR.axvline(lzd_start, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
+axR.set_xlabel('Time (hours)')
+axR.set_ylabel('Resistant Blood Bacteria (CFU/mL)')
+axR.set_title('Resistant Blood Bacteria - Monte Carlo')
+axR.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
+axR.legend(loc='best')
+axR.set_ylim([1e0, 1e13])
+plt.tight_layout()
+plt.savefig('mc0920_R_b.png', dpi=300, bbox_inches='tight')
+print('  Saved: mc0920_R_b.png')
+plt.show()
+
+# --- Plot 3: Sensitive Reservoir (S_res) ---
+Sr_med, Sr_p25, Sr_p75, Sr_p5, Sr_p95 = percentile_bands(S_res_results)
+figSr, axSr = plt.subplots(figsize=(12, 7))
+axSr.semilogy(t_eval, Sr_med, color='purple', linewidth=2.5, label='S_res Median')
+axSr.fill_between(t_eval, Sr_p25, Sr_p75, color='purple', alpha=0.35, label='S_res 25-75%')
+axSr.fill_between(t_eval, Sr_p5, Sr_p95, color='purple', alpha=0.18, label='S_res 5-95%')
+axSr.axvline(vanco_start, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
+axSr.axvline(lzd_start, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
+axSr.set_xlabel('Time (hours)')
+axSr.set_ylabel('Sensitive Reservoir Bacteria (CFU/mL)')
+axSr.set_title('Sensitive Reservoir Bacteria - Monte Carlo')
+axSr.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
+axSr.legend(loc='best')
+axSr.set_ylim([1e0, 1e6])
+plt.tight_layout()
+plt.savefig('mc0920_S_res.png', dpi=300, bbox_inches='tight')
+print('  Saved: mc0920_S_res.png')
+plt.show()
+
+# --- Plot 4: Resistant Reservoir (R_res) ---
+Rr_med, Rr_p25, Rr_p75, Rr_p5, Rr_p95 = percentile_bands(R_res_results)
+figRr, axRr = plt.subplots(figsize=(12, 7))
+axRr.semilogy(t_eval, Rr_med, color='green', linewidth=2.5, label='R_res Median')
+axRr.fill_between(t_eval, Rr_p25, Rr_p75, color='green', alpha=0.35, label='R_res 25-75%')
+axRr.fill_between(t_eval, Rr_p5, Rr_p95, color='green', alpha=0.18, label='R_res 5-95%')
+axRr.axvline(vanco_start, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
+axRr.axvline(lzd_start, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
+axRr.set_xlabel('Time (hours)')
+axRr.set_ylabel('Resistant Reservoir Bacteria (CFU/mL)')
+axRr.set_title('Resistant Reservoir Bacteria - Monte Carlo')
+axRr.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
+axRr.legend(loc='best')
+axRr.set_ylim([1e0, 1e6])
+plt.tight_layout()
+plt.savefig('mc0920_R_res.png', dpi=300, bbox_inches='tight')
+print('  Saved: mc0920_R_res.png')
+plt.show()
+
+# --- Plot 5: Neutrophils ---
+fig3, ax3 = plt.subplots(figsize=(12, 7))
+N_med, N_p25, N_p75, N_p5, N_p95 = percentile_bands(N_results)
+ax3.plot(t_eval, N_med, color='darkgreen', linewidth=2.5, label='Median')
+ax3.fill_between(t_eval, N_p25, N_p75, color='darkgreen', alpha=0.35, label='25-75%')
+ax3.fill_between(t_eval, N_p5, N_p95, color='darkgreen', alpha=0.18, label='5-95%')
+ax3.axvline(vanco_start, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
+ax3.axvline(lzd_start, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
+ax3.set_xlabel('Time (hours)')
+ax3.set_ylabel('Neutrophils (cells/μL)')
+ax3.set_title('Neutrophil Dynamics - Monte Carlo')
+ax3.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
+ax3.legend(loc='best')
+ax3.set_ylim([0, max(N_p95)*1.1])
+plt.tight_layout()
+plt.savefig('mc0920_neutrophils.png', dpi=300, bbox_inches='tight')
+print('  Saved: mc0920_neutrophils.png')
+plt.show()
+
+# --- Boxplots at key times ---
+fig4, axes = plt.subplots(2, 3, figsize=(18, 10))
+colors = {'S_b': '#3498db', 'R_b': '#ff8c42', 'S_res': '#9b59b6', 'R_res': '#2ecc71'}
+
+# Blood S
+ax = axes[0, 0]
+bp = ax.boxplot([S_b_box[t] for t in boxplot_times], labels=[f'{t}h' for t in boxplot_times],
+                patch_artist=True, widths=0.6)
+for patch in bp['boxes']:
+    patch.set_facecolor(colors['S_b']); patch.set_alpha(0.7)
+ax.set_title('Sensitive Blood Bacteria (log10 CFU/mL)')
+ax.grid(True, alpha=0.3, linestyle='--')
+ax.set_ylim([-1, 13])
+
+# Blood R
+ax = axes[0, 1]
+bp = ax.boxplot([R_b_box[t] for t in boxplot_times], labels=[f'{t}h' for t in boxplot_times],
+                patch_artist=True, widths=0.6)
+for patch in bp['boxes']:
+    patch.set_facecolor(colors['R_b']); patch.set_alpha(0.7)
+ax.set_title('Resistant Blood Bacteria (log10 CFU/mL)')
+ax.grid(True, alpha=0.3, linestyle='--')
+ax.set_ylim([-1, 13])
+
+# Reservoir S
+ax = axes[0, 2]
+bp = ax.boxplot([S_res_box[t] for t in boxplot_times], labels=[f'{t}h' for t in boxplot_times],
+                patch_artist=True, widths=0.6)
+for patch in bp['boxes']:
+    patch.set_facecolor(colors['S_res']); patch.set_alpha(0.7)
+ax.set_title('Sensitive Reservoir Bacteria (log10 CFU/mL)')
+ax.grid(True, alpha=0.3, linestyle='--')
+ax.set_ylim([-1, 6])
+
+# Reservoir R
+ax = axes[1, 0]
+bp = ax.boxplot([R_res_box[t] for t in boxplot_times], labels=[f'{t}h' for t in boxplot_times],
+                patch_artist=True, widths=0.6)
+for patch in bp['boxes']:
+    patch.set_facecolor(colors['R_res']); patch.set_alpha(0.7)
+ax.set_title('Resistant Reservoir Bacteria (log10 CFU/mL)')
+ax.grid(True, alpha=0.3, linestyle='--')
+ax.set_ylim([-1, 6])
+
+# Neutrophils
+ax = axes[1, 1]
+bp = ax.boxplot([N_box[t] for t in boxplot_times], labels=[f'{t}h' for t in boxplot_times],
+                patch_artist=True, widths=0.6)
+for patch in bp['boxes']:
+    patch.set_facecolor('green'); patch.set_alpha(0.7)
+ax.set_title('Neutrophils (cells/μL)')
+ax.grid(True, alpha=0.3, linestyle='--')
+ax.set_ylim([0, max([max(v) if v else 0 for v in N_box.values()]) * 1.1 or 1])
+
+# Hide unused subplot
+axes[1, 2].axis('off')
+
+plt.suptitle('Monte Carlo Summary (Dual-Reservoir Model)', fontsize=16, fontweight='bold')
+plt.tight_layout()
+plt.savefig('mc0920_boxplots.png', dpi=300, bbox_inches='tight')
+print('  Saved: mc0920_boxplots.png')
+plt.show()
+
+# --- Summary statistics ---
+print('\n' + '=' * 60)
+print('SUMMARY STATISTICS')
+print('=' * 60)
+
+for t in boxplot_times:
+    print(f"\nTime = {t} hours:\n" + '-'*40)
+    if S_b_box[t]:
+        print('  Sensitive Blood Bacteria (log10 CFU/mL):')
+        print(f"    • Median: {np.median(S_b_box[t]):.2f}")
+        print(f"    • Mean: {np.mean(S_b_box[t]):.2f}")
+        print(f"    • IQR: [{np.percentile(S_b_box[t],25):.2f}, {np.percentile(S_b_box[t],75):.2f}]")
+        print(f"    • Range: [{np.min(S_b_box[t]):.2f}, {np.max(S_b_box[t]):.2f}]")
+    if R_b_box[t]:
+        print('\n  Resistant Blood Bacteria (log10 CFU/mL):')
+        print(f"    • Median: {np.median(R_b_box[t]):.2f}")
+        print(f"    • Mean: {np.mean(R_b_box[t]):.2f}")
+        print(f"    • IQR: [{np.percentile(R_b_box[t],25):.2f}, {np.percentile(R_b_box[t],75):.2f}]")
+        print(f"    • Range: [{np.min(R_b_box[t]):.2f}, {np.max(R_b_box[t]):.2f}]")
+    if S_res_box[t]:
+        print('\n  Sensitive Reservoir Bacteria (log10 CFU/mL):')
+        print(f"    • Median: {np.median(S_res_box[t]):.2f}")
+        print(f"    • Mean: {np.mean(S_res_box[t]):.2f}")
+        print(f"    • IQR: [{np.percentile(S_res_box[t],25):.2f}, {np.percentile(S_res_box[t],75):.2f}]")
+        print(f"    • Range: [{np.min(S_res_box[t]):.2f}, {np.max(S_res_box[t]):.2f}]")
+    if R_res_box[t]:
+        print('\n  Resistant Reservoir Bacteria (log10 CFU/mL):')
+        print(f"    • Median: {np.median(R_res_box[t]):.2f}")
+        print(f"    • Mean: {np.mean(R_res_box[t]):.2f}")
+        print(f"    • IQR: [{np.percentile(R_res_box[t],25):.2f}, {np.percentile(R_res_box[t],75):.2f}]")
+        print(f"    • Range: [{np.min(R_res_box[t]):.2f}, {np.max(R_res_box[t]):.2f}]")
+    if N_box[t]:
+        print('\n  Neutrophils (cells/μL):')
+        print(f"    • Median: {np.median(N_box[t]):.0f}")
+        print(f"    • Mean: {np.mean(N_box[t]):.0f}")
+        print(f"    • IQR: [{np.percentile(N_box[t],25):.0f}, {np.percentile(N_box[t],75):.0f}]")
+        print(f"    • Range: [{np.min(N_box[t]):.0f}, {np.max(N_box[t]):.0f}]")
+
+print('\n' + '=' * 60)
+print('All visualizations have been generated and saved!')
+print('=' * 60)

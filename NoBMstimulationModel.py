@@ -37,29 +37,17 @@ class PharmacokineticModel:
 
 # --- Immune Response Model (aligned with current project) ---
 class ImmuneResponse:
-    def __init__(self, rho_N=2.1e-2, N_MAX=30000, delta_N=2e-2, kill_N=5e-5, N0=5000, rho_slope=1e-7):
+    def __init__(self, rho_N=2.1e-5, N_MAX=30000, delta_N=2e-1, kill_N=5e-5, N0=5000):
         self.rho_N = rho_N
         self.N_MAX = N_MAX
         self.delta_N = delta_N
         self.kill_N = kill_N
         self.N0 = N0
-        # Linear sensitivity of recruitment to bacterial load (per CFU/ml per hour)
-        self.rho_slope = rho_slope
 
     def compute(self, N, B_total, t=None):
-        """Option B: growth-rate increases linearly with total bacteria without an extra B_total factor.
-        rho_eff = rho_N + rho_slope * B_total
-        dN = rho_eff * N * (1 - N/N_MAX) - delta_N * N
-        """
-        B = max(B_total, 0.0)
-        rho_eff = self.rho_N + self.rho_slope * B
-        # prevent negative effective growth rate if slope < 0 or B small
-        # rho_eff = max(rho_eff, 0.0)
-        dN = rho_eff * N * (1 - N/self.N_MAX) - self.delta_N * N
+        """Recruitment driven by total bacteria, capped by N_MAX; killing proportional to N."""
+        dN = self.rho_N * N * B_total * (1 - N/self.N_MAX) - self.delta_N * N
         immune_effect = self.kill_N * N
-        # Enforce floor: do not allow N to decrease below initial N0
-        if N <= self.N0 and dN < 0:
-            dN = 0.0
         return dN, immune_effect
 
 # --- ODE system: Blood and Reservoir for S and R, plus Neutrophils ---
@@ -96,8 +84,8 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
     # Immune killing per compartment
     imm_S_b = immune_eff * S_b
     imm_R_b = immune_eff * R_b
-    imm_S_res = immune_eff * S_res
-    imm_R_res = immune_eff * R_res
+    imm_S_res = immune_eff * S_res 
+    imm_R_res = immune_eff * R_res 
 
     # Exchange rates (same for both S and R)
     f_r_b = params['f_r_b']  # reservoir -> blood
@@ -147,7 +135,7 @@ if __name__ == "__main__":
     # --- Simulation setup ---
     total_h = 600
     pk = PharmacokineticModel()
-    immune_model = ImmuneResponse(N0=5000, rho_slope=1e-8)
+    immune_model = ImmuneResponse(N0=5000)
 
     vanco_start = 300
     lzd_start = vanco_start + pk.van_duration
@@ -180,7 +168,7 @@ if __name__ == "__main__":
     }
 
     # Initial conditions [S_b, R_b, S_res, R_res, N]
-    y0 = [1e1, 1e1, 1e3, 1e3, immune_model.N0]
+    y0 = [1e1, 1e1, 1e3 , 1e3, immune_model.N0]
 
     # Time grid
     t_eval = np.linspace(0, total_h, 800)
@@ -188,13 +176,29 @@ if __name__ == "__main__":
     # Solve
     solution = odeint(dual_reservoir_model, y0, t_eval, args=(params, van_func, lzd_func, immune_model))
 
-    # Extractonly for plotting log scale because log(0) is undefined and 
-    #negative values will cause overflow
+    # Extract
     S_b = np.clip(solution[:, 0], 1, None)
     R_b = np.clip(solution[:, 1], 1, None)
     S_res = np.clip(solution[:, 2], 1, None)
     R_res = np.clip(solution[:, 3], 1, None)
     N = solution[:, 4]
+
+    # N>29000 returns a bool array, np.where returns the indices where the condition is true
+    # np.where returns a tuple of arrays, we only need the first one
+    index_29k = np.where(N > 29000)[0]
+    
+    
+    if len(index_29k) > 0:
+        time_point = t_eval[index_29k[0]]
+        print(f"Neutrophils exceed 29,000 at time: {time_point:.2f} hours (index {index_29k[0]})")
+    else:
+        print("Neutrophils never exceed 29,000")
+    
+    # Find when neutrophils are highest
+    max_index = np.argmax(N)
+    max_time = t_eval[max_index]
+    max_value = N[max_index]
+    print(f"Neutrophils reach maximum of {max_value:,.0f} cells/μL at time: {max_time:.2f} hours (index {max_index})")
 
     # Summary prints
     print(f"Exchange rates: f_r_b = {params['f_r_b']}, f_b_r = {params['f_b_r']} (same for S and R)")
@@ -232,10 +236,13 @@ if __name__ == "__main__":
     plt.figure(figsize=(10,6))
     plt.plot(t_eval, N, color='darkgreen', label='Neutrophils (N)')
     plt.xlabel('Time (h)')
-    plt.ylabel('Neutrophils (cells / $\mu$L)')
+    plt.ylabel(r'Neutrophils (cells / $\mu$L)')
     plt.title('Neutrophil Dynamics')
     plt.axvline(vanco_start, color='red', linestyle='--', label='Vancomycin Start')
     plt.axvline(lzd_start, color='blue', linestyle='--', label='Linezolid Start')
     plt.grid(True, ls='--', lw=0.5)
     plt.legend()
     plt.show()
+
+    print(index_29k)
+    print(np.where(N > 29000))
