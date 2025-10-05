@@ -7,11 +7,11 @@ import os
 import warnings
 warnings.filterwarnings('ignore')
 
-# --- Dynamically load NoBMstimulationModel.py ---
+# --- Dynamically load model.Ver10.py ---
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(THIS_DIR, 'NoBMstimulationModel.py')
+MODEL_PATH = os.path.join(THIS_DIR, 'model.Ver10.py')
 
-spec = importlib.util.spec_from_file_location('NoBMstimulationModel', MODEL_PATH)
+spec = importlib.util.spec_from_file_location('model.Ver10.py', MODEL_PATH)
 no_bm_model = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(no_bm_model)
 
@@ -19,13 +19,14 @@ PharmacokineticModel = no_bm_model.PharmacokineticModel
 ImmuneResponse = no_bm_model.ImmuneResponse
 dual_reservoir_model = no_bm_model.dual_reservoir_model
 
-print('Starting Monte Carlo for dual-reservoir model (NoBMstimulationModel.py)')
+print('Starting Monte Carlo for dual-reservoir model (model.Ver10.py)')
 print('=' * 70)
 
 # Reproducibility
 np.random.seed(42)
 
-# --- Base parameters (aligned with NoBMstimulationModel.py) ---
+# --- Base parameters (aligned with model.Ver10.py)
+
 base_params = {
     # Blood carrying capacity and reservoir capacity
     'B_max_blood': 4e12,
@@ -44,13 +45,13 @@ base_params = {
     'EC50_V': 0.245,
     'EC50_L': 0.56,
     # Exchange (same for S and R)
-    'f_r_b': 0.02,    # reservoir -> blood
-    'f_b_r': 0.0002,  # blood -> reservoir
+    'f_r_b': 1e-18,    # reservoir -> blood
+    'f_b_r': 1e-20,  # blood -> reservoir
 }
 
 # --- Simulation settings ---
-n_simulations = 500
-cv = 0.13  # coefficient of variation
+n_simulations = 100
+cv = 0.10  # coefficient of variation
 total_h = 600
 vanco_start = 300
 
@@ -65,7 +66,7 @@ R_res_results = []
 N_results = []
 
 # Boxplot times (align to new grid)
-boxplot_times = [10, 25,  300, 400, 500]
+boxplot_times = [10, 15, 25, 300, 400, 500]
 boxplot_indices = [np.argmin(np.abs(t_eval - t)) for t in boxplot_times]
 
 S_b_box = {t: [] for t in boxplot_times}
@@ -104,7 +105,7 @@ for sim in range(n_simulations):
     lzd_func = pk.concentration_function('linezolid', total_h, lzd_start)
 
     # Initial conditions [S_b, R_b, S_res, R_res, N]
-    y0_base = [1e1, 1e1, 1e3, 1e3, immune_model.N0]
+    y0_base = [0, 0, 10, 1, immune_model.N0]
     # Log-normal sampling for bacteria, normal for N0
     y0 = [max(1, np.random.lognormal(np.log(y0_base[i]), cv/2)) for i in range(4)]
     y0.append(max(500, np.random.normal(y0_base[4], y0_base[4]*cv/4)))
@@ -148,30 +149,30 @@ R_b_results = np.array(R_b_results)
 S_res_results = np.array(S_res_results)
 R_res_results = np.array(R_res_results)
 N_results = np.array(N_results)
+print(N_results.shape)
 
-# N>26000 returns a bool array, np.where returns the indices where the condition is true
-# np.where returns a tuple of arrays, we only need the first one
-# Analyze neutrophils across all simulations - use median trajectory
-N_median = np.percentile(N_results, 50, axis=0)
-index_26k = np.where(N_median > 26000)[0]
+# Find the absolute maximum neutrophil value and its time point (across all simulations)
+max_flat_index = np.argmax(N_results)
+sim_idx, time_idx = np.unravel_index(max_flat_index, N_results.shape)
+max_time = t_eval[time_idx]
+max_value = N_results[sim_idx, time_idx]
+print(f"Maximum neutrophils: {max_value:,.0f} cells/μL at time: {max_time:.2f} hours (simulation {sim_idx}, index {time_idx})")
+# Find indices where neutrophils > 25000
+""" indices_above_25000 = np.where(N_results > 25000)[0]
+#print(indices_above_25000)
+#determine the first index when neutrophils are > 25000
+first_index = indices_above_25000[0] if len(indices_above_25000) > 0 else None
+#print(first_index)
+#Find the corresponding time when neutrophils > 25000
+max_time = t_eval[first_index]
+print(f"Time when nonBMstim neutrophils are greater than 25000: {max_time} h") """
 
-if len(index_26k) > 0:
-    time_point = t_eval[index_26k[0]]
-    print(f"Median neutrophils exceed 26,000 at time: {time_point:.2f} hours (index {index_26k[0]})")
-else:
-    print("Median neutrophils never exceed 26,000")
-
-# Find when median neutrophils are highest
-max_index = np.argmax(N_median)
-max_time = t_eval[max_index]
-max_value = N_median[max_index]
-print(f"Median neutrophils reach maximum of {max_value:,.0f} cells/μL at time: {max_time:.2f} hours (index {max_index})")
 print('\nGenerating visualizations...')
 plt.style.use('seaborn-v0_8-darkgrid')
 
 # Helper to compute percentile bands
 def percentile_bands(arr):
-    return (
+    return ( 
         np.percentile(arr, 50, axis=0),
         np.percentile(arr, 25, axis=0),
         np.percentile(arr, 75, axis=0),
@@ -191,13 +192,13 @@ axS.axvline(vanco_start, color='red', linestyle='--', alpha=0.7, linewidth=2, la
 axS.axvline(lzd_start, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
 axS.set_xlabel('Time (hours)')
 axS.set_ylabel('Sensitive Blood Bacteria (CFU/mL)')
-axS.set_title('Sensitive Blood Bacteria - Monte Carlo (No BM Stimulation)')
+axS.set_title('Sensitive Blood Bacteria - Monte Carlo ')
 axS.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
 axS.legend(loc='best')
 axS.set_ylim([1e0, 1e13])
 plt.tight_layout()
-plt.savefig('mc0920_NoBM_S_b.png', dpi=300, bbox_inches='tight')
-print('  Saved: mc0920_NoBM_S_b.png')
+plt.savefig('Ver_10_S_b.png', dpi=300, bbox_inches='tight')
+print('  Saved: Ver_10_S_b.png')
 plt.show()
 
 # --- Plot 2: Resistant Blood (R_b) ---
@@ -210,13 +211,12 @@ axR.axvline(vanco_start, color='red', linestyle='--', alpha=0.7, linewidth=2, la
 axR.axvline(lzd_start, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
 axR.set_xlabel('Time (hours)')
 axR.set_ylabel('Resistant Blood Bacteria (CFU/mL)')
-axR.set_title('Resistant Blood Bacteria - Monte Carlo (No BM Stimulation)')
+axR.set_title('Resistant Blood Bacteria - Monte Carlo')
 axR.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
 axR.legend(loc='best')
 axR.set_ylim([1e0, 1e13])
 plt.tight_layout()
-plt.savefig('mc0920_NoBM_R_b.png', dpi=300, bbox_inches='tight')
-print('  Saved: mc0920_NoBM_R_b.png')
+plt.savefig('Ver10_R_b.png', dpi=300, bbox_inches='tight')
 plt.show()
 
 # --- Plot 3: Sensitive Reservoir (S_res) ---
@@ -229,13 +229,13 @@ axSr.axvline(vanco_start, color='red', linestyle='--', alpha=0.7, linewidth=2, l
 axSr.axvline(lzd_start, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
 axSr.set_xlabel('Time (hours)')
 axSr.set_ylabel('Sensitive Reservoir Bacteria (CFU/mL)')
-axSr.set_title('Sensitive Reservoir Bacteria - Monte Carlo (No BM Stimulation)')
+axSr.set_title('Sensitive Reservoir Bacteria - Monte Carlo ')
 axSr.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
 axSr.legend(loc='best')
 axSr.set_ylim([1e0, 1e6])
 plt.tight_layout()
-plt.savefig('mc0920_NoBM_S_res.png', dpi=300, bbox_inches='tight')
-print('  Saved: mc0920_NoBM_S_res.png')
+plt.savefig('Ver10_S_res.png', dpi=300, bbox_inches='tight')
+print('  Saved: Ver10_S_res.png')
 plt.show()
 
 # --- Plot 4: Resistant Reservoir (R_res) ---
@@ -248,13 +248,13 @@ axRr.axvline(vanco_start, color='red', linestyle='--', alpha=0.7, linewidth=2, l
 axRr.axvline(lzd_start, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
 axRr.set_xlabel('Time (hours)')
 axRr.set_ylabel('Resistant Reservoir Bacteria (CFU/mL)')
-axRr.set_title('Resistant Reservoir Bacteria - Monte Carlo (No BM Stimulation)')
+axRr.set_title('Resistant Reservoir Bacteria - Monte Carlo')
 axRr.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
 axRr.legend(loc='best')
 axRr.set_ylim([1e0, 1e6])
 plt.tight_layout()
-plt.savefig('mc0920_NoBM_R_res.png', dpi=300, bbox_inches='tight')
-print('  Saved: mc0920_NoBM_R_res.png')
+plt.savefig('Ver10_R_res.png', dpi=300, bbox_inches='tight')
+print(' Saved: Ver10_R_res.png')
 plt.show()
 
 # --- Plot 5: Neutrophils ---
@@ -267,13 +267,13 @@ ax3.axvline(vanco_start, color='red', linestyle='--', alpha=0.7, linewidth=2, la
 ax3.axvline(lzd_start, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
 ax3.set_xlabel('Time (hours)')
 ax3.set_ylabel('Neutrophils (cells/μL)')
-ax3.set_title('Neutrophil Dynamics - Monte Carlo (No BM Stimulation)')
+ax3.set_title('Neutrophil Dynamics - Monte Carlo')
 ax3.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
 ax3.legend(loc='best')
 ax3.set_ylim([0, max(N_p95)*1.1])
 plt.tight_layout()
-plt.savefig('mc0920_NoBM_neutrophils.png', dpi=300, bbox_inches='tight')
-print('  Saved: mc0920_NoBM_neutrophils.png')
+plt.savefig('Ver10_neutrophils.png', dpi=300, bbox_inches='tight')
+print('  Saved: Ver10_neutrophils.png')
 plt.show()
 
 # --- Boxplots at key times ---
@@ -333,15 +333,15 @@ ax.set_ylim([0, max([max(v) if v else 0 for v in N_box.values()]) * 1.1 or 1])
 # Hide unused subplot
 axes[1, 2].axis('off')
 
-plt.suptitle('Monte Carlo Summary (No BM Stimulation Model)', fontsize=16, fontweight='bold')
+plt.suptitle('Monte Carlo Summary', fontsize=16, fontweight='bold')
 plt.tight_layout()
-plt.savefig('mc0920_NoBM_boxplots.png', dpi=300, bbox_inches='tight')
-print('  Saved: mc0920_NoBM_boxplots.png')
+plt.savefig('Ver10_boxplots.png', dpi=300, bbox_inches='tight')
+print('Saved: Ver10_boxplots.png')
 plt.show()
 
 # --- Summary statistics ---
-print('\n' + '=' * 60)
-print('SUMMARY STATISTICS (No BM Stimulation Model)')
+""" print('\n' + '=' * 60)
+print('SUMMARY STATISTICS')
 print('=' * 60)
 
 for t in boxplot_times:
@@ -376,8 +376,8 @@ for t in boxplot_times:
         print(f"    • Mean: {np.mean(N_box[t]):.0f}")
         print(f"    • IQR: [{np.percentile(N_box[t],25):.0f}, {np.percentile(N_box[t],75):.0f}]")
         print(f"    • Range: [{np.min(N_box[t]):.0f}, {np.max(N_box[t]):.0f}]")
-
-print('\n' + '=' * 60)
+ """
+""" print('\n' + '=' * 60)
 print('All visualizations have been generated and saved!')
 print('Files saved with "NoBM" prefix to distinguish from BM stimulation results.')
-print('=' * 60)
+print('=' * 60) """

@@ -14,7 +14,7 @@ class PharmacokineticModel:
         # Linezolid
         self.lzd_dose = 800
         self.lzd_interval = 12
-        self.lzd_duration = 300
+        self.lzd_duration = 144
         self.lzd_ke = 0.116
         self.lzd_volume = 45
 
@@ -37,17 +37,21 @@ class PharmacokineticModel:
 
 # --- Immune Response Model (aligned with current project) ---
 class ImmuneResponse:
-    def __init__(self, rho_N=2.1e-5, N_MAX=30000, delta_N=2e-1, kill_N=5e-5, N0=5000):
+    # Line 40 - Updated __init__ method
+    def __init__(self, rho_N=2.0e-12, N_MAX=30000, delta_N=2e-2, kill_N=5e-5, N0=7000, prod_N=None):
         self.rho_N = rho_N
         self.N_MAX = N_MAX
         self.delta_N = delta_N
         self.kill_N = kill_N
         self.N0 = N0
+    # Basal production: if not specified, set to balance death at N0
+        self.prod_N = prod_N if prod_N is not None else delta_N * N0
 
+    # Line 47-51 - Updated compute method
     def compute(self, N, B_total, t=None):
-        """Recruitment driven by total bacteria, capped by N_MAX; killing proportional to N."""
-        dN = self.rho_N * N * B_total * (1 - N/self.N_MAX) - self.delta_N * N
-        immune_effect = self.kill_N * N
+        """Recruitment driven by total bacteria + basal production, capped by N_MAX; killing proportional to N."""
+        dN = self.prod_N + self.rho_N * N * B_total * (1 - N/self.N_MAX) - self.delta_N * N
+        immune_effect = 0.88 * self.kill_N * N
         return dN, immune_effect
 
 # --- ODE system: Blood and Reservoir for S and R, plus Neutrophils ---
@@ -135,7 +139,7 @@ if __name__ == "__main__":
     # --- Simulation setup ---
     total_h = 600
     pk = PharmacokineticModel()
-    immune_model = ImmuneResponse(N0=5000)
+    immune_model = ImmuneResponse(N0=7000)
 
     vanco_start = 300
     lzd_start = vanco_start + pk.van_duration
@@ -163,12 +167,12 @@ if __name__ == "__main__":
         'rho_res_R': 1.47,
         'delta_res': 0.179,
         # Exchange (same for S and R)
-        'f_r_b': 0.02,   # reservoir -> blood
-        'f_b_r': 0.0002,   # blood -> reservoir
+        'f_r_b': 2e-18,   # reservoir -> blood
+        'f_b_r': 2e-20,   # blood -> reservoir
     }
 
     # Initial conditions [S_b, R_b, S_res, R_res, N]
-    y0 = [1e1, 1e1, 1e3 , 1e3, immune_model.N0]
+    y0 = [0, 0, 1e1 , 1, immune_model.N0]
 
     # Time grid
     t_eval = np.linspace(0, total_h, 800)
@@ -183,22 +187,18 @@ if __name__ == "__main__":
     R_res = np.clip(solution[:, 3], 1, None)
     N = solution[:, 4]
 
-    # N>29000 returns a bool array, np.where returns the indices where the condition is true
-    # np.where returns a tuple of arrays, we only need the first one
-    index_29k = np.where(N > 29000)[0]
+
+    # Find indices where neutrophils > 25000
+    indices_above_25000 = np.where(N > 25000)[0]
+    #print(indices_above_25000)
+    #determine the first index when neutrophils are > 25000
+    first_index = indices_above_25000[0] if len(indices_above_25000) > 0 else None
+    #print(first_index)
+    #Find the corresponding time when neutrophils > 25000
+    max_time = t_eval[first_index]
+    print(f"Time when neutrophils are greater than 25000: {max_time} h")
+
     
-    
-    if len(index_29k) > 0:
-        time_point = t_eval[index_29k[0]]
-        print(f"Neutrophils exceed 29,000 at time: {time_point:.2f} hours (index {index_29k[0]})")
-    else:
-        print("Neutrophils never exceed 29,000")
-    
-    # Find when neutrophils are highest
-    max_index = np.argmax(N)
-    max_time = t_eval[max_index]
-    max_value = N[max_index]
-    print(f"Neutrophils reach maximum of {max_value:,.0f} cells/μL at time: {max_time:.2f} hours (index {max_index})")
 
     # Summary prints
     print(f"Exchange rates: f_r_b = {params['f_r_b']}, f_b_r = {params['f_b_r']} (same for S and R)")
@@ -217,6 +217,7 @@ if __name__ == "__main__":
     plt.axvline(vanco_start, color='red', linestyle='--', label='Vancomycin Start')
     plt.axvline(lzd_start, color='blue', linestyle='--', label='Linezolid Start')
     plt.grid(True, which="both", ls='--', lw=0.5)
+    plt.savefig('Blood.png', dpi=300, bbox_inches='tight')
     plt.legend()
     plt.show()
 
@@ -230,6 +231,7 @@ if __name__ == "__main__":
     plt.axvline(vanco_start, color='red', linestyle='--', label='Vancomycin Start')
     plt.axvline(lzd_start, color='blue', linestyle='--', label='Linezolid Start')
     plt.grid(True, which="both", ls='--', lw=0.5)
+    plt.savefig('Reservoir.png', dpi=300, bbox_inches='tight')
     plt.legend()
     plt.show()
 
@@ -242,7 +244,7 @@ if __name__ == "__main__":
     plt.axvline(lzd_start, color='blue', linestyle='--', label='Linezolid Start')
     plt.grid(True, ls='--', lw=0.5)
     plt.legend()
+    plt.savefig('Neutrophils.png', dpi=300, bbox_inches='tight')
     plt.show()
 
-    print(index_29k)
-    print(np.where(N > 29000))
+    
