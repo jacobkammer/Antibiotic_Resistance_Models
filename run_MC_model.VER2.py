@@ -5,6 +5,7 @@ import seaborn as sns
 import importlib.util
 import os
 import warnings
+import pandas as pd
 warnings.filterwarnings('ignore')
 
 # --- Dynamically load model.Ver10.py ---
@@ -50,10 +51,10 @@ base_params = {
 }
 
 # --- Simulation settings ---
-n_simulations = 100
+n_simulations = 1000
 cv = 0.10  # coefficient of variation
 total_h = 600
-vanco_start = 300
+vanco_start = 504 # 21 days
 
 # time grid
 t_eval = np.linspace(0, total_h, 800)
@@ -64,7 +65,8 @@ R_b_results = []
 S_res_results = []
 R_res_results = []
 N_results = []
-
+# Storage for initial conditions
+initial_conditions_log = []
 # Boxplot times (align to new grid)
 boxplot_times = [10, 15, 25, 300, 400, 500]
 boxplot_indices = [np.argmin(np.abs(t_eval - t)) for t in boxplot_times]
@@ -103,13 +105,37 @@ for sim in range(n_simulations):
 
     van_func = pk.concentration_function('vancomycin', total_h, vanco_start)
     lzd_func = pk.concentration_function('linezolid', total_h, lzd_start)
-
+    # Each of the 1000 Monte Carlo simulations starts
+    # with a different random initial bacterial load
+    # in the reservoir, uniformly distributed between 10-100 CFU/mL.
+    S_res_init = np.random.uniform(10, 100)
+    R_res_init = np.random.uniform(10, 100)
+    
     # Initial conditions [S_b, R_b, S_res, R_res, N]
-    y0_base = [0, 0, 10, 1, immune_model.N0]
-    # Log-normal sampling for bacteria, normal for N0
-    y0 = [max(1, np.random.lognormal(np.log(y0_base[i]), cv/2)) for i in range(4)]
-    y0.append(max(500, np.random.normal(y0_base[4], y0_base[4]*cv/4)))
+    y0_base = [0, 0, S_res_init, R_res_init, immune_model.N0]
+    
+    
+    
+    # normal variability to neutrophils (as before).
+    y0 = y0_base.copy()
+    # Ensure bacteria values are at least 1 CFU/mL for numerical stability
+    y0[:4] = [max(1, val) for val in y0[:4]]
+    # Apply normal variability only to neutrophils (keep a minimum of 500)
+    y0[4] = max(500, np.random.normal(y0_base[4], y0_base[4] * cv / 4))
 
+    # Log-normal sampling for bacteria, normal for N0
+    # Log initial conditions for this simulation
+    initial_conditions_log.append({
+        'Simulation': sim + 1,
+        'S_b_init': y0[0],
+        'R_b_init': y0[1],
+        'S_res_init': y0[2],
+        'R_res_init': y0[3],
+        'N_init': y0[4],
+        'S_res_base': S_res_init,
+        'R_res_base': R_res_init
+    })
+    
     try:
         solution = odeint(
             dual_reservoir_model,
@@ -129,6 +155,8 @@ for sim in range(n_simulations):
         N_results.append(solution[:, 4])
 
         # Boxplot collections (log10 for bacteria)
+
+
         for i, t in enumerate(boxplot_times):
             idx = boxplot_indices[i]
             S_b_box[t].append(np.log10(max(solution[idx, 0], 1)))
@@ -142,7 +170,66 @@ for sim in range(n_simulations):
         continue
 
 print(f"\nSimulation complete! {successful_runs}/{n_simulations} runs successful.")
+# Save initial conditions to CSV
+ic_df = pd.DataFrame(initial_conditions_log)
+ic_df.to_csv('initial_conditions_log.csv', index=False)
+print(f"\nInitial conditions saved to: initial_conditions_log.csv")
 
+# Display summary statistics
+print('\n' + '=' * 70)
+print('INITIAL CONDITIONS SUMMARY')
+print('=' * 70)
+print(ic_df.describe())
+# Initial Conditions Visualizations
+print('Generating initial conditions plots...')
+
+# S_res from uniform dist
+fig_ic1, ax_ic1 = plt.subplots(figsize=(12, 7))
+ax_ic1.hist(ic_df['S_res_base'], bins=30, color='mediumpurple', alpha=0.7, edgecolor='black', linewidth=1.5)
+ax_ic1.axvline(ic_df['S_res_base'].median(), color='indigo', linestyle='--', linewidth=2.5, 
+               label=f'Median: {ic_df["S_res_base"].median():.1f}')
+ax_ic1.set_xlabel('S_res Initial Value (CFU/mL)', fontsize=12)
+ax_ic1.set_ylabel('Frequency', fontsize=12)
+ax_ic1.set_title('S_res Initial Conditions - Monte Carlo', fontsize=14, fontweight='bold')
+ax_ic1.grid(True, alpha=0.3, linestyle='--')
+ax_ic1.legend(loc='best', fontsize=11)
+plt.tight_layout()
+plt.savefig('Figures/Ver10_IC_S_res_uniform.png', dpi=300, bbox_inches='tight')
+print('Saved: Ver10_IC_S_res_uniform.png')
+plt.show()
+
+# R_res from uniform dist
+fig_ic2, ax_ic2 = plt.subplots(figsize=(12, 7))
+ax_ic2.hist(ic_df['R_res_base'], bins=30, color='limegreen', alpha=0.7, edgecolor='black', linewidth=1.5)
+ax_ic2.axvline(ic_df['R_res_base'].median(), color='forestgreen', linestyle='--', linewidth=2.5, 
+               label=f'Median: {ic_df["R_res_base"].median():.1f}')
+ax_ic2.set_xlabel('R_res Initial Value (CFU/mL)', fontsize=12)
+ax_ic2.set_ylabel('Frequency', fontsize=12)
+ax_ic2.set_title('R_res Initial Conditions - Monte Carlo', fontsize=14, fontweight='bold')
+ax_ic2.grid(True, alpha=0.3, linestyle='--')
+ax_ic2.legend(loc='best', fontsize=11)
+plt.tight_layout()
+plt.savefig('Figures/Ver10_IC_R_res_uniform.png', dpi=300, bbox_inches='tight')
+print('Saved: Ver10_IC_R_res_uniform.png')
+plt.show()
+
+
+# Neutrophils Initial
+fig_ic5, ax_ic5 = plt.subplots(figsize=(12, 7))
+ax_ic5.hist(ic_df['N_init'], bins=30, color='seagreen', alpha=0.7, edgecolor='black', linewidth=1.5)
+ax_ic5.axvline(ic_df['N_init'].median(), color='black', linestyle='--', linewidth=2.5, 
+               label=f'Median: {ic_df["N_init"].median():.0f}')
+ax_ic5.set_xlabel('Neutrophils Initial Value (cells/μL)', fontsize=12)
+ax_ic5.set_ylabel('Frequency', fontsize=12)
+ax_ic5.set_title('Neutrophil Initial Conditions - Monte Carlo', fontsize=14, fontweight='bold')
+ax_ic5.grid(True, alpha=0.3, linestyle='--')
+ax_ic5.legend(loc='best', fontsize=11)
+plt.tight_layout()
+plt.savefig('Figures/Ver10_IC_neutrophils.png', dpi=300, bbox_inches='tight')
+print('Saved: Ver10_IC_neutrophils.png')
+plt.show()
+
+print('\nGenerating bacterial population visualizations...')
 # Convert lists to arrays
 S_b_results = np.array(S_b_results)
 R_b_results = np.array(R_b_results)
@@ -197,8 +284,8 @@ axS.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
 axS.legend(loc='best')
 axS.set_ylim([1e0, 1e13])
 plt.tight_layout()
-plt.savefig('Ver_10_S_b.png', dpi=300, bbox_inches='tight')
-print('  Saved: Ver_10_S_b.png')
+plt.savefig('Figures/Ver_10_S_b.png', dpi=300, bbox_inches='tight')
+print('Saved: Ver_10_S_b.png')
 plt.show()
 
 # --- Plot 2: Resistant Blood (R_b) ---
@@ -216,7 +303,7 @@ axR.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
 axR.legend(loc='best')
 axR.set_ylim([1e0, 1e13])
 plt.tight_layout()
-plt.savefig('Ver10_R_b.png', dpi=300, bbox_inches='tight')
+plt.savefig('Figures/Ver10_R_b.png', dpi=300, bbox_inches='tight')
 plt.show()
 
 # --- Plot 3: Sensitive Reservoir (S_res) ---
@@ -234,7 +321,7 @@ axSr.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
 axSr.legend(loc='best')
 axSr.set_ylim([1e0, 1e6])
 plt.tight_layout()
-plt.savefig('Ver10_S_res.png', dpi=300, bbox_inches='tight')
+plt.savefig('Figures/Ver10_S_res.png', dpi=300, bbox_inches='tight')
 print('  Saved: Ver10_S_res.png')
 plt.show()
 
@@ -253,7 +340,7 @@ axRr.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
 axRr.legend(loc='best')
 axRr.set_ylim([1e0, 1e6])
 plt.tight_layout()
-plt.savefig('Ver10_R_res.png', dpi=300, bbox_inches='tight')
+plt.savefig('Figures/Ver10_R_res.png', dpi=300, bbox_inches='tight')
 print(' Saved: Ver10_R_res.png')
 plt.show()
 
@@ -272,7 +359,7 @@ ax3.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
 ax3.legend(loc='best')
 ax3.set_ylim([0, max(N_p95)*1.1])
 plt.tight_layout()
-plt.savefig('Ver10_neutrophils.png', dpi=300, bbox_inches='tight')
+plt.savefig('Figures/Ver10_neutrophils.png', dpi=300, bbox_inches='tight')
 print('  Saved: Ver10_neutrophils.png')
 plt.show()
 
@@ -335,7 +422,7 @@ axes[1, 2].axis('off')
 
 plt.suptitle('Monte Carlo Summary', fontsize=16, fontweight='bold')
 plt.tight_layout()
-plt.savefig('Ver10_boxplots.png', dpi=300, bbox_inches='tight')
+plt.savefig('figures/Ver10_boxplots.png', dpi=300, bbox_inches='tight')
 print('Saved: Ver10_boxplots.png')
 plt.show()
 

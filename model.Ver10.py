@@ -141,7 +141,7 @@ if __name__ == "__main__":
     pk = PharmacokineticModel()
     immune_model = ImmuneResponse(N0=7000)
 
-    vanco_start = 300
+    vanco_start = 504 #21 days
     lzd_start = vanco_start + pk.van_duration
     lzd_end = lzd_start + pk.lzd_duration
 
@@ -217,7 +217,7 @@ if __name__ == "__main__":
     plt.axvline(vanco_start, color='red', linestyle='--', label='Vancomycin Start')
     plt.axvline(lzd_start, color='blue', linestyle='--', label='Linezolid Start')
     plt.grid(True, which="both", ls='--', lw=0.5)
-    plt.savefig('Blood.png', dpi=300, bbox_inches='tight')
+    plt.savefig('figures/Blood.png', dpi=300, bbox_inches='tight')
     plt.legend()
     plt.show()
 
@@ -231,7 +231,7 @@ if __name__ == "__main__":
     plt.axvline(vanco_start, color='red', linestyle='--', label='Vancomycin Start')
     plt.axvline(lzd_start, color='blue', linestyle='--', label='Linezolid Start')
     plt.grid(True, which="both", ls='--', lw=0.5)
-    plt.savefig('Reservoir.png', dpi=300, bbox_inches='tight')
+    plt.savefig('figures/Reservoir.png', dpi=300, bbox_inches='tight')
     plt.legend()
     plt.show()
 
@@ -244,7 +244,7 @@ if __name__ == "__main__":
     plt.axvline(lzd_start, color='blue', linestyle='--', label='Linezolid Start')
     plt.grid(True, ls='--', lw=0.5)
     plt.legend()
-    plt.savefig('Neutrophils.png', dpi=300, bbox_inches='tight')
+    plt.savefig('figures/Neutrophils.png', dpi=300, bbox_inches='tight')
     plt.show()
 
     
