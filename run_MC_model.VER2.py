@@ -54,7 +54,7 @@ base_params = {
 n_simulations = 1000
 cv = 0.10  # coefficient of variation
 total_h = 2500
-vanco_start = 504 # 42 days
+vanco_start = 1008 # 42 days
 
 # time grid
 t_eval = np.linspace(0, total_h, 800)
@@ -270,8 +270,11 @@ def percentile_bands(arr):
         np.percentile(arr, 95, axis=0),
     )
 
+    
 lzd_start = vanco_start + pk.van_duration  # from last pk used; only for plotting ref
+lzd_end = lzd_start + pk.lzd_duration      # linezolid end in hours
 lzd_start_days = lzd_start / 24.0
+lzd_end_days = lzd_end / 24.0
 
 # --- Plot 1: Sensitive Blood (S_b) ---
 S_med, S_p25, S_p75, S_p5, S_p95 = percentile_bands(S_b_results)
@@ -281,6 +284,7 @@ axS.fill_between(t_days, S_p25, S_p75, color='blue', alpha=0.35, label='S_b 25-7
 axS.fill_between(t_days, S_p5, S_p95, color='blue', alpha=0.18, label='S_b 5-95%')
 axS.axvline(vanco_start_days, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
 axS.axvline(lzd_start_days, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
+axS.axvline(lzd_end_days, color='black', linestyle=':', alpha=0.7, linewidth=2, label='Linezolid End')
 axS.set_xlabel('Time (days)')
 axS.set_ylabel('Sensitive Blood Bacteria (CFU/mL)')
 axS.set_title('Sensitive Blood Bacteria - Monte Carlo ')
@@ -300,6 +304,7 @@ axR.fill_between(t_days, R_p25, R_p75, color='orange', alpha=0.35, label='R_b 25
 axR.fill_between(t_days, R_p5, R_p95, color='orange', alpha=0.18, label='R_b 5-95%')
 axR.axvline(vanco_start_days, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
 axR.axvline(lzd_start_days, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
+axR.axvline(lzd_end_days, color='black', linestyle=':', alpha=0.7, linewidth=2, label='Linezolid End')
 axR.set_xlabel('Time (days)')
 axR.set_ylabel('Resistant Blood Bacteria (CFU/mL)')
 axR.set_title('Resistant Blood Bacteria - Monte Carlo')
@@ -318,6 +323,7 @@ axSr.fill_between(t_days, Sr_p25, Sr_p75, color='purple', alpha=0.35, label='S_r
 axSr.fill_between(t_days, Sr_p5, Sr_p95, color='purple', alpha=0.18, label='S_res 5-95%')
 axSr.axvline(vanco_start_days, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
 axSr.axvline(lzd_start_days, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
+axSr.axvline(lzd_end_days, color='black', linestyle=':', alpha=0.7, linewidth=2, label='Linezolid End')
 axSr.set_xlabel('Time (days)')
 axSr.set_ylabel('Sensitive Reservoir Bacteria (CFU/mL)')
 axSr.set_title('Sensitive Reservoir Bacteria - Monte Carlo ')
@@ -337,6 +343,7 @@ axRr.fill_between(t_days, Rr_p25, Rr_p75, color='green', alpha=0.35, label='R_re
 axRr.fill_between(t_days, Rr_p5, Rr_p95, color='green', alpha=0.18, label='R_res 5-95%')
 axRr.axvline(vanco_start_days, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
 axRr.axvline(lzd_start_days, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
+axRr.axvline(lzd_end_days, color='black', linestyle=':', alpha=0.7, linewidth=2, label='Linezolid End')
 axRr.set_xlabel('Time (days)')
 axRr.set_ylabel('Resistant Reservoir Bacteria (CFU/mL)')
 axRr.set_title('Resistant Reservoir Bacteria - Monte Carlo')
@@ -356,6 +363,7 @@ ax3.fill_between(t_days, N_p25, N_p75, color='darkgreen', alpha=0.35, label='25-
 ax3.fill_between(t_days, N_p5, N_p95, color='darkgreen', alpha=0.18, label='5-95%')
 ax3.axvline(vanco_start_days, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
 ax3.axvline(lzd_start_days, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
+ax3.axvline(lzd_end_days, color='black', linestyle=':', alpha=0.7, linewidth=2, label='Linezolid End')
 ax3.set_xlabel('Time (days)')
 ax3.set_ylabel('Neutrophils (cells/μL)')
 ax3.set_title('Neutrophil Dynamics - Monte Carlo')

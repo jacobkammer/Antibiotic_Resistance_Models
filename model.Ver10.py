@@ -127,7 +127,7 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
         - params['delta_res'] * R_res
         - imm_R_res
         # Vancomycin kill negligible on R in this model
-        - 0.5 * linezolid_inhibition * R_res
+        - 0.8 * linezolid_inhibition * R_res
         - f_r_b * R_res + f_b_r * R_b
     )
 
@@ -142,8 +142,10 @@ if __name__ == "__main__":
     immune_model = ImmuneResponse(N0=7000)
 
     vanco_start = 504 #21 days
-    lzd_start = vanco_start + pk.van_duration
-    lzd_end = lzd_start + pk.lzd_duration
+    lzd_start = vanco_start + pk.van_duration  # from last pk used; only for plotting ref
+    lzd_end = lzd_start + pk.lzd_duration      # linezolid end in hours
+    lzd_start_days = lzd_start / 24.0
+    lzd_end_days = lzd_end / 24.0
 
     van_func = pk.concentration_function('vancomycin', total_h, vanco_start)
     lzd_func = pk.concentration_function('linezolid', total_h, lzd_start)
