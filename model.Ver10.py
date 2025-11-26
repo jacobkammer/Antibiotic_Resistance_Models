@@ -88,8 +88,8 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
     # Immune killing per compartment
     imm_S_b = immune_eff * S_b
     imm_R_b = immune_eff * R_b
-    imm_S_res = immune_eff * S_res 
-    imm_R_res = immune_eff * R_res 
+    imm_S_res = 0.6 * immune_eff * S_res 
+    imm_R_res = 0.6 * immune_eff * R_res 
 
     # Exchange rates (same for both S and R)
     f_r_b = params['f_r_b']  # reservoir -> blood
@@ -188,6 +188,12 @@ if __name__ == "__main__":
     N = solution[:, 4]
 
 
+    # Convert time to days for plotting and output
+    t_days = t_eval / 24.0
+    vanco_start_days = vanco_start / 24.0
+    lzd_start_days = lzd_start / 24.0
+    lzd_end_days = lzd_end / 24.0
+
     # Find indices where neutrophils > 25000
     indices_above_25000 = np.where(N > 25000)[0]
     #print(indices_above_25000)
@@ -195,53 +201,53 @@ if __name__ == "__main__":
     first_index = indices_above_25000[0] if len(indices_above_25000) > 0 else None
     #print(first_index)
     #Find the corresponding time when neutrophils > 25000
-    max_time = t_eval[first_index]
-    print(f"Time when neutrophils are greater than 25000: {max_time} h")
+    max_time_days = t_days[first_index]
+    print(f"Time when neutrophils are greater than 25000: {max_time_days:.2f} days")
 
     
 
     # Summary prints
     print(f"Exchange rates: f_r_b = {params['f_r_b']}, f_b_r = {params['f_b_r']} (same for S and R)")
     print(f"Initial conditions: S_b={y0[0]:.1f}, R_b={y0[1]:.1f}, S_res={y0[2]:.1f}, R_res={y0[3]:.1f}, N0={y0[4]:.1f}")
-    print(f"Vancomycin starts at: {vanco_start} h, Linezolid starts at: {lzd_start} h")
-    print(f"Linezolid ends at: {lzd_end} h")
+    print(f"Vancomycin starts at: {vanco_start_days:.2f} days, Linezolid starts at: {lzd_start_days:.2f} days")
+    print(f"Linezolid ends at: {lzd_end_days:.2f} days")
 
     # Plots
     plt.figure(figsize=(10,6))
-    plt.plot(t_eval, S_b, label='Sensitive Blood (S_b)', color='blue')
-    plt.plot(t_eval, R_b, label='Resistant Blood (R_b)', color='orange')
+    plt.plot(t_days, S_b, label='Sensitive Blood (S_b)', color='blue')
+    plt.plot(t_days, R_b, label='Resistant Blood (R_b)', color='orange')
     plt.yscale('log')
-    plt.xlabel('Time (h)')
+    plt.xlabel('Time (days)')
     plt.ylabel('Blood Population (CFU/ml)')
     plt.title('Blood Compartment: Sensitive and Resistant')
-    plt.axvline(vanco_start, color='red', linestyle='--', label='Vancomycin Start')
-    plt.axvline(lzd_start, color='blue', linestyle='--', label='Linezolid Start')
+    plt.axvline(vanco_start_days, color='red', linestyle='--', label='Vancomycin Start')
+    plt.axvline(lzd_start_days, color='blue', linestyle='--', label='Linezolid Start')
     plt.grid(True, which="both", ls='--', lw=0.5)
     plt.savefig('figures/Blood.png', dpi=300, bbox_inches='tight')
     plt.legend()
     plt.show()
 
     plt.figure(figsize=(10,6))
-    plt.plot(t_eval, S_res, label='Sensitive Reservoir (S_res)', color='purple')
-    plt.plot(t_eval, R_res, label='Resistant Reservoir (R_res)', color='green')
+    plt.plot(t_days, S_res, label='Sensitive Reservoir (S_res)', color='purple')
+    plt.plot(t_days, R_res, label='Resistant Reservoir (R_res)', color='green')
     plt.yscale('log')
-    plt.xlabel('Time (h)')
+    plt.xlabel('Time (days)')
     plt.ylabel('Reservoir Population (CFU/ml)')
     plt.title('Reservoir Compartment: Sensitive and Resistant')
-    plt.axvline(vanco_start, color='red', linestyle='--', label='Vancomycin Start')
-    plt.axvline(lzd_start, color='blue', linestyle='--', label='Linezolid Start')
+    plt.axvline(vanco_start_days, color='red', linestyle='--', label='Vancomycin Start')
+    plt.axvline(lzd_start_days, color='blue', linestyle='--', label='Linezolid Start')
     plt.grid(True, which="both", ls='--', lw=0.5)
     plt.savefig('figures/Reservoir.png', dpi=300, bbox_inches='tight')
     plt.legend()
     plt.show()
 
     plt.figure(figsize=(10,6))
-    plt.plot(t_eval, N, color='darkgreen', label='Neutrophils (N)')
-    plt.xlabel('Time (h)')
+    plt.plot(t_days, N, color='darkgreen', label='Neutrophils (N)')
+    plt.xlabel('Time (days)')
     plt.ylabel(r'Neutrophils (cells / $\mu$L)')
     plt.title('Neutrophil Dynamics')
-    plt.axvline(vanco_start, color='red', linestyle='--', label='Vancomycin Start')
-    plt.axvline(lzd_start, color='blue', linestyle='--', label='Linezolid Start')
+    plt.axvline(vanco_start_days, color='red', linestyle='--', label='Vancomycin Start')
+    plt.axvline(lzd_start_days, color='blue', linestyle='--', label='Linezolid Start')
     plt.grid(True, ls='--', lw=0.5)
     plt.legend()
     plt.savefig('figures/Neutrophils.png', dpi=300, bbox_inches='tight')

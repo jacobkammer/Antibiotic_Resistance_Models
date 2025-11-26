@@ -37,9 +37,9 @@ base_params = {
     'rho_R': 1.47,
     'delta': 0.179,
     # Reservoir bacteria
-    'rho_res_S': 1.47,
-    'rho_res_R': 1.47,
-    'delta_res': 0.179,
+    'rho_res_S': 2,
+    'rho_res_R': 1.98,#fitness cost for being resistant
+    'delta_res': 0.06,
     # PD
     'Emax_v': 1.74,
     'Emax_l': 1.97,
@@ -53,11 +53,13 @@ base_params = {
 # --- Simulation settings ---
 n_simulations = 1000
 cv = 0.10  # coefficient of variation
-total_h = 600
-vanco_start = 504 # 21 days
+total_h = 2500
+vanco_start = 504 # 42 days
 
 # time grid
 t_eval = np.linspace(0, total_h, 800)
+t_days = t_eval / 24.0  # Convert to days for plotting
+vanco_start_days = vanco_start / 24.0
 
 # --- Storage ---
 S_b_results = []
@@ -67,8 +69,9 @@ R_res_results = []
 N_results = []
 # Storage for initial conditions
 initial_conditions_log = []
-# Boxplot times (align to new grid)
-boxplot_times = [10, 15, 25, 300, 400, 500]
+# Boxplot times (align to new grid) - in hours for indexing
+boxplot_times = [12, 24, 72, 168, 336, 504, 720, 1008]
+boxplot_times_days = [t / 24.0 for t in boxplot_times]  # Convert to days for labels
 boxplot_indices = [np.argmin(np.abs(t_eval - t)) for t in boxplot_times]
 
 S_b_box = {t: [] for t in boxplot_times}
@@ -241,9 +244,9 @@ print(N_results.shape)
 # Find the absolute maximum neutrophil value and its time point (across all simulations)
 max_flat_index = np.argmax(N_results)
 sim_idx, time_idx = np.unravel_index(max_flat_index, N_results.shape)
-max_time = t_eval[time_idx]
+max_time_days = t_days[time_idx]
 max_value = N_results[sim_idx, time_idx]
-print(f"Maximum neutrophils: {max_value:,.0f} cells/μL at time: {max_time:.2f} hours (simulation {sim_idx}, index {time_idx})")
+print(f"Maximum neutrophils: {max_value:,.0f} cells/μL at time: {max_time_days:.2f} days (simulation {sim_idx}, index {time_idx})")
 # Find indices where neutrophils > 25000
 """ indices_above_25000 = np.where(N_results > 25000)[0]
 #print(indices_above_25000)
@@ -268,16 +271,17 @@ def percentile_bands(arr):
     )
 
 lzd_start = vanco_start + pk.van_duration  # from last pk used; only for plotting ref
+lzd_start_days = lzd_start / 24.0
 
 # --- Plot 1: Sensitive Blood (S_b) ---
 S_med, S_p25, S_p75, S_p5, S_p95 = percentile_bands(S_b_results)
 figS, axS = plt.subplots(figsize=(12, 7))
-axS.semilogy(t_eval, S_med, color='blue', linewidth=2.5, label='S_b Median')
-axS.fill_between(t_eval, S_p25, S_p75, color='blue', alpha=0.35, label='S_b 25-75%')
-axS.fill_between(t_eval, S_p5, S_p95, color='blue', alpha=0.18, label='S_b 5-95%')
-axS.axvline(vanco_start, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
-axS.axvline(lzd_start, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
-axS.set_xlabel('Time (hours)')
+axS.semilogy(t_days, S_med, color='blue', linewidth=2.5, label='S_b Median')
+axS.fill_between(t_days, S_p25, S_p75, color='blue', alpha=0.35, label='S_b 25-75%')
+axS.fill_between(t_days, S_p5, S_p95, color='blue', alpha=0.18, label='S_b 5-95%')
+axS.axvline(vanco_start_days, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
+axS.axvline(lzd_start_days, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
+axS.set_xlabel('Time (days)')
 axS.set_ylabel('Sensitive Blood Bacteria (CFU/mL)')
 axS.set_title('Sensitive Blood Bacteria - Monte Carlo ')
 axS.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
@@ -291,12 +295,12 @@ plt.show()
 # --- Plot 2: Resistant Blood (R_b) ---
 R_med, R_p25, R_p75, R_p5, R_p95 = percentile_bands(R_b_results)
 figR, axR = plt.subplots(figsize=(12, 7))
-axR.semilogy(t_eval, R_med, color='orange', linewidth=2.5, label='R_b Median')
-axR.fill_between(t_eval, R_p25, R_p75, color='orange', alpha=0.35, label='R_b 25-75%')
-axR.fill_between(t_eval, R_p5, R_p95, color='orange', alpha=0.18, label='R_b 5-95%')
-axR.axvline(vanco_start, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
-axR.axvline(lzd_start, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
-axR.set_xlabel('Time (hours)')
+axR.semilogy(t_days, R_med, color='orange', linewidth=2.5, label='R_b Median')
+axR.fill_between(t_days, R_p25, R_p75, color='orange', alpha=0.35, label='R_b 25-75%')
+axR.fill_between(t_days, R_p5, R_p95, color='orange', alpha=0.18, label='R_b 5-95%')
+axR.axvline(vanco_start_days, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
+axR.axvline(lzd_start_days, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
+axR.set_xlabel('Time (days)')
 axR.set_ylabel('Resistant Blood Bacteria (CFU/mL)')
 axR.set_title('Resistant Blood Bacteria - Monte Carlo')
 axR.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
@@ -309,12 +313,12 @@ plt.show()
 # --- Plot 3: Sensitive Reservoir (S_res) ---
 Sr_med, Sr_p25, Sr_p75, Sr_p5, Sr_p95 = percentile_bands(S_res_results)
 figSr, axSr = plt.subplots(figsize=(12, 7))
-axSr.semilogy(t_eval, Sr_med, color='purple', linewidth=2.5, label='S_res Median')
-axSr.fill_between(t_eval, Sr_p25, Sr_p75, color='purple', alpha=0.35, label='S_res 25-75%')
-axSr.fill_between(t_eval, Sr_p5, Sr_p95, color='purple', alpha=0.18, label='S_res 5-95%')
-axSr.axvline(vanco_start, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
-axSr.axvline(lzd_start, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
-axSr.set_xlabel('Time (hours)')
+axSr.semilogy(t_days, Sr_med, color='purple', linewidth=2.5, label='S_res Median')
+axSr.fill_between(t_days, Sr_p25, Sr_p75, color='purple', alpha=0.35, label='S_res 25-75%')
+axSr.fill_between(t_days, Sr_p5, Sr_p95, color='purple', alpha=0.18, label='S_res 5-95%')
+axSr.axvline(vanco_start_days, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
+axSr.axvline(lzd_start_days, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
+axSr.set_xlabel('Time (days)')
 axSr.set_ylabel('Sensitive Reservoir Bacteria (CFU/mL)')
 axSr.set_title('Sensitive Reservoir Bacteria - Monte Carlo ')
 axSr.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
@@ -328,12 +332,12 @@ plt.show()
 # --- Plot 4: Resistant Reservoir (R_res) ---
 Rr_med, Rr_p25, Rr_p75, Rr_p5, Rr_p95 = percentile_bands(R_res_results)
 figRr, axRr = plt.subplots(figsize=(12, 7))
-axRr.semilogy(t_eval, Rr_med, color='green', linewidth=2.5, label='R_res Median')
-axRr.fill_between(t_eval, Rr_p25, Rr_p75, color='green', alpha=0.35, label='R_res 25-75%')
-axRr.fill_between(t_eval, Rr_p5, Rr_p95, color='green', alpha=0.18, label='R_res 5-95%')
-axRr.axvline(vanco_start, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
-axRr.axvline(lzd_start, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
-axRr.set_xlabel('Time (hours)')
+axRr.semilogy(t_days, Rr_med, color='green', linewidth=2.5, label='R_res Median')
+axRr.fill_between(t_days, Rr_p25, Rr_p75, color='green', alpha=0.35, label='R_res 25-75%')
+axRr.fill_between(t_days, Rr_p5, Rr_p95, color='green', alpha=0.18, label='R_res 5-95%')
+axRr.axvline(vanco_start_days, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
+axRr.axvline(lzd_start_days, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
+axRr.set_xlabel('Time (days)')
 axRr.set_ylabel('Resistant Reservoir Bacteria (CFU/mL)')
 axRr.set_title('Resistant Reservoir Bacteria - Monte Carlo')
 axRr.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
@@ -347,12 +351,12 @@ plt.show()
 # --- Plot 5: Neutrophils ---
 fig3, ax3 = plt.subplots(figsize=(12, 7))
 N_med, N_p25, N_p75, N_p5, N_p95 = percentile_bands(N_results)
-ax3.plot(t_eval, N_med, color='darkgreen', linewidth=2.5, label='Median')
-ax3.fill_between(t_eval, N_p25, N_p75, color='darkgreen', alpha=0.35, label='25-75%')
-ax3.fill_between(t_eval, N_p5, N_p95, color='darkgreen', alpha=0.18, label='5-95%')
-ax3.axvline(vanco_start, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
-ax3.axvline(lzd_start, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
-ax3.set_xlabel('Time (hours)')
+ax3.plot(t_days, N_med, color='darkgreen', linewidth=2.5, label='Median')
+ax3.fill_between(t_days, N_p25, N_p75, color='darkgreen', alpha=0.35, label='25-75%')
+ax3.fill_between(t_days, N_p5, N_p95, color='darkgreen', alpha=0.18, label='5-95%')
+ax3.axvline(vanco_start_days, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Vancomycin Start')
+ax3.axvline(lzd_start_days, color='darkblue', linestyle='--', alpha=0.7, linewidth=2, label='Linezolid Start')
+ax3.set_xlabel('Time (days)')
 ax3.set_ylabel('Neutrophils (cells/μL)')
 ax3.set_title('Neutrophil Dynamics - Monte Carlo')
 ax3.grid(True, which='both', ls='-', lw=0.3, alpha=0.3)
@@ -369,7 +373,7 @@ colors = {'S_b': '#3498db', 'R_b': '#ff8c42', 'S_res': '#9b59b6', 'R_res': '#2ec
 
 # Blood S
 ax = axes[0, 0]
-bp = ax.boxplot([S_b_box[t] for t in boxplot_times], labels=[f'{t}h' for t in boxplot_times],
+bp = ax.boxplot([S_b_box[t] for t in boxplot_times], labels=[f'{t_d:.1f}d' for t_d in boxplot_times_days],
                 patch_artist=True, widths=0.6)
 for patch in bp['boxes']:
     patch.set_facecolor(colors['S_b']); patch.set_alpha(0.7)
@@ -379,7 +383,7 @@ ax.set_ylim([-1, 13])
 
 # Blood R
 ax = axes[0, 1]
-bp = ax.boxplot([R_b_box[t] for t in boxplot_times], labels=[f'{t}h' for t in boxplot_times],
+bp = ax.boxplot([R_b_box[t] for t in boxplot_times], labels=[f'{t_d:.1f}d' for t_d in boxplot_times_days],
                 patch_artist=True, widths=0.6)
 for patch in bp['boxes']:
     patch.set_facecolor(colors['R_b']); patch.set_alpha(0.7)
@@ -389,7 +393,7 @@ ax.set_ylim([-1, 13])
 
 # Reservoir S
 ax = axes[0, 2]
-bp = ax.boxplot([S_res_box[t] for t in boxplot_times], labels=[f'{t}h' for t in boxplot_times],
+bp = ax.boxplot([S_res_box[t] for t in boxplot_times], labels=[f'{t_d:.1f}d' for t_d in boxplot_times_days],
                 patch_artist=True, widths=0.6)
 for patch in bp['boxes']:
     patch.set_facecolor(colors['S_res']); patch.set_alpha(0.7)
@@ -399,7 +403,7 @@ ax.set_ylim([-1, 6])
 
 # Reservoir R
 ax = axes[1, 0]
-bp = ax.boxplot([R_res_box[t] for t in boxplot_times], labels=[f'{t}h' for t in boxplot_times],
+bp = ax.boxplot([R_res_box[t] for t in boxplot_times], labels=[f'{t_d:.1f}d' for t_d in boxplot_times_days],
                 patch_artist=True, widths=0.6)
 for patch in bp['boxes']:
     patch.set_facecolor(colors['R_res']); patch.set_alpha(0.7)
@@ -409,7 +413,7 @@ ax.set_ylim([-1, 6])
 
 # Neutrophils
 ax = axes[1, 1]
-bp = ax.boxplot([N_box[t] for t in boxplot_times], labels=[f'{t}h' for t in boxplot_times],
+bp = ax.boxplot([N_box[t] for t in boxplot_times], labels=[f'{t_d:.1f}d' for t_d in boxplot_times_days],
                 patch_artist=True, widths=0.6)
 for patch in bp['boxes']:
     patch.set_facecolor('green'); patch.set_alpha(0.7)
