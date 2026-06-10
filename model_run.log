@@ -1,0 +1,9 @@
+Dual-reservoir model starting...
+Time when neutrophils are greater than 25000: 2.66 days
+Exchange rates: f_r_b = 2e-18, f_b_r = 2e-20 (same for S and R)
+Initial conditions: S_b=0.0, R_b=0.0, S_res=10.0, R_res=1.0, N0=7000.0
+Vancomycin starts at: 21.00 days, Linezolid starts at: 25.00 days
+Linezolid ends at: 46.00 days
+Saved: c:\Users\Jacob\Documents\Projects_Python\Antibiotic_Resistance_Models\figures\Blood.png
+Saved: c:\Users\Jacob\Documents\Projects_Python\Antibiotic_Resistance_Models\figures\Reservoir.png
+Saved: c:\Users\Jacob\Documents\Projects_Python\Antibiotic_Resistance_Models\figures\Neutrophils.png
