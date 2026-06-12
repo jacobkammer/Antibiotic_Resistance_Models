@@ -55,17 +55,17 @@ np.random.seed(42)
 # -------------------------------------------------------------------------
 # Fixed simulation settings
 # -------------------------------------------------------------------------
-resistance_factor = 0.25
+fitness_cost = 0.20#Fitness cost of VanA-Type Vancomycin Resistance in MRSA, Foucault et al. 2009
 # rho_S = 10% more than blood immune killing (eff_blood * k_immune = 1.0 * 0.12 = 0.12 h⁻¹)
 _immune_kill_blood = 1.0 * 0.12          # eff_blood * k_immune
-rho_S  = 1.10 * _immune_kill_blood       # 0.132 h⁻¹
-rho_R  = (1 - resistance_factor) * rho_S # 0.099 h⁻¹ at rf=0.25 (< immune kill → R cannot establish in blood without seeding)
+rho_S  = 1.35 * _immune_kill_blood       # 0.162 h⁻¹
+rho_R  = (1 - fitness_cost) * rho_S # 0.1296 h⁻¹ at rf=0.20 (< immune kill → R cannot establish in blood without seeding)
 
 n_simulations = 100
 total_h       = 1344   # 56 days
 vanco_start   = 504    # h (day 21)
 
-print(f"Resistance factor: {resistance_factor}  →  rho_R = {rho_R:.4f}  (rho_S = {rho_S})")
+print(f"Fitness cost: {fitness_cost}  ->  rho_R = {rho_R:.4f}  (rho_S = {rho_S})")
 print(f"Simulations: {n_simulations}  |  Total time: {total_h} h ({total_h/24:.0f} days)")
 print(f"Vancomycin start: {vanco_start} h (day {vanco_start/24:.0f})")
 print()
@@ -79,13 +79,11 @@ nominal_params = {
     'rho_S':            rho_S,
     'rho_R':            rho_R,
     'rho_res_S':        0.07,
-    'rho_res_R':        0.07 * (1 - resistance_factor),
+    'rho_res_R':        0.07 * (1 - fitness_cost),
     'Emax_v':  0.20,
     'EC50_V':  1.5,
-    'Emax_l':  rho_S,  # h⁻¹  = rho_S for true bacteriostasis (cannot directly kill)
-    'EC50_L':   1.0,    # mg/L (sensitive)
-    'EC50_L_R': 10.0,   # mg/L (resistant; 10× sensitive — moderate resistance)
-    'biofilm_factor': 10.0,
+    'Emax_l':  0.1,  # h⁻¹ 
+    'EC50_L':   3.8,    # mg/L 
     # f_r_b and f_b_r are NOT set here — varied per simulation below
 }
 
@@ -93,14 +91,14 @@ kinetic_rows = []
 kinetic_specs = [
     ('Sensitive Blood', nominal_params['rho_S'], 0.12 * 1.0),
     ('Resistant Blood', nominal_params['rho_R'], 0.12 * 1.0),
-    ('Sensitive Reservoir', nominal_params['rho_res_S'], 0.12 * 0.3),
-    ('Resistant Reservoir', nominal_params['rho_res_R'], 0.12 * 0.3),
+    ('Sensitive Reservoir', nominal_params['rho_res_S'], 0.12 * 0.1),
+    ('Resistant Reservoir', nominal_params['rho_res_R'], 0.12 * 0.1),
 ]
 
 for species, growth_rate_h, immune_death_rate_h in kinetic_specs:
     net_rate_h = growth_rate_h - immune_death_rate_h
-    intrinsic_doubling_time_h = np.log(2) / growth_rate_h if growth_rate_h > 0 else np.nan
-    net_doubling_time_h = np.log(2) / net_rate_h if net_rate_h > 0 else np.nan
+    intrinsic_doubling_time_h = np.log(2) / growth_rate_h if growth_rate_h > 0 else np.nan# growth only, no killing
+    net_doubling_time_h = np.log(2) / net_rate_h if net_rate_h > 0 else np.nan# growth after subtracting for immune killing
     growth_log10_per_day = growth_rate_h * 24 / np.log(10)
     death_log10_per_day = immune_death_rate_h * 24 / np.log(10)
     net_log10_per_day = net_rate_h * 24 / np.log(10)
@@ -133,8 +131,8 @@ print()
 F_R_B_MIN, F_R_B_MAX = 1e-6, 1e-2   # h⁻¹
 F_B_R_MIN, F_B_R_MAX = 1e-7, 1e-3   # h⁻¹
 
-print(f"f_r_b range: {F_R_B_MIN:.0e} – {F_R_B_MAX:.0e} h⁻¹  (log-uniform)")
-print(f"f_b_r range: {F_B_R_MIN:.0e} – {F_B_R_MAX:.0e} h⁻¹  (log-uniform)")
+print(f"f_r_b range: {F_R_B_MIN:.0e} - {F_R_B_MAX:.0e} h^-1  (log-uniform)")
+print(f"f_b_r range: {F_B_R_MIN:.0e} - {F_B_R_MAX:.0e} h^-1  (log-uniform)")
 print()
 
 # -------------------------------------------------------------------------
@@ -145,9 +143,9 @@ print()
 # temporal sequence for MRSA osteomyelitis: bone peaks first, blood peaks
 # later as a secondary compartment driven by bone shedding.
 #
-# S_res = 1e4, R_res = 1e3: established bone infection at t=0
+# S_res = 1e4, R_res = 1e4: established bone infection at t=0
 # (MRSA osteomyelitis tissue burden: 1e3–1e6 CFU/g; Norden 1970, Calhoun 2003)
-y0_fixed = [0.0, 0.0, 1e3, 1e2]   # [S_b, R_b, S_res, R_res] CFU/mL
+y0_fixed = [0.0, 0.0, 1e4, 1e4]   # [S_b, R_b, S_res, R_res] CFU/mL
 print(f"Fixed ICs: S_b={y0_fixed[0]:.0f}, R_b={y0_fixed[1]:.0f}, "
       f"S_res={y0_fixed[2]:.0e}, R_res={y0_fixed[3]:.0e} CFU/mL")
 print()
@@ -222,17 +220,19 @@ for sim in range(n_simulations):
             rtol=1e-6, atol=1e-8, mxstep=5000,
         )
 
-        S_b_results.append(np.clip(solution[:, 0], 0.1, None))
-        R_b_results.append(np.clip(solution[:, 1], 0.1, None))
-        S_res_results.append(np.clip(solution[:, 2], 0.1, None))
-        R_res_results.append(np.clip(solution[:, 3], 0.1, None))
+        solution_clean = np.where(solution < 10.0, 0.0, solution)
+
+        S_b_results.append(solution_clean[:, 0])
+        R_b_results.append(solution_clean[:, 1])
+        S_res_results.append(solution_clean[:, 2])
+        R_res_results.append(solution_clean[:, 3])
 
         for i, t in enumerate(boxplot_times):
             idx = boxplot_indices[i]
-            S_b_box[t].append(np.log10(max(solution[idx, 0], 0.1)))
-            R_b_box[t].append(np.log10(max(solution[idx, 1], 0.1)))
-            S_res_box[t].append(np.log10(max(solution[idx, 2], 0.1)))
-            R_res_box[t].append(np.log10(max(solution[idx, 3], 0.1)))
+            S_b_box[t].append(np.log10(max(solution_clean[idx, 0], 1.0)))
+            R_b_box[t].append(np.log10(max(solution_clean[idx, 1], 1.0)))
+            S_res_box[t].append(np.log10(max(solution_clean[idx, 2], 1.0)))
+            R_res_box[t].append(np.log10(max(solution_clean[idx, 3], 1.0)))
 
         successful_runs += 1
     except Exception:
@@ -278,6 +278,9 @@ def percentile_bands(arr):
         np.percentile(arr, 95, axis=0),
     )
 
+def log_plot_values(values):
+    return np.where(np.asarray(values) < 1.0, 1.0, values)
+
 def add_treatment_lines(ax, vd, ld, le):
     ax.axvline(vd, color='red',      ls='--', lw=1.5, label=f'Vanco start (d{vd:.0f})')
     ax.axvline(ld, color='darkblue', ls='--', lw=1.5, label=f'LZD start (d{ld:.0f})')
@@ -311,7 +314,7 @@ for i in range(successful_runs):
     alpha  = 0.25
     for ax, arr in zip([axS, axR, axSr, axRr],
                        [S_b_results, R_b_results, S_res_results, R_res_results]):
-        ax.semilogy(t_days, arr[i], color=colour, lw=0.6, alpha=alpha)
+        ax.semilogy(t_days, log_plot_values(arr[i]), color=colour, lw=0.6, alpha=alpha)
 
 # Overlay median and IQR
 for ax, results, label, color in zip(
@@ -322,9 +325,9 @@ for ax, results, label, color in zip(
     ['blue', 'orange', 'purple', 'green']
 ):
     med, p25, p75, p5, p95 = percentile_bands(results)
-    ax.semilogy(t_days, med, color=color, lw=2.5, label='Median', zorder=5)
-    ax.fill_between(t_days, p25, p75, color=color, alpha=0.35, label='IQR 25–75%')
-    ax.fill_between(t_days, p5,  p95, color=color, alpha=0.15, label='5–95%')
+    ax.semilogy(t_days, log_plot_values(med), color=color, lw=2.5, label='Median', zorder=5)
+    ax.fill_between(t_days, log_plot_values(p25), log_plot_values(p75), color=color, alpha=0.35, label='IQR 25–75%')
+    ax.fill_between(t_days, log_plot_values(p5),  log_plot_values(p95), color=color, alpha=0.15, label='5–95%')
     add_treatment_lines(ax, vd, ld, le)
     ax.set_title(label, fontsize=13, fontweight='bold')
     ax.set_ylabel('CFU/mL', fontsize=11)
@@ -367,9 +370,9 @@ for ax, results, label, color in zip(
     ['blue', 'orange', 'purple', 'green']
 ):
     med, p25, p75, p5, p95 = percentile_bands(results)
-    ax.semilogy(t_days, med,  color=color, lw=2.5, label='Median')
-    ax.fill_between(t_days, p25, p75, color=color, alpha=0.35, label='IQR 25–75%')
-    ax.fill_between(t_days, p5,  p95, color=color, alpha=0.15, label='5–95%')
+    ax.semilogy(t_days, log_plot_values(med),  color=color, lw=2.5, label='Median')
+    ax.fill_between(t_days, log_plot_values(p25), log_plot_values(p75), color=color, alpha=0.35, label='IQR 25–75%')
+    ax.fill_between(t_days, log_plot_values(p5),  log_plot_values(p95), color=color, alpha=0.15, label='5–95%')
     add_treatment_lines(ax, vd, ld, le)
     ax.set_title(label, fontsize=13, fontweight='bold')
     ax.set_ylabel('CFU/mL', fontsize=11)

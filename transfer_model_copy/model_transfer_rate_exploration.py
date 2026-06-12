@@ -95,14 +95,12 @@ class ImmuneResponse:
     stable, immunocompetent host.
     """
 
-    def __init__(self, k_immune=0.12, eff_blood=1.0, eff_res=0.3):
+    def __init__(self, k_immune=0.12, eff_blood=1.0, eff_res=0.1):
         self.k_immune  = k_immune
         self.eff_blood = eff_blood
-        # CORRECTED eff_res: 0.8 → 0.3
+        # eff_res: 0.3
         # Biofilm physically shields bacteria from phagocytosis; immune killing
         # in the reservoir is substantially reduced vs. planktonic blood bacteria.
-        # eff_res = 0.3 gives reservoir net growth = rho_res_S - 0.12*0.3 = +0.034 h⁻¹
-        # (doubling ~20 h), consistent with slow-growing persistent biofilm.
         self.eff_res = eff_res
 
     def compute(self, t=None):
@@ -115,11 +113,11 @@ class ImmuneResponse:
 def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
     S_b, R_b, S_res, R_res = y
 
-    # Non-negativity clamp
-    S_b   = max(S_b,   0.0)
-    R_b   = max(R_b,   0.0)
-    S_res = max(S_res, 0.0)
-    R_res = max(R_res, 0.0)
+    eradication_threshold = 10.0
+    S_b   = 0.0 if S_b   < eradication_threshold else S_b
+    R_b   = 0.0 if R_b   < eradication_threshold else R_b
+    S_res = 0.0 if S_res < eradication_threshold else S_res
+    R_res = 0.0 if R_res < eradication_threshold else R_res
 
     # Drug free concentrations (mg/L)
     V = max(0.0, van_func(t))
@@ -139,14 +137,8 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
     #   E_L is a bacteriostatic effect rate (h⁻¹) subtracted from the growth rate.
     #   Emax_l = rho_S: complete growth arrest of sensitive strain at saturation.
     #   E_L ∈ [0, Emax_l]; (rho_S - E_L) ≥ 0 — drug cannot directly kill via this term.
-    #
-    # NEW: separate EC50 for resistant strain (EC50_L_R > EC50_L).
-    # Higher EC50 means the resistant strain needs higher drug concentrations
-    # to be inhibited — this is what makes a strain "resistant" in PD terms.
-    # Typical fold-change for linezolid resistance: 4–32×; we use 10× as default.
     h_L = 1.0
-    E_L_S = (params['Emax_l'] * L**h_L) / (params['EC50_L']**h_L   + L**h_L)
-    E_L_R = (params['Emax_l'] * L**h_L) / (params['EC50_L_R']**h_L + L**h_L)
+    E_L = (params['Emax_l'] * L**h_L) / (params['EC50_L']**h_L + L**h_L)
 
     # -------------------------------------------------------------------------
     # Logistic carrying capacity (separate for blood vs reservoir)
@@ -178,31 +170,29 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
     # Blood — Sensitive (S_b): linezolid as separate density-independent term
     dS_b = (
         params['rho_S'] * S_b * logistic_blood
-        - E_L_S * S_b
+        - E_L * S_b
         - imm_S_b
         - vancomycin_kill * S_b
         + f_r_b * S_res - f_b_r * S_b
     )
 
-    # Blood — Resistant (R_b): vancomycin-resistant; linezolid effect reduced
-    # via elevated EC50_L_R.
+    # Blood — Resistant (R_b): vancomycin-resistant.
     dR_b = (
         params['rho_R'] * R_b * logistic_blood
-        - E_L_R * R_b
+        - E_L * R_b
         - imm_R_b
         + f_r_b * R_res - f_b_r * R_b
     )
 
-    # Reservoir — vancomycin with biofilm factor; linezolid with penetration + scaled Emax
-    biofilm_factor = params.get('biofilm_factor', 100.0)
+    # Reservoir — vancomycin; linezolid with penetration + scaled Emax
     vancomycin_kill_res = (params['Emax_v'] * V**h_V) / \
-                          ((biofilm_factor * params['EC50_V'])**h_V + V**h_V)
+                          (params['EC50_V']**h_V + V**h_V)
 
-    lzd_res_fraction = 0.60
+    lzd_res_fraction = 0.50
     Emax_l_res = params['Emax_l'] * (params['rho_res_S'] / params['rho_S'])
     L_res = lzd_res_fraction * L   # effective linezolid concentration in reservoir
     E_L_res_S = (Emax_l_res * L_res**h_L) / (params['EC50_L']**h_L   + L_res**h_L)
-    E_L_res_R = (Emax_l_res * L_res**h_L) / (params['EC50_L_R']**h_L + L_res**h_L)
+    E_L_res_R = (Emax_l_res * L_res**h_L) / (params['EC50_L']**h_L   + L_res**h_L)
 
     dS_res = (
         params['rho_res_S'] * S_res * logistic_res
@@ -230,7 +220,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     total_h = 1344   # 56 days (21d pre-treatment + 4d vanco + 14d LZD + ~17d follow-up)
 
-    resistance_factor = 0.25   # 25% fitness cost; MRSA literature: 10–30%
+    fitness_cost = 0.20   # 25% fitness cost; MRSA literature: 10–30%
 
     vanco_start = 504  # hours (21 days after infection onset)
     # -------------------------------------------------------------------------
@@ -257,7 +247,7 @@ if __name__ == "__main__":
     # close to the immune clearance ceiling — the infection only narrowly wins
     # against immune killing, so dynamics are dominated by bone seeding (f_r_b)
     # rather than autonomous blood proliferation.
-    rho_R = (1 - resistance_factor) * rho_S
+    rho_R = (1 - fitness_cost) * rho_S
     # WARNING: with rho_R < k_immune, resistant blood bacteria have NEGATIVE
     # net growth in the absence of antibiotics and cannot establish on their own.
     # They persist only via continuous seeding from the reservoir.
@@ -267,7 +257,7 @@ if __name__ == "__main__":
         'rho_S':     rho_S,   # 0.63 h⁻¹ (blood planktonic)
         'rho_R':     rho_R,   # 0.504 h⁻¹
         'rho_res_S': 0.07,    # h⁻¹  biofilm/tissue (5–10× slower than planktonic)
-        'rho_res_R': 0.07 * (1 - resistance_factor),  # fitness cost applies in reservoir too
+        'rho_res_R': 0.07 * (1 - fitness_cost),  # fitness cost applies in reservoir too
 
         # ---- Vancomycin PD ----
         # Emax_v: maximum bactericidal rate (h⁻¹, natural-log units)
@@ -286,16 +276,13 @@ if __name__ == "__main__":
         # but the drug cannot directly drive populations negative.
         # Setting Emax_l = rho_S ensures (rho_S - E_L) ≥ 0 at all linezolid
         # concentrations; killing only occurs via immune clearance, not the drug.
-        'Emax_l':  rho_S,  # h⁻¹  = rho_S for true bacteriostasis (was 1.0 h⁻¹ = bactericidal)
+        'Emax_l':  0.2,  # h⁻¹  = rho_S for true bacteriostasis (was 1.0 h⁻¹ = bactericidal)
         # EC50_L lowered 3.0 → 1.0 mg/L: EUCAST susceptible S. aureus peaks at 1–2 mg/L.
         # At EC50=3.0, trough free conc (1.88 mg/L) gave only 39% inhibition → S_b
         # net growth positive (+0.064 h⁻¹) despite linezolid → visually wrong.
         # EC50=1.0 gives 65% inhibition at trough → net = -0.016 h⁻¹ (suppressed).
-        'EC50_L':  1.0,    # mg/L (sensitive S. aureus; EUCAST susceptible range)
-        # EC50_L_R: linezolid EC50 for resistant strain.
-        # Linezolid resistance (cfr / 23S rRNA G2576T) raises MIC ~4–32× above sensitive.
-        # We use 10× as a moderate, clinically realistic default.
-        'EC50_L_R': 10.0,  # mg/L (10× sensitive EC50)
+        'EC50_L':  3.2,    # mg/L Sandberg, A., Jensen, K. S., Baudoux, P., et al. (2010). 
+        #Intra- and extracellular activity of linezolid against Staphylococcus aureus in vivo and in vitro
 
         # ---- Carrying capacities ----
         # B_max_blood: peak bacteremia ~1e4–1e6 CFU/mL in severe MRSA
@@ -304,16 +291,6 @@ if __name__ == "__main__":
 
         # B_max_reservoir: tissue/biofilm capacity ~1e6–1e9 CFU/g
         'B_max_reservoir':  1e7,   # CFU/mL equiv (was 1e2–1e4 — too small)
-
-        # ---- Biofilm protection ----
-        # Biofilm MIC is 100–1000× higher than planktonic MIC for vancomycin
-        # IN VITRO. In vivo, achievable tissue concentrations and biofilm
-        # heterogeneity make the effective protection factor lower —
-        # clinical PK/PD models often use 5–50× (Lewis 2001 AAC; Ceri 1999 AAC;
-        # Garrigós 2010 AAC for bone-PK adjustment).
-        # Reduced 100 → 10 so vancomycin can partially penetrate the reservoir
-        # and clear some bone bacteria in lucky simulations → partial relapse.
-        'biofilm_factor': 10.0,
 
         # ---- Exchange rates ----
         # f_r_b lowered to 5e-5: at 5e-4, seeding from S_res=2.4e5 = 120 CFU/mL/h,
@@ -368,7 +345,7 @@ if __name__ == "__main__":
     assert net_growth_blood > 0, \
         "ERROR: k_immune >= rho_S — bacteria always cleared even without antibiotics!"
 
-    print(f"Resistance factor:  {resistance_factor}  →  rho_R = {rho_R:.4f}  (rho_S = {rho_S})", flush=True)
+    
     print(f"Exchange rates: f_r_b = {params['f_r_b']}, f_b_r = {params['f_b_r']}", flush=True)
     print(f"Initial conditions: S_b={y0[0]:.1f}, R_b={y0[1]:.1f}, S_res={y0[2]:.1f}, R_res={y0[3]:.1f}", flush=True)
     print(f"Vancomycin starts at: {vanco_start_days:.2f} days", flush=True)
