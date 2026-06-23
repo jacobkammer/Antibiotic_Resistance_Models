@@ -58,7 +58,7 @@ np.random.seed(42)
 fitness_cost = 0.20#Fitness cost of VanA-Type Vancomycin Resistance in MRSA, Foucault et al. 2009
 # rho_S = 10% more than blood immune killing (eff_blood * k_immune = 1.0 * 0.12 = 0.12 h⁻¹)
 _immune_kill_blood = 1.0 * 0.12          # eff_blood * k_immune
-rho_S  = 1.35 * _immune_kill_blood       # 0.162 h⁻¹
+rho_S  = 1.50 * _immune_kill_blood       # 0.18 h⁻¹
 rho_R  = (1 - fitness_cost) * rho_S # 0.1296 h⁻¹ at rf=0.20 (< immune kill → R cannot establish in blood without seeding)
 
 n_simulations = 100
@@ -78,8 +78,9 @@ nominal_params = {
     'B_max_reservoir':  1e7,
     'rho_S':            rho_S,
     'rho_R':            rho_R,
-    'rho_res_S':        0.07,
-    'rho_res_R':        0.07 * (1 - fitness_cost),
+    'rho_res_S':        0.09,
+    'rho_res_R':        0.09 * (1 - fitness_cost),
+    'van_res_fraction': 0.15,
     'Emax_v':  0.20,
     'EC50_V':  1.5,
     'Emax_l':  0.1,  # h⁻¹ 
@@ -91,8 +92,8 @@ kinetic_rows = []
 kinetic_specs = [
     ('Sensitive Blood', nominal_params['rho_S'], 0.12 * 1.0),
     ('Resistant Blood', nominal_params['rho_R'], 0.12 * 1.0),
-    ('Sensitive Reservoir', nominal_params['rho_res_S'], 0.12 * 0.1),
-    ('Resistant Reservoir', nominal_params['rho_res_R'], 0.12 * 0.1),
+    ('Sensitive Reservoir', nominal_params['rho_res_S'], 0.12 * 0.1),  # 0.09 h⁻¹ growth
+    ('Resistant Reservoir', nominal_params['rho_res_R'], 0.12 * 0.1),  # 0.072 h⁻¹ growth
 ]
 
 for species, growth_rate_h, immune_death_rate_h in kinetic_specs:
@@ -128,8 +129,8 @@ print()
 # f_r_b (reservoir → blood): plausible range 1e-6 to 1e-2 h⁻¹
 # f_b_r (blood → reservoir): plausible range 1e-7 to 1e-3 h⁻¹
 # Sampled independently; log-uniform gives equal density per decade.
-F_R_B_MIN, F_R_B_MAX = 1e-6, 1e-2   # h⁻¹
-F_B_R_MIN, F_B_R_MAX = 1e-7, 1e-3   # h⁻¹
+F_R_B_MIN, F_R_B_MAX = 1e-5, 1e-3   # h⁻¹
+F_B_R_MIN, F_B_R_MAX = 1e-7, 1e-5   # h⁻¹
 
 print(f"f_r_b range: {F_R_B_MIN:.0e} - {F_R_B_MAX:.0e} h^-1  (log-uniform)")
 print(f"f_b_r range: {F_B_R_MIN:.0e} - {F_B_R_MAX:.0e} h^-1  (log-uniform)")
@@ -220,6 +221,7 @@ for sim in range(n_simulations):
             rtol=1e-6, atol=1e-8, mxstep=5000,
         )
 
+        solution = np.clip(solution, 0, 1e15)
         solution_clean = np.where(solution < 10.0, 0.0, solution)
 
         S_b_results.append(solution_clean[:, 0])

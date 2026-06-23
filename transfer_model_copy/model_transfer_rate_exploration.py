@@ -184,11 +184,13 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
         + f_r_b * R_res - f_b_r * R_b
     )
 
-    # Reservoir — vancomycin; linezolid with penetration + scaled Emax
-    vancomycin_kill_res = (params['Emax_v'] * V**h_V) / \
-                          (params['EC50_V']**h_V + V**h_V)
+    # Reservoir — vancomycin with bone penetration; linezolid with penetration + scaled Emax
+    van_res_fraction = params.get('van_res_fraction', 1.0)
+    V_res = van_res_fraction * V
+    vancomycin_kill_res = (params['Emax_v'] * V_res**h_V) / \
+                          (params['EC50_V']**h_V + V_res**h_V)
 
-    lzd_res_fraction = 0.50
+    lzd_res_fraction = 0.45
     Emax_l_res = params['Emax_l'] * (params['rho_res_S'] / params['rho_S'])
     L_res = lzd_res_fraction * L   # effective linezolid concentration in reservoir
     E_L_res_S = (Emax_l_res * L_res**h_L) / (params['EC50_L']**h_L   + L_res**h_L)
@@ -256,8 +258,8 @@ if __name__ == "__main__":
         # ---- Growth rates ----
         'rho_S':     rho_S,   # 0.63 h⁻¹ (blood planktonic)
         'rho_R':     rho_R,   # 0.504 h⁻¹
-        'rho_res_S': 0.07,    # h⁻¹  biofilm/tissue (5–10× slower than planktonic)
-        'rho_res_R': 0.07 * (1 - fitness_cost),  # fitness cost applies in reservoir too
+        'rho_res_S': 0.09,    # h⁻¹  biofilm/tissue (5–10× slower than planktonic)
+        'rho_res_R': 0.09 * (1 - fitness_cost),  # fitness cost applies in reservoir too
 
         # ---- Vancomycin PD ----
         # Emax_v: maximum bactericidal rate (h⁻¹, natural-log units)
@@ -291,6 +293,9 @@ if __name__ == "__main__":
 
         # B_max_reservoir: tissue/biofilm capacity ~1e6–1e9 CFU/g
         'B_max_reservoir':  1e7,   # CFU/mL equiv (was 1e2–1e4 — too small)
+
+        # ---- Vancomycin bone penetration ----
+        'van_res_fraction': 0.15,  # 15% of serum levels reach bone (Graziani et al. 1988)
 
         # ---- Exchange rates ----
         # f_r_b lowered to 5e-5: at 5e-4, seeding from S_res=2.4e5 = 120 CFU/mL/h,
