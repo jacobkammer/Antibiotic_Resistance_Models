@@ -35,9 +35,9 @@ NUM_ITERATIONS = 400
 LOD            = 10.0       # limit of detection (CFU/mL)
 SIGMA          = 0.9        # log-normal spread applied to whichever rate is varied
 
-total_h      = 1344
+total_h      = 1944  # 21d pre-tx + 4d vancomycin + 42d linezolid + 14d post-tx follow-up
 vanco_start  = 504
-t_eval       = np.linspace(0, total_h, 800)
+t_eval       = np.linspace(0, total_h, 1150)
 t_days       = t_eval / 24.0
 
 pk           = model_mod.PharmacokineticModel()
@@ -53,21 +53,20 @@ lzd_end_days     = (vanco_start + pk.van_duration + pk.lzd_duration) / 24.0
 # ---------------------------------------------------------------------------
 # Fixed parameters (all except the swept transfer rate held at baseline)
 # ---------------------------------------------------------------------------
-fitness_cost = 0.20
 rho_S        = 0.16
-rho_R        = (1 - fitness_cost) * rho_S
+rho_R        = 0.128   # directly tuned (20% fitness cost relative to rho_S)
 
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
     "rho_res_S":        0.035,
-    "rho_res_R":        0.035 * (1 - fitness_cost),
+    "rho_res_R":        0.024,   # lowered below the 20%-fitness-cost value (0.028) so R_res clears before linezolid ends
     "Emax_v":           0.40,
     "EC50_V":           1.5,
     "Emax_l":           rho_S,
     "EC50_L":           1.0,
     "B_max_blood":      5e5,
-    "B_max_reservoir":  1e7,
+    "B_max_reservoir":  4.5e6,
     "van_res_fraction": 0.15,
     "lzd_res_fraction": 0.45,
 }
@@ -76,7 +75,7 @@ F_R_B_BASE = 5e-5   # reservoir -> blood baseline
 F_B_R_BASE = 1e-5   # blood -> reservoir baseline
 
 # Fixed initial conditions — only the swept rate is varied across iterations
-Y0 = [0.0, 0.0, 1000.0, 100.0]
+Y0 = [0.0, 0.0, 100.0, 100.0]
 
 
 # ---------------------------------------------------------------------------

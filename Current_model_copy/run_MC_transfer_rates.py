@@ -1,8 +1,7 @@
 """
 run_MC_transfer_rates.py
 ========================
-Monte Carlo exploration of reservoir-to-blood and blood-to-reservoir transfer
-rate parameters (f_r_b, f_b_r).
+Monte Carlo exploration of transfer rates, all other parameters fixed.
 
 Design differences from run_MC_model.py:
   - Initial conditions are FIXED (constant across all simulations) to isolate
@@ -57,9 +56,8 @@ np.random.seed(42)
 # -------------------------------------------------------------------------
 fitness_cost = 0.20#Fitness cost of VanA-Type Vancomycin Resistance in MRSA, Foucault et al. 2009
 # rho_S = 10% more than blood immune killing (eff_blood * k_immune = 1.0 * 0.12 = 0.12 h⁻¹)
-_immune_kill_blood = 1.0 * 0.12          # eff_blood * k_immune
-rho_S  = 1.50 * _immune_kill_blood       # 0.18 h⁻¹
-rho_R  = (1 - fitness_cost) * rho_S # 0.1296 h⁻¹ at rf=0.20 (< immune kill → R cannot establish in blood without seeding)
+rho_S  = 1.0   # h⁻¹
+rho_R  = (1 - fitness_cost) * rho_S# 0.1296 h⁻¹ at rf=0.20 (< immune kill → R cannot establish in blood without seeding)
 
 n_simulations = 100
 total_h       = 1344   # 56 days
@@ -81,9 +79,10 @@ nominal_params = {
     'rho_res_S':        0.09,
     'rho_res_R':        0.09 * (1 - fitness_cost),
     'van_res_fraction': 0.15,
+    'lzd_res_fraction': 0.45,
     'Emax_v':  0.20,
     'EC50_V':  1.5,
-    'Emax_l':  0.1,  # h⁻¹ 
+    'Emax_l':  0.2,  # h⁻¹ 
     'EC50_L':   3.8,    # mg/L 
     # f_r_b and f_b_r are NOT set here — varied per simulation below
 }
@@ -112,8 +111,7 @@ for species, growth_rate_h, immune_death_rate_h in kinetic_specs:
         'Intrinsic_doubling_time_h': intrinsic_doubling_time_h,
         'Net_doubling_time_h': net_doubling_time_h,
         'Growth_log10_per_day': growth_log10_per_day,
-        'Death_log10_per_day': death_log10_per_day,
-        'Net_log10_per_day': net_log10_per_day,
+        'Death_log10_per_day': death_log10_per_day     
     })
 
 kinetic_df = pd.DataFrame(kinetic_rows)
@@ -130,7 +128,7 @@ print()
 # f_b_r (blood → reservoir): plausible range 1e-7 to 1e-3 h⁻¹
 # Sampled independently; log-uniform gives equal density per decade.
 F_R_B_MIN, F_R_B_MAX = 1e-5, 1e-3   # h⁻¹
-F_B_R_MIN, F_B_R_MAX = 1e-7, 1e-5   # h⁻¹
+F_B_R_MIN, F_B_R_MAX = 1e-9, 1e-5  # h⁻¹
 
 print(f"f_r_b range: {F_R_B_MIN:.0e} - {F_R_B_MAX:.0e} h^-1  (log-uniform)")
 print(f"f_b_r range: {F_B_R_MIN:.0e} - {F_B_R_MAX:.0e} h^-1  (log-uniform)")
@@ -146,7 +144,7 @@ print()
 #
 # S_res = 1e4, R_res = 1e4: established bone infection at t=0
 # (MRSA osteomyelitis tissue burden: 1e3–1e6 CFU/g; Norden 1970, Calhoun 2003)
-y0_fixed = [0.0, 0.0, 1e4, 1e4]   # [S_b, R_b, S_res, R_res] CFU/mL
+y0_fixed = [0.0, 0.0, 1e2, 1e2]   # [S_b, R_b, S_res, R_res] CFU/mL
 print(f"Fixed ICs: S_b={y0_fixed[0]:.0f}, R_b={y0_fixed[1]:.0f}, "
       f"S_res={y0_fixed[2]:.0e}, R_res={y0_fixed[3]:.0e} CFU/mL")
 print()
@@ -221,20 +219,19 @@ for sim in range(n_simulations):
             rtol=1e-6, atol=1e-8, mxstep=5000,
         )
 
-        solution = np.clip(solution, 0, 1e15)
-        solution_clean = np.where(solution < 10.0, 0.0, solution)
+        solution = np.clip(solution, 0, None)
 
-        S_b_results.append(solution_clean[:, 0])
-        R_b_results.append(solution_clean[:, 1])
-        S_res_results.append(solution_clean[:, 2])
-        R_res_results.append(solution_clean[:, 3])
+        S_b_results.append(solution[:, 0])
+        R_b_results.append(solution[:, 1])
+        S_res_results.append(solution[:, 2])
+        R_res_results.append(solution[:, 3])
 
         for i, t in enumerate(boxplot_times):
             idx = boxplot_indices[i]
-            S_b_box[t].append(np.log10(max(solution_clean[idx, 0], 1.0)))
-            R_b_box[t].append(np.log10(max(solution_clean[idx, 1], 1.0)))
-            S_res_box[t].append(np.log10(max(solution_clean[idx, 2], 1.0)))
-            R_res_box[t].append(np.log10(max(solution_clean[idx, 3], 1.0)))
+            S_b_box[t].append(np.log10(max(solution[idx, 0], 1.0)))
+            R_b_box[t].append(np.log10(max(solution[idx, 1], 1.0)))
+            S_res_box[t].append(np.log10(max(solution[idx, 2], 1.0)))
+            R_res_box[t].append(np.log10(max(solution[idx, 3], 1.0)))
 
         successful_runs += 1
     except Exception:

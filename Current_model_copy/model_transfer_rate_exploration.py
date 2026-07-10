@@ -1,36 +1,16 @@
 # =============================================================================
-# model.transfer_rate_exploration.py
-# Copy of model.MRSA_dual_reservoir.py for transfer-rate Monte Carlo exploration.
-# Used by run_MC_transfer_rates.py, which varies f_r_b and f_b_r across their
-# full plausible range while holding all other parameters and initial conditions
-# fixed. See run_MC_transfer_rates.py for details.
+# Model for Monte Carlo exploration
+# Used by run_MC_transfer_rates.py
 # =============================================================================
 import numpy as np
 from scipy.integrate import odeint
 import os
 import sys
 
-# =============================================================================
-# CORRECTIONS SUMMARY (vs model.06042026.py)
-# =============================================================================
-# 1. EC50_V raised from 0.384 → 1.5 mg/L (above vancomycin MIC for MRSA)
-# 2. Emax_v raised from 0.096 → 2.0 h⁻¹ (bactericidal max kill, literature-based)
-# 3. Emax_l corrected to = rho_S; linezolid modeled as BACTERIOSTATIC
-#    (growth inhibition), not bactericidal (kill term)
-# 4. k_immune lowered from 0.3 → 0.12 h⁻¹ so rho_S > k_immune and infection
-#    can establish (net growth positive before antibiotics)
-# 5. Exchange rates raised from ~1e-24 → 5e-4 h⁻¹ (biofilm seeding literature)
-# 6. B_max_blood lowered from 4e7 → 5e5 CFU/mL (realistic peak bacteremia)
-# 7. B_max_reservoir raised to 1e7 CFU/mL (tissue/biofilm capacity)
-# 8. y0: S_b initialized to a small positive value so blood compartment
-#    develops realistically (seeding + initial inoculum)
-# 9. rho_S kept at 0.63 h⁻¹ (doubling time ~1.1 h, consistent with in vivo
-#    S. aureus estimates; see Campion et al. 2005)
-# =============================================================================
 
 class PharmacokineticModel:
     """
-    One-compartment PK model with fixed clearance values.
+    Two-compartment PK model with fixed clearance values.
     Vancomycin: CL = 5.0 L/h, Vd = 50 L → ke = 0.10 h⁻¹, t½ = 6.9 h
     Linezolid:  CL = 6.0 L/h, Vd = 45 L → ke = 0.133 h⁻¹, t½ = 5.2 h
 
@@ -50,7 +30,6 @@ class PharmacokineticModel:
 
         # Linezolid
         self.lzd_dose     = 600     # mg (standard 600 mg q12h)
-        # CORRECTION: was 800 mg — standard dose is 600 mg (Zyvox label)
         self.lzd_interval = 12      # h (q12h dosing)
         self.lzd_duration = 336     # h (14-day course; was 912 h = 38 days which is unusually long)
         self.lzd_volume   = 45      # L
@@ -98,7 +77,6 @@ class ImmuneResponse:
     def __init__(self, k_immune=0.12, eff_blood=1.0, eff_res=0.1):
         self.k_immune  = k_immune
         self.eff_blood = eff_blood
-        # eff_res: 0.3
         # Biofilm physically shields bacteria from phagocytosis; immune killing
         # in the reservoir is substantially reduced vs. planktonic blood bacteria.
         self.eff_res = eff_res
@@ -113,13 +91,26 @@ class ImmuneResponse:
 def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
     S_b, R_b, S_res, R_res = y
 
-    eradication_threshold = 10.0
-    S_b   = 0.0 if S_b   < eradication_threshold else S_b
-    R_b   = 0.0 if R_b   < eradication_threshold else R_b
-    S_res = 0.0 if S_res < eradication_threshold else S_res
-    R_res = 0.0 if R_res < eradication_threshold else R_res
+    S_b   = max(0.0, S_b)
+    R_b   = max(0.0, R_b)
+    S_res = max(0.0, S_res)
+    R_res = max(0.0, R_res)
 
-    # Drug free concentrations (mg/L)
+    # Smooth floor: Hill function that transitions from 1 (full activity) to 0
+    # as population approaches zero. Prevents the hard discontinuity that causes
+    # ODE solver stiffness. N_floor=10 CFU/mL, steepness n=2.
+    _nf = 10.0
+    _ns = 2
+    smooth_S_b   = S_b**_ns   / (_nf**_ns + S_b**_ns)
+    smooth_R_b   = R_b**_ns   / (_nf**_ns + R_b**_ns)
+    smooth_S_res = S_res**_ns / (_nf**_ns + S_res**_ns)
+    smooth_R_res = R_res**_ns / (_nf**_ns + R_res**_ns)
+
+    
+    # Returns the free (unbound) serum concentration (mg/L) at time t
+    # The van_func(t) and lzd_func(t) are interpolation functions built from the PK model's concentration-time curve,
+    # which models a one-compartment system with first-order elimination
+    # max() ensures non-negative concentrations
     V = max(0.0, van_func(t))
     L = max(0.0, lzd_func(t))
 
@@ -128,7 +119,7 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
     # -------------------------------------------------------------------------
     # Vancomycin: bactericidal — Hill equation → kill rate (h⁻¹)
     #   EC50_V ≈ 1.5 mg/L (near MIC for MRSA, 1–2 mg/L)
-    #   Emax_v ≈ 2.0 h⁻¹ (max kill rate; Zhi et al. 2007, Campion et al. 2005)
+    #   Emax_v ≈ 2.0 h⁻¹ (max kill rate; Campion et al. 2005)
     #   Hill coefficient h_V = 1 (conservative; some models use 2–4)
     h_V = 1.0
     vancomycin_kill = (params['Emax_v'] * V**h_V) / (params['EC50_V']**h_V + V**h_V)
@@ -136,7 +127,7 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
     # Linezolid: BACTERIOSTATIC — net effect model (clinical PK/PD convention)
     #   E_L is a bacteriostatic effect rate (h⁻¹) subtracted from the growth rate.
     #   Emax_l = rho_S: complete growth arrest of sensitive strain at saturation.
-    #   E_L ∈ [0, Emax_l]; (rho_S - E_L) ≥ 0 — drug cannot directly kill via this term.
+    #   E_L ∈ [0, Emax_l]; (rho_S - E_L) ≥ 0
     h_L = 1.0
     E_L = (params['Emax_l'] * L**h_L) / (params['EC50_L']**h_L + L**h_L)
 
@@ -158,7 +149,6 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
     # -------------------------------------------------------------------------
     # Exchange rates (reservoir ↔ blood)
     # Literature: biofilm seeding to blood ~1e-4 to 1e-3 h⁻¹
-    # CORRECTION: raised from ~1e-24 (physically nonsensical) to 5e-4 h⁻¹
     # -------------------------------------------------------------------------
     f_r_b = params['f_r_b']   # reservoir → blood (h⁻¹)
     f_b_r = params['f_b_r']   # blood → reservoir (h⁻¹)
@@ -169,7 +159,7 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
 
     # Blood — Sensitive (S_b): linezolid as separate density-independent term
     dS_b = (
-        params['rho_S'] * S_b * logistic_blood
+        params['rho_S'] * S_b * logistic_blood * smooth_S_b
         - E_L * S_b
         - imm_S_b
         - vancomycin_kill * S_b
@@ -178,26 +168,36 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
 
     # Blood — Resistant (R_b): vancomycin-resistant.
     dR_b = (
-        params['rho_R'] * R_b * logistic_blood
+        params['rho_R'] * R_b * logistic_blood * smooth_R_b
         - E_L * R_b
         - imm_R_b
         + f_r_b * R_res - f_b_r * R_b
     )
 
     # Reservoir — vancomycin with bone penetration; linezolid with penetration + scaled Emax
+    #van_res_fraction = 0.15 (set in params) - only 15% of serum reaches the bone/tissue (reservoir)
+    #Graziani et al. 1988.  Poor penetration of vancomycin into bone tissue.
     van_res_fraction = params.get('van_res_fraction', 1.0)
-    V_res = van_res_fraction * V
+    V_res = van_res_fraction * V# V_res is the effective vancomycin concentration in the reservoir
+    # vancomycin_kill_res is the same Hill-function kill rate as in blood, but driven by the reduced v_res so kill rate is lower
     vancomycin_kill_res = (params['Emax_v'] * V_res**h_V) / \
                           (params['EC50_V']**h_V + V_res**h_V)
 
-    lzd_res_fraction = 0.45
-    Emax_l_res = params['Emax_l'] * (params['rho_res_S'] / params['rho_S'])
+    lzd_res_fraction = params.get('lzd_res_fraction', 0.45)
+    Emax_l_res = params['Emax_l'] * (params['rho_res_S'] / params['rho_S']) #scaled Emax for linezolid in reservoir
+    # Emax_l_res — the maximum bacteriostatic effect is scaled down proportionally
+    # to the reservoir growth rate (rho_res_S / rho_S ≈ 0.09/0.63 ≈ 0.14). This is biologically correct:
+    # since linezolid is bacteriostatic (it arrests growth), its maximum possible effect is bounded by how fast bacteria are actually growing.
+    # Slow-growing biofilm bacteria have less growth to suppress.
+
+
+
     L_res = lzd_res_fraction * L   # effective linezolid concentration in reservoir
     E_L_res_S = (Emax_l_res * L_res**h_L) / (params['EC50_L']**h_L   + L_res**h_L)
     E_L_res_R = (Emax_l_res * L_res**h_L) / (params['EC50_L']**h_L   + L_res**h_L)
 
     dS_res = (
-        params['rho_res_S'] * S_res * logistic_res
+        params['rho_res_S'] * S_res * logistic_res * smooth_S_res
         - E_L_res_S * S_res
         - imm_S_res
         - vancomycin_kill_res * S_res
@@ -205,7 +205,7 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
     )
 
     dR_res = (
-        params['rho_res_R'] * R_res * logistic_res
+        params['rho_res_R'] * R_res * logistic_res * smooth_R_res
         - E_L_res_R * R_res
         - imm_R_res
         - f_r_b * R_res + f_b_r * R_b
@@ -222,7 +222,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     total_h = 1344   # 56 days (21d pre-treatment + 4d vanco + 14d LZD + ~17d follow-up)
 
-    fitness_cost = 0.20   # 25% fitness cost; MRSA literature: 10–30%
+    fitness_cost = 0.20   # 20% fitness cost; MRSA literature: 10–30%
 
     vanco_start = 504  # hours (21 days after infection onset)
     # -------------------------------------------------------------------------
@@ -240,7 +240,7 @@ if __name__ == "__main__":
     # Parameters — corrected and literature-grounded
     # =========================================================================
     rho_S = 1.10 * immune_model.eff_blood * immune_model.k_immune
-    # h⁻¹  blood sensitive growth set to 10% above immune killing rate.
+    rho_R = (1 - fitness_cost) * rho_S #h⁻¹  blood sensitive growth set to 10% above immune killing rate.
     #   immune killing in blood = eff_blood * k_immune = 1.0 * 0.12 = 0.12 h⁻¹
     #   → rho_S = 1.10 * 0.12 = 0.132 h⁻¹
     #   → net blood growth (no Abx) = 0.132 - 0.12 = 0.012 h⁻¹
@@ -249,7 +249,7 @@ if __name__ == "__main__":
     # close to the immune clearance ceiling — the infection only narrowly wins
     # against immune killing, so dynamics are dominated by bone seeding (f_r_b)
     # rather than autonomous blood proliferation.
-    rho_R = (1 - fitness_cost) * rho_S
+    
     # WARNING: with rho_R < k_immune, resistant blood bacteria have NEGATIVE
     # net growth in the absence of antibiotics and cannot establish on their own.
     # They persist only via continuous seeding from the reservoir.
@@ -264,21 +264,21 @@ if __name__ == "__main__":
         # ---- Vancomycin PD ----
         # Emax_v: maximum bactericidal rate (h⁻¹, natural-log units)
         #   Clinical target: blood clearance in 5–9 days for MRSA bacteremia
-        #   (Fowler et al. 2006 JAMA; Chang et al. 2003 Medicine)
+        #   (Clinical Management of SA bacteremia, Fowler et al. 2014 JAMA; Chang et al. 2003 Medicine)
         #   With rho_S=0.30, k_immune=0.12, free vanco trough ~5 mg/L (Hill~0.77):
         #     net removal = Emax_v*0.77 - rho_S + k_immune
         #     For 7-day clearance: net removal ≈ 0.078 h⁻¹ → Emax_v ≈ 0.36 h⁻¹
-        #   Previous value of 2.0 h⁻¹ cleared bacteria in ~13 h (far too fast).
+        #   
         'Emax_v':  0.40,   # h⁻¹  (~7-day clearance for sensitive MRSA)
         # EC50_V: concentration at 50% max kill; MRSA MIC ~1–2 mg/L (EUCAST)
-        'EC50_V':  1.5,    # mg/L (unchanged)
+        'EC50_V':  1.5,    # mg/L 
 
         # ---- Linezolid PD ----
         # Linezolid is BACTERIOSTATIC — at maximum effect, growth is arrested
         # but the drug cannot directly drive populations negative.
         # Setting Emax_l = rho_S ensures (rho_S - E_L) ≥ 0 at all linezolid
         # concentrations; killing only occurs via immune clearance, not the drug.
-        'Emax_l':  0.2,  # h⁻¹  = rho_S for true bacteriostasis (was 1.0 h⁻¹ = bactericidal)
+        'Emax_l':  0.4,  # h⁻¹  = rho_S for true bacteriostasis (was 1.0 h⁻¹ = bactericidal)
         # EC50_L lowered 3.0 → 1.0 mg/L: EUCAST susceptible S. aureus peaks at 1–2 mg/L.
         # At EC50=3.0, trough free conc (1.88 mg/L) gave only 39% inhibition → S_b
         # net growth positive (+0.064 h⁻¹) despite linezolid → visually wrong.
@@ -289,19 +289,20 @@ if __name__ == "__main__":
         # ---- Carrying capacities ----
         # B_max_blood: peak bacteremia ~1e4–1e6 CFU/mL in severe MRSA
         #   (Nolan CM & Beaty HN, Am J Med 1976; Wisplinghoff H et al.)
-        'B_max_blood':      5e5,   # CFU/mL (was 4e7 — unrealistically high)
+        'B_max_blood':      5e5,   # CFU/mL 
 
         # B_max_reservoir: tissue/biofilm capacity ~1e6–1e9 CFU/g
-        'B_max_reservoir':  1e7,   # CFU/mL equiv (was 1e2–1e4 — too small)
+        'B_max_reservoir':  1e7,   # CFU/mL equiv
 
-        # ---- Vancomycin bone penetration ----
+        # ---- Bone penetration ----
         'van_res_fraction': 0.15,  # 15% of serum levels reach bone (Graziani et al. 1988)
+        'lzd_res_fraction': 0.45,  # 45% of serum levels reach bone (better tissue penetration)
 
         # ---- Exchange rates ----
         # f_r_b lowered to 5e-5: at 5e-4, seeding from S_res=2.4e5 = 120 CFU/mL/h,
         # overwhelming linezolid's bacteriostatic effect on S_b in blood.
         # 5e-5 gives seeding = 12 CFU/mL/h (within literature range 1e-5–1e-3).
-        'f_r_b': 5e-5,    # h⁻¹  reservoir → blood (Kostakioti et al. 2013)
+        'f_r_b': 1e-3,    # h⁻¹  reservoir → blood
         'f_b_r': 1e-5,    # h⁻¹  blood → reservoir
     }
 
