@@ -48,7 +48,9 @@ S_res_history = np.zeros((num_iterations, len(t_eval)))
 R_res_history = np.zeros((num_iterations, len(t_eval)))
 
 np.random.seed(42)
-sigma    = 0.4
+sigma    = 0.6   # widened from 0.4 -- drops resolution from ~70.7% to ~64.7% (wider spread
+                 # pushes more R_res_0 samples above the ~7.57 CFU/mL escape threshold, even
+                 # though the median stays ~6 CFU/mL)
 s_res_mu = np.log(1000)
 r_res_mu = 1.78   # median R_res_0 ~= 5.93 CFU/mL, lowered from log(100) so ~70% of samples
                   # start below the reservoir persistence threshold (R_res_0 ~= 7.57 CFU/mL,
