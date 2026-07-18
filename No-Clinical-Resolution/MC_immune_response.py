@@ -1,8 +1,16 @@
 """
 Monte Carlo simulation varying k_immune with a log-normal distribution.
-k_immune ~ LogNormal(mean=0.12, CV=0.2)
+k_immune ~ LogNormal(mean=0.14719, CV=0.25)
 4-panel figure: S_b, R_b, S_res, R_res — each with individual MC trajectories,
 5th–95th percentile band, and median.
+
+Mean raised from the model's own default (0.12) to 0.142 so that ~70% of
+samples land above the R_b/R_res escape threshold (k_immune = 0.1255 h^-1,
+see ImmuneResponse_threshold_sweep.py) and resolve the infection -- at the
+model default, only ~31-37% of samples resolved. CV was then widened from
+0.20 to 0.25 (dropping resolution to ~64%), so the mean was re-solved to
+0.14719 -- the 30th percentile of LogNormal(mean, CV=0.25) sits exactly at
+the 0.1255 threshold -- restoring resolution to ~70%.
 """
 
 import importlib.util
@@ -13,12 +21,12 @@ import numpy as np
 from scipy.integrate import odeint
 
 # ── Load model module ─────────────────────────────────────────────────────────
-spec = importlib.util.spec_from_file_location("model_mod", "model.LinearIM.py")
+spec = importlib.util.spec_from_file_location("model_mod", "model.ClinicalResponse.py")
 model_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model_mod)
 
 # ── Simulation settings ───────────────────────────────────────────────────────
-NUM_ITER    = 300
+NUM_ITER    = 1000
 TOTAL_H     = 1944  # 21d pre-tx + 4d vancomycin + 42d linezolid + 14d post-tx follow-up
 VANCO_START = 504
 t_eval      = np.linspace(0, TOTAL_H, 1450)
@@ -28,23 +36,23 @@ pk       = model_mod.PharmacokineticModel()
 van_func = pk.concentration_function("vancomycin", TOTAL_H, VANCO_START)
 lzd_func = pk.concentration_function("linezolid",  TOTAL_H, VANCO_START + pk.van_duration)
 
-rho_S = 0.16
-rho_R = 0.128   # directly tuned (20% fitness cost relative to rho_S)
+rho_S = 0.60    # lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
+rho_R = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
 params = {
     "rho_S":           rho_S,
     "rho_R":           rho_R,
-    "rho_res_S":       0.035,
-    "rho_res_R":       0.024,   # lowered below the 20%-fitness-cost value (0.028) so R_res clears before linezolid ends
+    "rho_res_S":       0.175,  # scaled 5x (from 0.035) alongside rho_S
+    "rho_res_R":       0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.ClinicalResponse.py
     "Emax_v":          0.40,
-    "EC50_V":          1.5,
-    "Emax_l":          rho_S,
+    "EC50_V":          0.245,
+    "Emax_l":          0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
     "EC50_L":          1.0,
-    "B_max_blood":     5e5,
-    "B_max_reservoir": 4.5e6,
+    "B_max_blood":     6000,
+    "B_max_reservoir": 1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
     "van_res_fraction":0.15,
     "lzd_res_fraction":0.45,
-    "f_r_b":           5e-5,
+    "f_r_b":           5e-5,  # restored to original
     "f_b_r":           1e-5,
 }
 
@@ -54,8 +62,8 @@ Y0 = [0.0, 0.0, 100.0, 100.0]
 # ── Log-normal sampling of k_immune ──────────────────────────────────────────
 # CV = sqrt(exp(σ²) - 1)  →  σ = sqrt(ln(1 + CV²))
 # μ  = ln(mean) - σ²/2   ensures E[k_immune] = 0.12
-K_IMMUNE_MEAN = 0.12
-CV            = 0.20
+K_IMMUNE_MEAN = 0.14719   # re-tuned from 0.142 after CV widened to 0.25, to hold resolution at ~70%
+CV            = 0.25      # widened from 0.20
 
 sigma_ln = np.sqrt(np.log(1.0 + CV**2))
 mu_ln    = np.log(K_IMMUNE_MEAN) - sigma_ln**2 / 2.0
@@ -85,7 +93,7 @@ for i, k_im in enumerate(k_immune_samples):
         sol = odeint(
             model_mod.dual_reservoir_model, Y0, t_eval,
             args=(params, van_func, lzd_func, immune_i),
-            rtol=1e-8, atol=1e-10, mxstep=5000,
+            rtol=1e-7, atol=1e-9, mxstep=5000,
         )
 
     # Clip negatives, then mask below LOD with NaN (log-scale friendly)

@@ -5,12 +5,12 @@ import importlib.util
 import os
 
 # Load model
-MODULE_NAME = "model.LinearIM.py"
+MODULE_NAME = "model.ClinicalResponse.py"
 spec = importlib.util.spec_from_file_location("model_mod", MODULE_NAME)
 model_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model_mod)
 
-num_iterations = 200
+num_iterations = 1000
 total_h = 1944  # 21d pre-tx + 4d vancomycin + 42d linezolid + 14d post-tx follow-up
 vanco_start = 504
 t_eval = np.linspace(0, total_h, 1450)
@@ -22,23 +22,23 @@ immune_model = model_mod.ImmuneResponse()
 van_func = pk.concentration_function("vancomycin", total_h, vanco_start)
 lzd_func = pk.concentration_function("linezolid", total_h, vanco_start + pk.van_duration)
 
-rho_S = 0.16
-rho_R = 0.128   # directly tuned (20% fitness cost relative to rho_S)
+rho_S = 0.60    # lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
+rho_R = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
 params = {
     "rho_S":           rho_S,
     "rho_R":           rho_R,
-    "rho_res_S":       0.035,
-    "rho_res_R":       0.024,   # lowered below the 20%-fitness-cost value (0.028) so R_res clears before linezolid ends
+    "rho_res_S":       0.175,  # scaled 5x (from 0.035) alongside rho_S
+    "rho_res_R":       0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.ClinicalResponse.py
     "Emax_v":          0.40,
-    "EC50_V":          1.5,
-    "Emax_l":          rho_S,
+    "EC50_V":          0.245,
+    "Emax_l":          0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
     "EC50_L":          1.0,
-    "B_max_blood":     5e5,
-    "B_max_reservoir": 4.5e6,
+    "B_max_blood":     6000,
+    "B_max_reservoir": 1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
     "van_res_fraction":0.15,
     "lzd_res_fraction":0.45,
-    "f_r_b":           5e-5,
+    "f_r_b":           5e-5,  # restored to original
     "f_b_r":           1e-5,
 }
 
@@ -50,7 +50,11 @@ R_res_history = np.zeros((num_iterations, len(t_eval)))
 np.random.seed(42)
 sigma    = 0.4
 s_res_mu = np.log(1000)
-r_res_mu = np.log(100)
+r_res_mu = 1.78   # median R_res_0 ~= 5.93 CFU/mL, lowered from log(100) so ~70% of samples
+                  # start below the reservoir persistence threshold (R_res_0 ~= 7.57 CFU/mL,
+                  # found by bisection at rho_res_R=0.1765) and resolve the infection --
+                  # S_res_0 has no effect on this threshold (S_res and R_res don't compete
+                  # for the shared reservoir carrying capacity the way S_b/R_b do in blood)
 
 S_res_0_samples = np.random.lognormal(s_res_mu, sigma, num_iterations)
 R_res_0_samples = np.random.lognormal(r_res_mu, sigma, num_iterations)

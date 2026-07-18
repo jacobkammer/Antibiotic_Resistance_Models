@@ -18,7 +18,7 @@ from scipy.integrate import odeint
 # ---------------------------------------------------------------------------
 # Load model
 # ---------------------------------------------------------------------------
-MODULE_NAME = "model.LinearIM.py"
+MODULE_NAME = "model.ClinicalResponse.py"
 if not os.path.exists(MODULE_NAME):
     print(f"ERROR: Cannot find '{MODULE_NAME}' in the current directory.", file=sys.stderr)
     sys.exit(1)
@@ -31,7 +31,7 @@ spec.loader.exec_module(model_mod)
 # ---------------------------------------------------------------------------
 # Simulation settings
 # ---------------------------------------------------------------------------
-NUM_ITERATIONS = 400
+NUM_ITERATIONS = 1000
 LOD            = 10.0       # limit of detection (CFU/mL)
 SIGMA          = 0.9        # log-normal spread applied to whichever rate is varied
 
@@ -53,25 +53,25 @@ lzd_end_days     = (vanco_start + pk.van_duration + pk.lzd_duration) / 24.0
 # ---------------------------------------------------------------------------
 # Fixed parameters (all except the swept transfer rate held at baseline)
 # ---------------------------------------------------------------------------
-rho_S        = 0.16
-rho_R        = 0.128   # directly tuned (20% fitness cost relative to rho_S)
+rho_S        = 0.60    # lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
+rho_R        = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
-    "rho_res_S":        0.035,
-    "rho_res_R":        0.024,   # lowered below the 20%-fitness-cost value (0.028) so R_res clears before linezolid ends
+    "rho_res_S":        0.175,  # scaled 5x (from 0.035) alongside rho_S
+    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.ClinicalResponse.py
     "Emax_v":           0.40,
-    "EC50_V":           1.5,
-    "Emax_l":           rho_S,
+    "EC50_V":           0.245,
+    "Emax_l":           0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
     "EC50_L":           1.0,
-    "B_max_blood":      5e5,
-    "B_max_reservoir":  4.5e6,
+    "B_max_blood":      6000,
+    "B_max_reservoir":  1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
     "van_res_fraction": 0.15,
     "lzd_res_fraction": 0.45,
 }
 
-F_R_B_BASE = 5e-5   # reservoir -> blood baseline
+F_R_B_BASE = 5e-5   # reservoir -> blood baseline (restored to original)
 F_B_R_BASE = 1e-5   # blood -> reservoir baseline
 
 # Fixed initial conditions — only the swept rate is varied across iterations
@@ -240,6 +240,12 @@ def plot_sweep_outcomes(sweep, filename):
         ax.scatter(log10_rate[nonzero], y_vals[nonzero],
                    s=18, alpha=0.5, color="steelblue", edgecolors="none")
         ax.set_yscale("log")
+        if not nonzero.any():
+            # e.g. Peak/Final R_b now clears throughout -- give the empty
+            # log-scale axis an explicit range so tight_layout doesn't crash
+            ax.set_ylim(LOD * 0.1, LOD * 10)
+            ax.text(0.5, 0.5, "All values below LOD", transform=ax.transAxes,
+                    ha="center", va="center", fontsize=9, color="gray")
         ax.set_xlabel(f"$\\log_{{10}}$({RATE_LABELS[sweep['vary_name']]})")
         ax.set_ylabel(ylabel)
         ax.grid(True, which="both", ls=":", alpha=0.35)
@@ -293,9 +299,12 @@ def print_summary(sweep, fixed_name, fixed_value):
     pk_Sb = sweep["peak_S_b"]
     pk_Rb = sweep["peak_R_b"]
     print(f"\n--- Sweep: {sweep['vary_name']} varied ({fixed_name} fixed at {fixed_value:.1e}) ---")
-    print(f"  Peak S_b  median={np.median(pk_Sb[pk_Sb > LOD]):.1e}  "
-          f"[5th={np.percentile(pk_Sb[pk_Sb > LOD], 5):.1e}, "
-          f"95th={np.percentile(pk_Sb[pk_Sb > LOD], 95):.1e}] CFU/mL")
+    if np.any(pk_Sb > LOD):
+        print(f"  Peak S_b  median={np.median(pk_Sb[pk_Sb > LOD]):.1e}  "
+              f"[5th={np.percentile(pk_Sb[pk_Sb > LOD], 5):.1e}, "
+              f"95th={np.percentile(pk_Sb[pk_Sb > LOD], 95):.1e}] CFU/mL")
+    else:
+        print("  Peak S_b: no samples above LOD")
     if np.any(pk_Rb > LOD):
         print(f"  Peak R_b  median={np.median(pk_Rb[pk_Rb > LOD]):.1e}  "
               f"[5th={np.percentile(pk_Rb[pk_Rb > LOD], 5):.1e}, "

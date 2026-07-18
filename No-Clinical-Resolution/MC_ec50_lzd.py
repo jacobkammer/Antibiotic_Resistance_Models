@@ -3,6 +3,38 @@
 # Samples EC50_L from a log-normal distribution centred on baseline (1.0 mg/L)
 # while every other parameter stays fixed, isolating the effect of linezolid
 # potency/susceptibility on bacterial kinetics.
+#
+# Growth rates were scaled 5x (rho_S/rho_R) alongside the original Emax_l
+# increase, but the EC50_L change independently weakens linezolid's effect at
+# realistic (sub-saturating) concentrations, which growth-rate scaling cannot
+# offset.
+#
+# B_max_reservoir was lowered 4.5e6 -> 1e4 (see baseline_reservoir_
+# clearance.py) so an escaped R_res plateaus far below its old level.
+# rho_S/rho_R were lowered 0.80/0.64 -> 0.60/0.55, and Emax_l was UNCOUPLED
+# from rho_S and fixed at 0.8 -- at that point Emax_l exceeded every species'
+# growth rate and ALL FOUR compartments cleared at baseline, the only point
+# in this project where that happened.
+#
+# rho_res_R was then raised 0.145 -> 0.20 (precise clearance threshold
+# 0.17594055) -- now a fitness ADVANTAGE over rho_res_S (0.175) -- which
+# pulled the joint R_b/R_res escape threshold back down to 0.573 mg/L and
+# restored "no clinical resolution": R_b visibly CLEARS during the linezolid
+# course before relapsing. BUT at rho_res_R = 0.20, R_res's reservoir growth
+# advantage over S_res (0.175) was large enough that R_b won the
+# pretreatment race for blood's shared carrying capacity outright, crowding
+# S_b out entirely -- no visible sensitive-strain infection anywhere in this
+# project's Monte Carlo scripts.
+#
+# rho_res_R was finally narrowed to 0.1765 -- just above the reservoir's own
+# 0.17594055 persistence threshold, but below the point where R_b starts
+# winning the blood race -- so S_b CAN also establish a visible infection
+# (peak ~4.8e3 CFU/mL). This pulled the EC50_L escape threshold up to
+# 0.988 mg/L, right next to baseline (1.0): only ~47% of sampled EC50_L
+# values now suppress the reservoir, vs. ~53% that let it persist and
+# relapse. Both outcomes are accepted here -- the point of this rho_res_R is
+# to let S_b establish, not to guarantee reservoir persistence in every
+# sample.
 # =============================================================================
 import importlib.util
 import os
@@ -16,7 +48,7 @@ from scipy.integrate import odeint
 # ---------------------------------------------------------------------------
 # Load model
 # ---------------------------------------------------------------------------
-MODULE_NAME = "model.LinearIM.py"
+MODULE_NAME = "model.ClinicalResponse.py"
 if not os.path.exists(MODULE_NAME):
     print(f"ERROR: Cannot find '{MODULE_NAME}' in the current directory.", file=sys.stderr)
     sys.exit(1)
@@ -29,7 +61,7 @@ spec.loader.exec_module(model_mod)
 # ---------------------------------------------------------------------------
 # Simulation settings
 # ---------------------------------------------------------------------------
-NUM_ITERATIONS = 400
+NUM_ITERATIONS = 1000
 LOD            = 10.0       # limit of detection (CFU/mL)
 SIGMA          = 0.9        # log-normal spread applied to EC50_L
 SEED           = 44
@@ -52,24 +84,24 @@ lzd_end_days     = (vanco_start + pk.van_duration + pk.lzd_duration) / 24.0
 # ---------------------------------------------------------------------------
 # Fixed parameters (all except EC50_L held at baseline)
 # ---------------------------------------------------------------------------
-rho_S        = 0.16
-rho_R        = 0.128   # directly tuned (20% fitness cost relative to rho_S)
+rho_S        = 0.60    # lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
+rho_R        = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
 EC50_L_BASE = 1.0
 
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
-    "rho_res_S":        0.035,
-    "rho_res_R":        0.024,   # lowered below the 20%-fitness-cost value (0.028) so R_res clears before linezolid ends
+    "rho_res_S":        0.175,  # scaled 5x (from 0.035) alongside rho_S
+    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.ClinicalResponse.py
     "Emax_v":           0.40,
-    "EC50_V":           1.5,
-    "Emax_l":           rho_S,
-    "B_max_blood":      5e5,
-    "B_max_reservoir":  4.5e6,
+    "EC50_V":           0.245,
+    "Emax_l":           0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
+    "B_max_blood":      6000,
+    "B_max_reservoir":  1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
     "van_res_fraction": 0.15,
     "lzd_res_fraction": 0.45,
-    "f_r_b":            5e-5,
+    "f_r_b":            5e-5,  # restored to original
     "f_b_r":            1e-5,
 }
 
@@ -83,37 +115,42 @@ rng = np.random.default_rng(SEED)
 ec50_l_samples = rng.lognormal(np.log(EC50_L_BASE), SIGMA, NUM_ITERATIONS)
 
 # ---------------------------------------------------------------------------
-# Resistant-strain escape bins & thresholds (Final Rb / Rres only)
-# Bin edges chosen from EC50_lzd_threshold_sweep.py, which located the exact
-# EC50_L values where resistant counts cross the LOD by end-of-simulation
-# (with S_res_0 = 100 and rho_res_R = 0.024, matching model.LinearIM.py's
-# own defaults -- lowering rho_res_R pushed both thresholds well above
-# baseline EC50_L = 1.0, so the reservoir clears comfortably at baseline):
-#   R_res escape threshold ~= 1.86 mg/L
-#   R_b   escape threshold ~= 2.62 mg/L
-# Bins are built around those two thresholds so every resistant-strain figure
-# shows all three regimes: fully suppressed / reservoir-only escape / both escape.
+# Resistant-strain escape bins & threshold (Final Rb / Rres only)
+# Precise threshold located by direct root-finding against the model's
+# current defaults (rho_S = 0.60, rho_R = 0.55, rho_res_R = 0.1765 -- a
+# narrow window just above the reservoir's own 0.17594055 persistence
+# threshold, chosen so S_b can also establish in blood -- Emax_l = 0.8
+# FIXED, decoupled from rho_S, see model.ClinicalResponse.py's
+# ImmuneResponse class -- EC50_V = 0.245, eff_blood = 1.0), see
+# EC50_lzd_threshold_sweep.py:
+#   Joint R_b / R_res escape threshold = 0.988 mg/L
+# (up from 0.573 mg/L at rho_res_R = 0.20 -- the thinner rho_res_R margin
+# pulls this threshold right next to baseline). R_b and R_res cross the LOD
+# together (a single shared eff_blood couples their fates). Baseline
+# EC50_L = 1.0 sits just above the threshold, so R_b/R_res persist at
+# baseline (R_b visibly clears during the linezolid course, then relapses
+# ~3 days after treatment ends) -- but only ~53% of sampled EC50_L values
+# do so; the rest suppress the reservoir entirely. Both outcomes are
+# accepted; S_b establishing is the priority for this parameterization.
+#
+# Bin edges tightened around the new threshold (0.988, right at baseline).
 # ---------------------------------------------------------------------------
-RES_ESCAPE_THRESH   = 1.863   # R_res crosses LOD here
-BLOOD_ESCAPE_THRESH = 2.616   # R_b   crosses LOD here
+ESCAPE_THRESH = 0.988   # both R_b and R_res cross the LOD here (joint threshold)
 
-res_bin_edges    = np.array([0.70, 1.00, 1.30, 1.60, RES_ESCAPE_THRESH, 2.20, BLOOD_ESCAPE_THRESH, 3.10, 3.50])
+res_bin_edges    = np.array([0.40, 0.60, 0.80, ESCAPE_THRESH, 1.10, 1.30, 1.60, 2.00])
 RES_EC50_CENTERS = np.sqrt(res_bin_edges[:-1] * res_bin_edges[1:])
 RES_EC50_LABELS  = [f"{c:.2f}" for c in RES_EC50_CENTERS]
 N_RES_EC50_BINS  = len(RES_EC50_CENTERS)
 
 REGIME_COLORS = {
-    "suppressed":        "#4c72b0",  # blue   — both compartments stay under LOD
-    "reservoir_escapes": "#dd8452",  # orange — only R_res crosses the LOD
-    "both_escape":       "#c44e52",  # red    — both R_b and R_res cross the LOD
+    "suppressed":  "#4c72b0",  # blue — both R_b and R_res stay under the LOD
+    "both_escape": "#c44e52",  # red  — both R_b and R_res cross the LOD
 }
 
 
 def _regime(lo, hi):
-    if hi <= RES_ESCAPE_THRESH:
+    if hi <= ESCAPE_THRESH:
         return "suppressed"
-    if hi <= BLOOD_ESCAPE_THRESH:
-        return "reservoir_escapes"
     return "both_escape"
 
 
@@ -124,9 +161,8 @@ res_in_range = (ec50_l_samples >= res_bin_edges[0]) & (ec50_l_samples <= res_bin
 res_bin_idx  = np.digitize(ec50_l_samples, res_bin_edges[1:-1])
 
 regime_handles = [
-    mpatches.Patch(facecolor=REGIME_COLORS["suppressed"],        alpha=0.65, label=f"Suppressed (< {RES_ESCAPE_THRESH:.2f})"),
-    mpatches.Patch(facecolor=REGIME_COLORS["reservoir_escapes"], alpha=0.65, label=f"$R_{{res}}$ escapes ({RES_ESCAPE_THRESH:.2f}–{BLOOD_ESCAPE_THRESH:.2f})"),
-    mpatches.Patch(facecolor=REGIME_COLORS["both_escape"],       alpha=0.65, label=f"Both escape (≥ {BLOOD_ESCAPE_THRESH:.2f})"),
+    mpatches.Patch(facecolor=REGIME_COLORS["suppressed"],  alpha=0.65, label=f"Suppressed (< {ESCAPE_THRESH:.3f})"),
+    mpatches.Patch(facecolor=REGIME_COLORS["both_escape"], alpha=0.65, label=f"Both escape (≥ {ESCAPE_THRESH:.3f})"),
 ]
 
 S_b_hist   = np.full((NUM_ITERATIONS, len(t_eval)), np.nan)
@@ -253,6 +289,12 @@ for ax, (y_vals, ylabel) in zip(axes2.flat, outcomes):
     ax.axvline(np.log10(EC50_L_BASE), color="black", ls="--", lw=1.0, alpha=0.7,
                label=f"Baseline ({EC50_L_BASE:.1f})")
     ax.set_yscale("log")
+    if not nonzero.any():
+        # e.g. Peak/Final R_b now clears for every sampled EC50_L -- give the
+        # empty log-scale axis an explicit range so tight_layout doesn't crash
+        ax.set_ylim(LOD * 0.1, LOD * 10)
+        ax.text(0.5, 0.5, "All values below LOD", transform=ax.transAxes,
+                ha="center", va="center", fontsize=9, color="gray")
     ax.set_xlabel(r"$\log_{10}(EC_{50,L})$")
     ax.set_ylabel(ylabel)
     ax.grid(True, which="both", ls=":", alpha=0.35)
@@ -376,9 +418,12 @@ print(f"\n--- Sweep: EC50_L varied (baseline={EC50_L_BASE:.2f}) ---")
 print(f"  EC50_L sampled  median={np.median(ec50_l_samples):.2f}  "
       f"[5th={np.percentile(ec50_l_samples, 5):.2f}, "
       f"95th={np.percentile(ec50_l_samples, 95):.2f}]")
-print(f"  Peak S_b  median={np.median(peak_S_b[peak_S_b > LOD]):.1e}  "
-      f"[5th={np.percentile(peak_S_b[peak_S_b > LOD], 5):.1e}, "
-      f"95th={np.percentile(peak_S_b[peak_S_b > LOD], 95):.1e}] CFU/mL")
+if np.any(peak_S_b > LOD):
+    print(f"  Peak S_b  median={np.median(peak_S_b[peak_S_b > LOD]):.1e}  "
+          f"[5th={np.percentile(peak_S_b[peak_S_b > LOD], 5):.1e}, "
+          f"95th={np.percentile(peak_S_b[peak_S_b > LOD], 95):.1e}] CFU/mL")
+else:
+    print("  Peak S_b: no samples above LOD")
 if np.any(peak_R_b > LOD):
     print(f"  Peak R_b  median={np.median(peak_R_b[peak_R_b > LOD]):.1e}  "
           f"[5th={np.percentile(peak_R_b[peak_R_b > LOD], 5):.1e}, "

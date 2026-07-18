@@ -1,8 +1,8 @@
 # =============================================================================
 # Baseline reservoir clearance check
 #
-# Runs model.LinearIM.py exactly as written (its own __main__ block defaults:
-# EC50_L = 1.0, Emax_l = rho_S = 0.16, S_res_0 = R_res_0 = 100 CFU/mL) as a
+# Runs model.ClinicalResponse.py exactly as written (its own __main__ block defaults:
+# EC50_L = 1.0, Emax_l = rho_S = 0.6, S_res_0 = R_res_0 = 100 CFU/mL) as a
 # single deterministic simulation, and plots blood vs. reservoir kinetics for
 # both strains to show whether each compartment clears below the LOD by the
 # end of the simulation.
@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import odeint
 
-MODULE_NAME = "model.LinearIM.py"
+MODULE_NAME = "model.ClinicalResponse.py"
 if not os.path.exists(MODULE_NAME):
     print(f"ERROR: Cannot find '{MODULE_NAME}' in the current directory.", file=sys.stderr)
     sys.exit(1)
@@ -45,28 +45,28 @@ vanco_start_days = vanco_start / 24.0
 lzd_start_days   = lzd_start / 24.0
 lzd_end_days     = lzd_end / 24.0
 
-rho_S        = 0.16
-rho_R        = 0.128   # directly tuned (20% fitness cost relative to rho_S)
+rho_S        = 0.60    # lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
+rho_R        = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
-# Baseline params, identical to model.LinearIM.py's __main__ block
+# Baseline params, identical to model.ClinicalResponse.py's __main__ block
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
-    "rho_res_S":        0.035,
-    "rho_res_R":        0.024,   # lowered below the 20%-fitness-cost value (0.028) so R_res clears before linezolid ends
+    "rho_res_S":        0.175,  # scaled 5x (from 0.035) alongside rho_S
+    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.ClinicalResponse.py
     "Emax_v":           0.40,
-    "EC50_V":           1.5,
-    "Emax_l":           rho_S,   # "perfect bacteriostasis" for the sensitive strain
+    "EC50_V":           0.245,
+    "Emax_l":           0.8,    # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
     "EC50_L":           1.0,
-    "B_max_blood":      5e5,
-    "B_max_reservoir":  4.5e6,
+    "B_max_blood":      6000,
+    "B_max_reservoir":  1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
     "van_res_fraction": 0.15,
     "lzd_res_fraction": 0.45,
-    "f_r_b":            5e-5,
+    "f_r_b":            5e-5,  # restored to original
     "f_b_r":            1e-5,
 }
 
-Y0 = [0.0, 0.0, 100.0, 100.0]   # model.LinearIM.py's own default reservoir seed
+Y0 = [0.0, 0.0, 100.0, 100.0]   # model.ClinicalResponse.py's own default reservoir seed
 
 sol = odeint(
     model_mod.dual_reservoir_model, Y0, t_eval,
@@ -77,7 +77,7 @@ sol = odeint(
 S_b, R_b, S_res, R_res = sol[:, 0], sol[:, 1], sol[:, 2], sol[:, 3]
 
 final = {"S_b": S_b[-1], "R_b": R_b[-1], "S_res": S_res[-1], "R_res": R_res[-1]}
-print("Final compartment values (baseline model.LinearIM.py parameters):")
+print("Final compartment values (baseline model.ClinicalResponse.py parameters):")
 for name, val in final.items():
     status = "cleared" if val < LOD else "NOT CLEARED"
     print(f"  {name:6s} = {val:.3e} CFU/mL   ({status})")
@@ -124,7 +124,7 @@ fig.suptitle(
 
 axes[1].annotate(
     f"Final $R_{{res}}$ = {final['R_res']:.2e} CFU/mL\n(never drops below LOD after day ~25)",
-    xy=(t_days[-1] * 0.98, final["R_res"]), xytext=(t_days[-1] * 0.55, final["R_res"] * 15),
+    xy=(t_days[-1] * 0.98, final["R_res"]), xytext=(t_days[-1] * 0.30, final["R_res"] * 3.0),
     fontsize=9, color=R_COLOR, fontweight="bold",
     arrowprops=dict(arrowstyle="->", color=R_COLOR, lw=1.2),
 )

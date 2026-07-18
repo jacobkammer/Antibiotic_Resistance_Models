@@ -61,6 +61,16 @@ class ImmuneResponse:
     """Fixed immune clearance model."""
 
     def __init__(self, k_immune=0.12, eff_blood=1.0, eff_res=0.1):
+        # Strain-specific eff_blood_S/eff_blood_R (S=1.0, R=5.0) was tried to
+        # make R_b clear without relapsing, but R_b never establishes a real,
+        # visible infection under any constant R-specific value -- it's a
+        # switch between "never appears" and "relapses to ~4e3+ CFU/mL after
+        # treatment ends" with no stable middle ground (S_b is crowded out of
+        # blood by S_b's own carrying-capacity dominance until vancomycin/
+        # linezolid clear it, then R_b's fate purely depends on whether it can
+        # out-run reservoir reseeding after linezolid stops). Reverted to a
+        # single eff_blood so R_b shows a real, treated infection and accepts
+        # the post-treatment relapse -- see baseline_reservoir_clearance.py.
         self.k_immune  = k_immune
         self.eff_blood = eff_blood
         self.eff_res   = eff_res
@@ -192,24 +202,24 @@ if __name__ == "__main__":
     # =========================================================================
     # Adjusted Growth Parameters for Smooth Trajectories
     # =========================================================================
-    rho_S = 0.16        # h⁻¹ Lowered from 0.63 to slow down blood proliferation
-    rho_R = 0.128        # h⁻¹ Directly tuned (20% fitness cost relative to rho_S)
+    rho_S = 0.60         # h⁻¹ Lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
+    rho_R = 0.55         # h⁻¹ Directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
     params = {
-        'rho_S':           rho_S,   
-        'rho_R':           rho_R,   
-        'rho_res_S':       0.035,   # Lowered from 0.09 to slow down biofilm expansion
-        'rho_res_R':       0.024,   # Lowered below the 20%-fitness-cost value (0.028) so R_res clears before linezolid ends
-        'Emax_v':          0.40,   
-        'EC50_V':          1.5,    
-        'Emax_l':          rho_S,   # Automatically scales to 0.16 for perfect bacteriostasis
-        'EC50_L':          1.0,    
-        'B_max_blood':     5e5,   
-        'B_max_reservoir': 4.5e6,   # Halved from 1e7 to reduce reservoir burden by ~50%
-        'van_res_fraction':0.15,  
-        'lzd_res_fraction':0.45,  
-        'f_r_b':           5e-5,   
-        'f_b_r':           1e-5,    
+        'rho_S':           rho_S,
+        'rho_R':           rho_R,
+        'rho_res_S':       0.175,   # Scaled 5x (from 0.035) alongside rho_S
+        'rho_res_R':       0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.ClinicalResponse.py
+        'Emax_v':          0.40,
+        'EC50_V':          0.245,
+        'Emax_l':          0.8,    # Fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
+        'EC50_L':          1.0,
+        'B_max_blood':     6000,
+        'B_max_reservoir': 1e4,     # Lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
+        'van_res_fraction':0.15,
+        'lzd_res_fraction':0.45,
+        'f_r_b':           5e-5,   # Original value
+        'f_b_r':           1e-5,
     }
 
     y0 = [0, 0, 100, 100]   
@@ -224,8 +234,8 @@ if __name__ == "__main__":
     t_days           = t_eval / 24.0
     vanco_start_days = vanco_start / 24.0
 
-    net_growth_blood = rho_S - immune_model.k_immune
-    print(f"Net blood growth before Abx: {net_growth_blood:.3f} h⁻¹", flush=True)
+    net_growth_blood = rho_S - immune_model.eff_blood * immune_model.k_immune
+    print(f"Net blood growth before Abx: {net_growth_blood:.3f} h^-1", flush=True)
     assert net_growth_blood > 0, "ERROR: Host clears infection without antibiotics!"
 
     print(f"Exchange rates: f_r_b = {params['f_r_b']}, f_b_r = {params['f_b_r']}", flush=True)

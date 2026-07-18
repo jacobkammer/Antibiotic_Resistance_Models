@@ -1,17 +1,47 @@
 # =============================================================================
 # Monte Carlo Simulation: Linezolid Emax (Emax_l)
-# Samples Emax_l from a log-normal distribution centred on baseline (0.16 h^-1,
-# = rho_S, "perfect bacteriostasis") while every other parameter stays fixed,
-# isolating the effect of linezolid's maximum killing capacity on bacterial
-# kinetics. Mirrors MC_ec50_lzd.py, but for Emax_l instead of EC50_L.
+# Samples Emax_l from a log-normal distribution centred on baseline (0.8
+# h^-1) while every other parameter stays fixed, isolating the effect of
+# linezolid's maximum killing capacity on bacterial kinetics. Mirrors
+# MC_ec50_lzd.py, but for Emax_l instead of EC50_L.
+#
+# Growth rates (rho_S/rho_R/rho_res_S/rho_res_R) were scaled 5x alongside the
+# original Emax_l increase (from 0.16 to 0.8), and EC50_L was independently
+# raised to 1.0. rho_S/rho_R were later lowered 0.80/0.64 -> 0.60/0.55
+# (~8.3% fitness cost, down from 20%) for slower post-treatment R_b regrowth.
+# Emax_l originally auto-followed rho_S (so it would have dropped to 0.6),
+# but was then UNCOUPLED from rho_S and fixed at 0.8 -- see
+# model.ClinicalResponse.py's ImmuneResponse class for why.
 #
 # Unlike EC50_L (where HIGH values are bad), for Emax_l LOW values are bad:
 # below a threshold, linezolid's ceiling effect can no longer hold resistant
-# growth in check and R_b / R_res escape. Thresholds located by
-# Emax_lzd_threshold_sweep.py:
-#   R_b   escape threshold ~= 0.147 h^-1
-#   R_res escape threshold ~= 0.158 h^-1
-# (baseline sits at 0.16 h^-1, just above both)
+# growth in check and R_b/R_res escape.
+#
+# B_max_reservoir was lowered 4.5e6 -> 1e4 (see baseline_reservoir_
+# clearance.py) so an escaped R_res plateaus far below its old level. At
+# rho_res_R = 0.145, this sweep's joint R_b/R_res escape threshold was
+# ~0.6517 h^-1, and fixed Emax_l = 0.8 sat ABOVE it, so ALL FOUR compartments
+# cleared at baseline -- the only point in this project where that happened.
+#
+# rho_res_R was then raised 0.145 -> 0.20 (precise clearance threshold
+# 0.17594055) -- now a fitness ADVANTAGE over rho_res_S (0.175) rather than
+# a cost -- which pushed the threshold up to ~0.9156 h^-1, and restored
+# "no clinical resolution": R_b visibly CLEARED during the linezolid course
+# before relapsing. BUT at rho_res_R = 0.20, R_res's reservoir growth
+# advantage over S_res (0.175) was large enough that R_b won the
+# pretreatment race for blood's shared carrying capacity outright, crowding
+# S_b out entirely -- no visible sensitive-strain infection anywhere in this
+# project's Monte Carlo scripts.
+#
+# rho_res_R was finally narrowed to 0.1765 -- just above the reservoir's own
+# 0.17594055 persistence threshold, but below the point where R_b starts
+# winning the blood race -- so S_b CAN also establish a visible infection
+# (peak ~4.8e3 CFU/mL). This pulled this sweep's escape threshold down to
+# 0.8027 h^-1, right next to baseline (0.8): only ~48% of sampled Emax_l
+# values now let the reservoir persist and relapse, vs. ~52% that suppress
+# it entirely. Both outcomes are accepted here -- the point of this
+# rho_res_R is to let S_b establish, not to guarantee reservoir persistence
+# in every sample.
 # =============================================================================
 import importlib.util
 import os
@@ -25,7 +55,7 @@ from scipy.integrate import odeint
 # ---------------------------------------------------------------------------
 # Load model
 # ---------------------------------------------------------------------------
-MODULE_NAME = "model.LinearIM.py"
+MODULE_NAME = "model.ClinicalResponse.py"
 if not os.path.exists(MODULE_NAME):
     print(f"ERROR: Cannot find '{MODULE_NAME}' in the current directory.", file=sys.stderr)
     sys.exit(1)
@@ -38,7 +68,7 @@ spec.loader.exec_module(model_mod)
 # ---------------------------------------------------------------------------
 # Simulation settings
 # ---------------------------------------------------------------------------
-NUM_ITERATIONS = 400
+NUM_ITERATIONS = 1000
 LOD            = 10.0       # limit of detection (CFU/mL)
 SIGMA          = 0.3        # log-normal spread applied to Emax_l
 SEED           = 44
@@ -61,24 +91,24 @@ lzd_end_days     = (vanco_start + pk.van_duration + pk.lzd_duration) / 24.0
 # ---------------------------------------------------------------------------
 # Fixed parameters (all except Emax_l held at baseline)
 # ---------------------------------------------------------------------------
-rho_S        = 0.16
-rho_R        = 0.128   # directly tuned (20% fitness cost relative to rho_S)
+rho_S        = 0.60    # lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
+rho_R        = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
-EMAX_L_BASE = rho_S   # 0.16 h^-1
+EMAX_L_BASE = 0.8   # fixed, decoupled from rho_S = 0.6 (was tied for "perfect bacteriostasis")
 
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
-    "rho_res_S":        0.035,
-    "rho_res_R":        0.024,   # lowered below the 20%-fitness-cost value (0.028) so R_res clears before linezolid ends
+    "rho_res_S":        0.175,  # scaled 5x (from 0.035) alongside rho_S
+    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.ClinicalResponse.py
     "Emax_v":           0.40,
-    "EC50_V":           1.5,
+    "EC50_V":           0.245,
     "EC50_L":           1.0,
-    "B_max_blood":      5e5,
-    "B_max_reservoir":  4.5e6,
+    "B_max_blood":      6000,
+    "B_max_reservoir":  1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
     "van_res_fraction": 0.15,
     "lzd_res_fraction": 0.45,
-    "f_r_b":            5e-5,
+    "f_r_b":            5e-5,  # restored to original
     "f_b_r":            1e-5,
 }
 
@@ -92,38 +122,42 @@ rng = np.random.default_rng(SEED)
 emax_l_samples = rng.lognormal(np.log(EMAX_L_BASE), SIGMA, NUM_ITERATIONS)
 
 # ---------------------------------------------------------------------------
-# Resistant-strain escape bins & thresholds (Final Rb / Rres only)
+# Resistant-strain escape bins & threshold (Final Rb / Rres only)
 # Bin edges chosen from Emax_lzd_threshold_sweep.py, which located the exact
-# Emax_l values where resistant counts cross the LOD by end-of-simulation
-# (with S_res_0 = 100 and rho_res_R = 0.024, matching model.LinearIM.py's
-# own defaults -- lowering rho_res_R pushed both thresholds well below
-# baseline Emax_l = 0.16, so the reservoir clears comfortably at baseline):
-#   R_b   escape threshold ~= 0.110 h^-1  (higher Emax_l -> R_b suppressed)
-#   R_res escape threshold ~= 0.128 h^-1  (higher Emax_l -> R_res suppressed)
-# Bins are built around those two thresholds so every resistant-strain figure
-# shows all three regimes: both escape / reservoir-only escape / suppressed.
-# Direction is flipped vs EC50_L: here LOW Emax_l is the escape zone.
+# Emax_l value where R_b/R_res cross the LOD by end-of-simulation (with
+# S_res_0 = 100, rho_S = 0.60, rho_R = 0.55, rho_res_R = 0.1765 -- a narrow
+# window just above the reservoir's own 0.17594055 persistence threshold,
+# chosen so S_b can also establish in blood -- EC50_L = 1.0, eff_blood = 1.0,
+# matching model.ClinicalResponse.py's own defaults):
+#   Joint R_b / R_res escape threshold ~= 0.8027 h^-1  (higher Emax_l -> suppressed)
+# (down from ~0.9156 h^-1 at rho_res_R = 0.20 -- the thinner rho_res_R margin
+# pulls this threshold right next to baseline). R_b and R_res cross the LOD
+# together (a single shared eff_blood couples their fates -- see
+# model.ClinicalResponse.py's ImmuneResponse class). Direction is flipped
+# vs EC50_L: here LOW Emax_l is the escape zone. Baseline Emax_l = 0.8 sits
+# just below the threshold, so R_b/R_res persist at baseline (R_b visibly
+# clears during the linezolid course, then relapses ~3 days after treatment
+# ends) -- but only ~48% of sampled Emax_l values do so; the rest suppress
+# the reservoir entirely. Both outcomes are accepted; S_b establishing is
+# the priority for this parameterization. Bin edges tightened around the
+# new threshold (0.8027, right at baseline).
 # ---------------------------------------------------------------------------
-BLOOD_ESCAPE_THRESH = 0.1096   # R_b   crosses LOD here (increasing Emax_l)
-RES_ESCAPE_THRESH   = 0.1283   # R_res crosses LOD here (increasing Emax_l)
+ESCAPE_THRESH = 0.8027   # both R_b and R_res cross the LOD here (increasing Emax_l)
 
-emax_bin_edges    = np.array([0.06, 0.08, 0.10, BLOOD_ESCAPE_THRESH, RES_ESCAPE_THRESH, 0.15, 0.18, 0.22])
+emax_bin_edges    = np.array([0.40, 0.55, 0.70, ESCAPE_THRESH, 0.90, 1.00, 1.20])
 EMAX_L_CENTERS    = np.sqrt(emax_bin_edges[:-1] * emax_bin_edges[1:])
 EMAX_L_LABELS     = [f"{c:.2f}" for c in EMAX_L_CENTERS]
 N_EMAX_L_BINS     = len(EMAX_L_CENTERS)
 
 REGIME_COLORS = {
-    "both_escape":       "#c44e52",  # red    — both R_b and R_res cross the LOD (escaped)
-    "reservoir_escapes": "#dd8452",  # orange — only R_res still crosses the LOD
-    "suppressed":        "#4c72b0",  # blue   — both compartments stay under LOD
+    "both_escape": "#c44e52",  # red  — both R_b and R_res cross the LOD
+    "suppressed":  "#4c72b0",  # blue — both compartments stay under LOD
 }
 
 
 def _regime(lo, hi):
-    if hi <= BLOOD_ESCAPE_THRESH:
+    if hi <= ESCAPE_THRESH:
         return "both_escape"
-    if hi <= RES_ESCAPE_THRESH:
-        return "reservoir_escapes"
     return "suppressed"
 
 
@@ -134,9 +168,8 @@ emax_in_range = (emax_l_samples >= emax_bin_edges[0]) & (emax_l_samples <= emax_
 emax_bin_idx  = np.digitize(emax_l_samples, emax_bin_edges[1:-1])
 
 regime_handles = [
-    mpatches.Patch(facecolor=REGIME_COLORS["both_escape"],       alpha=0.65, label=f"Both escape (≤ {BLOOD_ESCAPE_THRESH:.3f})"),
-    mpatches.Patch(facecolor=REGIME_COLORS["reservoir_escapes"], alpha=0.65, label=f"$R_{{res}}$ escapes ({BLOOD_ESCAPE_THRESH:.3f}–{RES_ESCAPE_THRESH:.3f})"),
-    mpatches.Patch(facecolor=REGIME_COLORS["suppressed"],        alpha=0.65, label=f"Suppressed (> {RES_ESCAPE_THRESH:.3f})"),
+    mpatches.Patch(facecolor=REGIME_COLORS["both_escape"], alpha=0.65, label=f"Both escape (≤ {ESCAPE_THRESH:.3f})"),
+    mpatches.Patch(facecolor=REGIME_COLORS["suppressed"],  alpha=0.65, label=f"Suppressed (> {ESCAPE_THRESH:.3f})"),
 ]
 
 S_b_hist   = np.full((NUM_ITERATIONS, len(t_eval)), np.nan)

@@ -1,10 +1,33 @@
 # =============================================================================
 # Deterministic S_res_0 sensitivity sweep (1 - 2000 CFU/mL)
 #
-# baseline_reservoir_clearance.py showed that with model.LinearIM.py's own
-# defaults (S_res_0 = 100), the reservoir resistant strain (R_res) does NOT
-# clear -- it persists at ~9,175 CFU/mL indefinitely, even though the
-# reservoir sensitive strain (S_res) and both blood strains clear normally.
+# baseline_reservoir_clearance.py showed that with model.ClinicalResponse.py's own
+# defaults (S_res_0 = 100, rho_S = 0.60, rho_R = 0.55, rho_res_S = 0.175,
+# EC50_L = 1.0, eff_blood = 1.0, B_max_reservoir = 1e4, Emax_l = 0.8 --
+# UNCOUPLED from rho_S, which previously made it auto-follow rho_S down to
+# 0.6), ALL FOUR compartments briefly cleared at one point in this project's
+# history ("Reservoir fully cleared: True"), since fixing Emax_l at 0.8 made
+# it exceed every species' growth rate.
+#
+# rho_res_R was then deliberately raised 0.145 -> 0.20 (precise clearance
+# threshold 0.17594055, found by root-finding) -- now a fitness ADVANTAGE
+# over rho_res_S (0.175) rather than a cost -- specifically to restore
+# "no clinical resolution": R_res persisted indefinitely, while R_b visibly
+# CLEARED during the linezolid course before relapsing. BUT at
+# rho_res_R = 0.20, R_res's reservoir growth advantage over S_res (0.175)
+# was large enough that R_b won the pretreatment race for blood's shared
+# carrying capacity outright, crowding S_b out entirely -- no visible
+# sensitive-strain infection anywhere in this project's Monte Carlo scripts.
+#
+# rho_res_R was finally narrowed to 0.1765 -- just above the reservoir's own
+# 0.17594055 persistence threshold, but below the point (~0.1766-0.1770)
+# where R_b starts winning the blood race outright -- so S_b CAN also
+# establish a visible infection (peak ~4.8e3 CFU/mL, confirmed via
+# model.ClinicalResponse.py's own __main__). This is a much thinner
+# margin for R_res's own persistence, so some Monte Carlo samples in other
+# scripts (which also vary EC50_L, Emax_l, etc.) may show the reservoir
+# fully clearing rather than persisting -- accepted, since the point is to
+# show S_b establishing.
 #
 # This script asks: how sensitive is that outcome to the initial reservoir
 # sensitive-strain load (S_res_0) alone? All other parameters (including
@@ -12,13 +35,6 @@
 # is run, the final R_b / R_res are recorded, and the exact S_res_0 at which
 # each compartment's outcome flips from "escapes" to "clears" is located via
 # root-finding.
-#
-# Mechanism: a larger initial S_res population depletes the reservoir's shared
-# logistic carrying capacity faster (and interacts with the exchange terms
-# and linezolid's timing), leaving R_res less room to establish itself before
-# linezolid engages. A bigger S_res_0 is therefore *protective* against
-# resistant escape in the reservoir -- the opposite of what intuition about
-# a competing strain might suggest.
 # =============================================================================
 import importlib.util
 import os
@@ -32,7 +48,7 @@ from scipy.optimize import brentq
 # ---------------------------------------------------------------------------
 # Load model
 # ---------------------------------------------------------------------------
-MODULE_NAME = "model.LinearIM.py"
+MODULE_NAME = "model.ClinicalResponse.py"
 if not os.path.exists(MODULE_NAME):
     print(f"ERROR: Cannot find '{MODULE_NAME}' in the current directory.", file=sys.stderr)
     sys.exit(1)
@@ -42,7 +58,7 @@ model_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model_mod)
 
 # ---------------------------------------------------------------------------
-# Simulation settings (matches model.LinearIM.py's own __main__ block)
+# Simulation settings (matches model.ClinicalResponse.py's own __main__ block)
 # ---------------------------------------------------------------------------
 LOD = 10.0   # limit of detection (CFU/mL)
 
@@ -56,25 +72,25 @@ immune_model = model_mod.ImmuneResponse(k_immune=0.12)
 van_func = pk.concentration_function("vancomycin", total_h, vanco_start)
 lzd_func = pk.concentration_function("linezolid",  total_h, vanco_start + pk.van_duration)
 
-rho_S        = 0.16
-rho_R        = 0.128   # directly tuned (20% fitness cost relative to rho_S)
+rho_S        = 0.60    # lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
+rho_R        = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
-SRES0_BASE = 100   # model.LinearIM.py's own default
+SRES0_BASE = 100   # model.ClinicalResponse.py's own default
 
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
-    "rho_res_S":        0.035,
-    "rho_res_R":        0.024,   # lowered below the 20%-fitness-cost value (0.028) so R_res clears before linezolid ends
+    "rho_res_S":        0.175,  # scaled 5x (from 0.035) alongside rho_S
+    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.ClinicalResponse.py
     "Emax_v":           0.40,
-    "EC50_V":           1.5,
-    "Emax_l":           rho_S,
+    "EC50_V":           0.245,
+    "Emax_l":           0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
     "EC50_L":           1.0,
-    "B_max_blood":      5e5,
-    "B_max_reservoir":  4.5e6,
+    "B_max_blood":      6000,
+    "B_max_reservoir":  1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
     "van_res_fraction": 0.15,
     "lzd_res_fraction": 0.45,
-    "f_r_b":            5e-5,
+    "f_r_b":            5e-5,  # restored to original
     "f_b_r":            1e-5,
 }
 
@@ -139,30 +155,45 @@ def find_threshold(compartment_idx, lo, hi):
     return brentq(f, lo, hi, xtol=1e-2)
 
 
-threshold_R_b   = find_threshold(1, 1, 50)
-threshold_R_res = find_threshold(3, 400, 800)
+# Search the whole swept domain for the crossing point -- with rho_res_R now
+# high enough that R_res may never clear at all, a narrow hardcoded bracket
+# can miss the real crossing (or find none when there truly is none).
+threshold_R_b   = find_threshold(1, SRES0_MIN, SRES0_MAX)
+threshold_R_res = find_threshold(3, SRES0_MIN, SRES0_MAX)
 
-print(f"\nPrecise clearance threshold (final R_b   crosses LOD):   "
-      f"S_res_0 = {threshold_R_b:.1f} CFU/mL" if threshold_R_b else
-      "\nNo clean R_b threshold found -- R_b clears across the entire swept range.")
-print(f"Precise clearance threshold (final R_res crosses LOD):   "
-      f"S_res_0 = {threshold_R_res:.1f} CFU/mL" if threshold_R_res else
-      "No clean R_res threshold found -- R_res clears across the entire swept range.")
+
+def _describe(name, threshold, escapes):
+    """Report a compartment's clearance threshold, disambiguating a None
+    result as 'always escapes' vs 'always clears' using the swept data
+    (a missing brentq root is ambiguous on its own)."""
+    if threshold is not None:
+        print(f"\nPrecise clearance threshold (final {name} crosses LOD):   "
+              f"S_res_0 = {threshold:.1f} CFU/mL")
+    elif len(escapes) == N_POINTS:
+        print(f"\nNo clean {name} threshold found -- {name} escapes (stays above LOD) "
+              f"across the entire swept range [{SRES0_MIN}, {SRES0_MAX}].")
+    else:
+        print(f"\nNo clean {name} threshold found -- {name} clears across the entire swept range.")
+
+
+_describe("R_b", threshold_R_b, escape_R_b)
+_describe("R_res", threshold_R_res, escape_R_res)
 
 if threshold_R_res is not None:
     below_threshold = SRES0_BASE < threshold_R_res
-    print(f"\nmodel.LinearIM.py's own default S_res_0 = {SRES0_BASE} is "
+    print(f"\nmodel.ClinicalResponse.py's own default S_res_0 = {SRES0_BASE} is "
           f"{'BELOW' if below_threshold else 'AT/ABOVE'} the R_res clearance threshold "
           f"({threshold_R_res:.1f}) -> R_res {'escapes' if below_threshold else 'clears'}")
+elif len(escape_R_res) == N_POINTS:
+    print(f"\nmodel.ClinicalResponse.py's own default S_res_0 = {SRES0_BASE} -> "
+          f"R_res escapes (stays above LOD) regardless of S_res_0 in "
+          f"[{SRES0_MIN}, {SRES0_MAX}] (rho_res_R = 0.1765 is high enough on its own).")
 else:
-    print(f"\nmodel.LinearIM.py's own default S_res_0 = {SRES0_BASE} -> "
-          f"R_res clears regardless of S_res_0 in [{SRES0_MIN}, {SRES0_MAX}] "
-          f"(rho_res_R = 0.024 is now low enough on its own).")
+    print(f"\nmodel.ClinicalResponse.py's own default S_res_0 = {SRES0_BASE} -> "
+          f"R_res clears regardless of S_res_0 in [{SRES0_MIN}, {SRES0_MAX}].")
 
 # ---------------------------------------------------------------------------
 # FIGURE: final R_b / R_res vs S_res_0, with escape zone(s) highlighted
-# Note the direction: here HIGH S_res_0 clears the reservoir; LOW S_res_0
-# is the escape zone (opposite intuition from a "bigger initial infection").
 # ---------------------------------------------------------------------------
 FLOOR = LOD * 0.5
 
@@ -180,7 +211,7 @@ if threshold_R_b is not None:
 
 ax.axhline(LOD, color="black", ls=":", lw=1.0, alpha=0.7, label=f"LOD ({int(LOD)} CFU/mL)")
 ax.axvline(SRES0_BASE, color="gray", ls="-.", lw=1.5, alpha=0.8,
-           label=f"model.LinearIM.py default ($S_{{res,0}}$ = {SRES0_BASE})")
+           label=f"model.ClinicalResponse.py default ($S_{{res,0}}$ = {SRES0_BASE})")
 
 ax.plot(sres0_sweep, disp_R_res, color="indianred", lw=2.0, marker="o", ms=3,
         label="Final $R_{res}$ (reservoir)")

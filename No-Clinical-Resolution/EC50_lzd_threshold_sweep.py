@@ -1,13 +1,39 @@
 # =============================================================================
-# Deterministic EC50_L threshold sweep (0.9 - 2.0 mg/L)
+# Deterministic EC50_L threshold sweep (0.3 - 2.0 mg/L)
 #
-# MC_ec50_lzd.py showed that resistant bacterial escape is a threshold effect:
-# below EC50_L ~ 1.3 mg/L, linezolid's bacteriostatic effect fully suppresses
-# both R_b and R_res back under the limit of detection by the end of the
-# simulation; above it, resistant counts escape and grow.
+# Growth rates (rho_S/rho_R/rho_res_S/rho_res_R) were scaled 5x and Emax_l
+# raised to match; EC50_L was independently raised 0.7 -> 1.0.
+# B_max_reservoir was also lowered 4.5e6 -> 1e4 (see baseline_reservoir_
+# clearance.py) so an escaped R_res plateaus far below its old level.
+# rho_S/rho_R were lowered 0.80/0.64 -> 0.60/0.55, and Emax_l was UNCOUPLED
+# from rho_S and fixed at 0.8 -- since 0.8 then exceeded every species'
+# growth rate, linezolid became bactericidal against everything, pushing this
+# threshold up to 1.796 mg/L and making ALL FOUR compartments clear at
+# baseline (EC50_L = 1.0), the only point in this project where that
+# happened.
+#
+# rho_res_R was then raised 0.145 -> 0.20 (precise clearance threshold
+# 0.17594055, found by root-finding) -- now a fitness ADVANTAGE over
+# rho_res_S (0.175) rather than a cost. This pulled the EC50_L escape
+# threshold back down to 0.573 mg/L: baseline EC50_L = 1.0 sat back ABOVE
+# it, so R_b and R_res persisted again, with R_b visibly CLEARING during the
+# linezolid course itself before relapsing after treatment ends. BUT at
+# rho_res_R = 0.20, R_res's reservoir growth advantage over S_res (0.175)
+# was large enough that R_b won the pretreatment race for blood's shared
+# carrying capacity outright, crowding S_b out entirely (S_b never
+# established a visible infection in any of these sweeps or the MC scripts).
+#
+# rho_res_R was finally narrowed to 0.1765 -- just above the reservoir's own
+# 0.17594055 persistence threshold, but below the ~0.1766-0.1770 point where
+# R_b starts winning the blood race -- so S_b CAN also establish a visible
+# infection (peak ~4.8e3 CFU/mL). This is a much thinner margin: the EC50_L
+# escape threshold moved to 0.988 mg/L, right next to baseline (1.0), so
+# roughly half of EC50_L samples in MC_ec50_lzd.py will show the reservoir
+# fully clearing rather than persisting. This is accepted -- the point is to
+# show S_b establishing, not to guarantee persistence in every sample.
 #
 # This script runs a fine, deterministic (non-Monte-Carlo) sweep of EC50_L
-# across [0.9, 2.0], records the FINAL R_b / R_res at the end of each run,
+# across [0.3, 2.0], records the FINAL R_b / R_res at the end of each run,
 # selects the EC50_L values that finish above the LOD, and locates the exact
 # crossing point for each compartment via root-finding.
 # =============================================================================
@@ -23,7 +49,7 @@ from scipy.optimize import brentq
 # ---------------------------------------------------------------------------
 # Load model
 # ---------------------------------------------------------------------------
-MODULE_NAME = "model.LinearIM.py"
+MODULE_NAME = "model.ClinicalResponse.py"
 if not os.path.exists(MODULE_NAME):
     print(f"ERROR: Cannot find '{MODULE_NAME}' in the current directory.", file=sys.stderr)
     sys.exit(1)
@@ -53,22 +79,22 @@ vanco_start_days = vanco_start / 24.0
 lzd_start_days   = (vanco_start + pk.van_duration) / 24.0
 lzd_end_days     = (vanco_start + pk.van_duration + pk.lzd_duration) / 24.0
 
-rho_S        = 0.16
-rho_R        = 0.128   # directly tuned (20% fitness cost relative to rho_S)
+rho_S        = 0.60    # lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
+rho_R        = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
-    "rho_res_S":        0.035,
-    "rho_res_R":        0.024,   # lowered below the 20%-fitness-cost value (0.028) so R_res clears before linezolid ends
+    "rho_res_S":        0.175,  # scaled 5x (from 0.035) alongside rho_S
+    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.ClinicalResponse.py
     "Emax_v":           0.40,
-    "EC50_V":           1.5,
-    "Emax_l":           rho_S,
-    "B_max_blood":      5e5,
-    "B_max_reservoir":  4.5e6,
+    "EC50_V":           0.245,
+    "Emax_l":           0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
+    "B_max_blood":      6000,
+    "B_max_reservoir":  1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
     "van_res_fraction": 0.15,
     "lzd_res_fraction": 0.45,
-    "f_r_b":            5e-5,
+    "f_r_b":            5e-5,  # restored to original
     "f_b_r":            1e-5,
 }
 
@@ -90,10 +116,10 @@ def final_counts(ec50_l):
 
 
 # ---------------------------------------------------------------------------
-# Fine sweep across EC50_L in [0.7, 3.5]
+# Fine sweep across EC50_L in [0.3, 2.0]
 # ---------------------------------------------------------------------------
-EC50_MIN, EC50_MAX = 0.7, 3.5
-N_POINTS = 141   # step = 0.02
+EC50_MIN, EC50_MAX = 0.3, 2.0
+N_POINTS = 171   # step = 0.01
 
 ec50_sweep = np.linspace(EC50_MIN, EC50_MAX, N_POINTS)
 final_R_b   = np.zeros(N_POINTS)
