@@ -1,8 +1,9 @@
 # =============================================================================
 # Monte Carlo Simulation: Linezolid Emax (Emax_l)
-# Samples Emax_l from a log-normal distribution centred on baseline (0.8
-# h^-1) while every other parameter stays fixed, isolating the effect of
-# linezolid's maximum killing capacity on bacterial kinetics. Mirrors
+# Samples Emax_l ~ LogNormal(mean=0.8 h^-1, CV=0.307), mean-corrected so
+# E[Emax_l] lands exactly on baseline (same convention as MC_immune_response.py
+# and MC_ec50_lzd.py), while every other parameter stays fixed, isolating the
+# effect of linezolid's maximum killing capacity on bacterial kinetics. Mirrors
 # MC_ec50_lzd.py, but for Emax_l instead of EC50_L.
 #
 # Growth rates (rho_S/rho_R/rho_res_S/rho_res_R) were scaled 5x alongside the
@@ -11,7 +12,7 @@
 # (~8.3% fitness cost, down from 20%) for slower post-treatment R_b regrowth.
 # Emax_l originally auto-followed rho_S (so it would have dropped to 0.6),
 # but was then UNCOUPLED from rho_S and fixed at 0.8 -- see
-# model.ClinicalResponse.py's ImmuneResponse class for why.
+# model_Bacteremia.py's ImmuneResponse class for why.
 #
 # Unlike EC50_L (where HIGH values are bad), for Emax_l LOW values are bad:
 # below a threshold, linezolid's ceiling effect can no longer hold resistant
@@ -47,15 +48,25 @@ import importlib.util
 import os
 import sys
 
-import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import odeint
+from scipy.optimize import brentq
+
+plt.rcParams.update({
+    "font.size": 16,
+    "axes.titlesize": 18,
+    "axes.labelsize": 16,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 14,
+    "legend.fontsize": 14,
+    "figure.titlesize": 20,
+})
 
 # ---------------------------------------------------------------------------
 # Load model
 # ---------------------------------------------------------------------------
-MODULE_NAME = "model.ClinicalResponse.py"
+MODULE_NAME = "model_Bacteremia.py"
 if not os.path.exists(MODULE_NAME):
     print(f"ERROR: Cannot find '{MODULE_NAME}' in the current directory.", file=sys.stderr)
     sys.exit(1)
@@ -70,7 +81,7 @@ spec.loader.exec_module(model_mod)
 # ---------------------------------------------------------------------------
 NUM_ITERATIONS = 1000
 LOD            = 10.0       # limit of detection (CFU/mL)
-SIGMA          = 0.3        # log-normal spread applied to Emax_l
+CV             = 0.307      # log-normal spread applied to Emax_l (equiv. to prior sigma=0.3)
 SEED           = 44
 
 total_h      = 1944  # 21d pre-tx + 4d vancomycin + 42d linezolid + 14d post-tx follow-up
@@ -91,16 +102,20 @@ lzd_end_days     = (vanco_start + pk.van_duration + pk.lzd_duration) / 24.0
 # ---------------------------------------------------------------------------
 # Fixed parameters (all except Emax_l held at baseline)
 # ---------------------------------------------------------------------------
-rho_S        = 0.60    # lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
+rho_S        = 0.61    # raised from 0.60 -- see rho_S sensitivity analysis: this shifts the
+                       # Emax_l escape threshold from 0.8027 up to 0.8161 h^-1 via a
+                       # vancomycin-driven competitive-release effect (S_b grows larger
+                       # pre-vancomycin, then gets cleared, leaving more of blood's shared
+                       # carrying capacity open for R_b to claim)
 rho_R        = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
-EMAX_L_BASE = 0.8   # fixed, decoupled from rho_S = 0.6 (was tied for "perfect bacteriostasis")
+EMAX_L_BASE = 0.8   # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
 
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
     "rho_res_S":        0.175,  # scaled 5x (from 0.035) alongside rho_S
-    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.ClinicalResponse.py
+    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
     "Emax_v":           0.40,
     "EC50_V":           0.245,
     "EC50_L":           1.0,
@@ -118,59 +133,60 @@ Y0 = [0.0, 0.0, 100.0, 100.0]
 # ---------------------------------------------------------------------------
 # Run Monte Carlo sweep: vary Emax_l, hold everything else fixed
 # ---------------------------------------------------------------------------
+# CV = sqrt(exp(σ²) - 1)  →  σ = sqrt(ln(1 + CV²))
+# μ  = ln(mean) - σ²/2   ensures E[Emax_l] = EMAX_L_BASE
+sigma_ln = np.sqrt(np.log(1.0 + CV**2))
+mu_ln    = np.log(EMAX_L_BASE) - sigma_ln**2 / 2.0
+
 rng = np.random.default_rng(SEED)
-emax_l_samples = rng.lognormal(np.log(EMAX_L_BASE), SIGMA, NUM_ITERATIONS)
+emax_l_samples = rng.lognormal(mu_ln, sigma_ln, NUM_ITERATIONS)
 
 # ---------------------------------------------------------------------------
-# Resistant-strain escape bins & threshold (Final Rb / Rres only)
-# Bin edges chosen from Emax_lzd_threshold_sweep.py, which located the exact
-# Emax_l value where R_b/R_res cross the LOD by end-of-simulation (with
-# S_res_0 = 100, rho_S = 0.60, rho_R = 0.55, rho_res_R = 0.1765 -- a narrow
-# window just above the reservoir's own 0.17594055 persistence threshold,
-# chosen so S_b can also establish in blood -- EC50_L = 1.0, eff_blood = 1.0,
-# matching model.ClinicalResponse.py's own defaults):
-#   Joint R_b / R_res escape threshold ~= 0.8027 h^-1  (higher Emax_l -> suppressed)
-# (down from ~0.9156 h^-1 at rho_res_R = 0.20 -- the thinner rho_res_R margin
-# pulls this threshold right next to baseline). R_b and R_res cross the LOD
-# together (a single shared eff_blood couples their fates -- see
-# model.ClinicalResponse.py's ImmuneResponse class). Direction is flipped
-# vs EC50_L: here LOW Emax_l is the escape zone. Baseline Emax_l = 0.8 sits
-# just below the threshold, so R_b/R_res persist at baseline (R_b visibly
-# clears during the linezolid course, then relapses ~3 days after treatment
-# ends) -- but only ~48% of sampled Emax_l values do so; the rest suppress
-# the reservoir entirely. Both outcomes are accepted; S_b establishing is
-# the priority for this parameterization. Bin edges tightened around the
-# new threshold (0.8027, right at baseline).
+# Continuous deterministic switch curve + precise escape threshold.
+#
+# Mirrors MC_ec50_lzd.py's own fine sweep + bisection, but direction-flipped:
+# for Emax_l, LOW values are the escape zone (a weaker drug ceiling can't
+# hold resistant growth in check), the opposite of EC50_L. Replaces the old
+# hardcoded ESCAPE_THRESH=0.8161 with a value bisected directly here, and
+# replaces the 4-bin categorical grouping with a fine, continuous sweep used
+# by the combined switch/population figure below.
 # ---------------------------------------------------------------------------
-ESCAPE_THRESH = 0.8027   # both R_b and R_res cross the LOD here (increasing Emax_l)
-
-emax_bin_edges    = np.array([0.40, 0.55, 0.70, ESCAPE_THRESH, 0.90, 1.00, 1.20])
-EMAX_L_CENTERS    = np.sqrt(emax_bin_edges[:-1] * emax_bin_edges[1:])
-EMAX_L_LABELS     = [f"{c:.2f}" for c in EMAX_L_CENTERS]
-N_EMAX_L_BINS     = len(EMAX_L_CENTERS)
-
-REGIME_COLORS = {
-    "both_escape": "#c44e52",  # red  — both R_b and R_res cross the LOD
-    "suppressed":  "#4c72b0",  # blue — both compartments stay under LOD
-}
-
-
-def _regime(lo, hi):
-    if hi <= ESCAPE_THRESH:
-        return "both_escape"
-    return "suppressed"
+def _final_counts(emax_l):
+    """One deterministic run at a fixed Emax_l; returns (final R_b, final R_res)."""
+    params_i = {**BASE_PARAMS, "Emax_l": emax_l}
+    sol = odeint(
+        model_mod.dual_reservoir_model,
+        Y0, t_eval,
+        args=(params_i, van_func, lzd_func, immune_model),
+        rtol=1e-7, atol=1e-9, mxstep=5000,
+    )
+    return sol[-1, 1], sol[-1, 3]
 
 
-emax_bin_regimes = [_regime(emax_bin_edges[b], emax_bin_edges[b + 1]) for b in range(N_EMAX_L_BINS)]
-emax_bin_colors  = [REGIME_COLORS[r] for r in emax_bin_regimes]
+SWEEP_MIN, SWEEP_MAX = 0.0, 1.0
+N_SWEEP = 101   # step = 0.01
 
-emax_in_range = (emax_l_samples >= emax_bin_edges[0]) & (emax_l_samples <= emax_bin_edges[-1])
-emax_bin_idx  = np.digitize(emax_l_samples, emax_bin_edges[1:-1])
+print(f"\nRunning deterministic switch-curve sweep across [{SWEEP_MIN}, {SWEEP_MAX}] "
+      f"({N_SWEEP} points)...", flush=True)
+sweep_emax  = np.linspace(SWEEP_MIN, SWEEP_MAX, N_SWEEP)
+sweep_R_b   = np.zeros(N_SWEEP)
+sweep_R_res = np.zeros(N_SWEEP)
+for i, emax in enumerate(sweep_emax):
+    sweep_R_b[i], sweep_R_res[i] = _final_counts(emax)
 
-regime_handles = [
-    mpatches.Patch(facecolor=REGIME_COLORS["both_escape"], alpha=0.65, label=f"Both escape (≤ {ESCAPE_THRESH:.3f})"),
-    mpatches.Patch(facecolor=REGIME_COLORS["suppressed"],  alpha=0.65, label=f"Suppressed (> {ESCAPE_THRESH:.3f})"),
-]
+
+def _f_res(emax_l):
+    return _final_counts(emax_l)[1] - LOD
+
+
+if _f_res(SWEEP_MIN) < 0 or _f_res(SWEEP_MAX) > 0:
+    ESCAPE_THRESH = float(sweep_emax[np.argmax(sweep_R_res <= LOD)])  # fallback: coarse crossing
+else:
+    ESCAPE_THRESH = brentq(_f_res, SWEEP_MIN, SWEEP_MAX, xtol=1e-4)
+
+print(f"Precise escape threshold (final R_res crosses LOD): {ESCAPE_THRESH:.4f} h^-1")
+
+REGIME_COLORS = {"suppressed": "#4c72b0", "escape": "#c44e52"}  # blue / red
 
 S_b_hist   = np.full((NUM_ITERATIONS, len(t_eval)), np.nan)
 R_b_hist   = np.full((NUM_ITERATIONS, len(t_eval)), np.nan)
@@ -207,106 +223,67 @@ print("Simulations complete. Generating figures...", flush=True)
 
 
 # ---------------------------------------------------------------------------
-# FIGURE: bar chart of FINAL resistant-strain levels at representative
-# Emax_l values (R_b, R_res only). Uses the same escape bins/thresholds and
-# regime coloring as the boxplot figure below.
-# ---------------------------------------------------------------------------
-bar_final_R_b, bar_final_R_res = [], []
-
-print("\nRunning single simulations at representative Emax_l levels...", flush=True)
-for emax in EMAX_L_CENTERS:
-    params_i = {**BASE_PARAMS, "Emax_l": emax}
-    sol = odeint(
-        model_mod.dual_reservoir_model,
-        Y0, t_eval,
-        args=(params_i, van_func, lzd_func, immune_model),
-        rtol=1e-7, atol=1e-9, mxstep=5000,
-    )
-
-    rb   = sol[-1, 1] if sol[-1, 1] >= LOD else 0.0
-    rres = sol[-1, 3] if sol[-1, 3] >= LOD else 0.0
-
-    bar_final_R_b.append(rb)
-    bar_final_R_res.append(rres)
-
-bar_panels = [
-    (bar_final_R_b,   "Final $R_b$ (CFU/mL)",     1e6),
-    (bar_final_R_res, "Final $R_{res}$ (CFU/mL)", 8e7),
-]
-
-FLOOR = LOD * 0.5   # display floor for values that fell below the LOD (i.e. 0)
-
-fig1, axes1 = plt.subplots(1, 2, figsize=(12, 5))
-fig1.suptitle(r"Final Resistant-Strain Levels at Representative $Emax_L$ Values (linezolid)",
-              fontsize=12, fontweight="bold")
-
-for ax, (values, ylabel, ylim) in zip(axes1.flat, bar_panels):
-    disp_values = [FLOOR if v <= 0 else v for v in values]
-    ax.bar(EMAX_L_LABELS, disp_values, color=emax_bin_colors, edgecolor="black", linewidth=0.6)
-
-    ax.axhline(LOD, color="black", ls=":", lw=0.9, alpha=0.6, label="LOD (10 CFU/mL)")
-    ax.set_yscale("log")
-    ax.set_ylim(LOD * 0.3, ylim)
-    ax.set_xlabel(r"$Emax_L$ (h$^{-1}$)")
-    ax.set_ylabel(ylabel)
-    ax.set_title(ylabel, fontsize=10, pad=12)
-    ax.grid(True, which="both", axis="y", ls=":", alpha=0.35)
-    ax.legend(handles=regime_handles + [ax.get_legend_handles_labels()[0][0]],
-              labels=[h.get_label() for h in regime_handles] + ["LOD (10 CFU/mL)"],
-              fontsize=6.5, loc="upper right")
-
-plt.tight_layout()
-plt.savefig("mc_emax_lzd_bar_levels.png", dpi=300, bbox_inches="tight")
-print("Saved: mc_emax_lzd_bar_levels.png")
-
-
-# ---------------------------------------------------------------------------
-# FIGURE: boxplots of FINAL (end-of-simulation) resistant bacterial counts
-# (R_b, R_res only), built from the full 400-run Monte Carlo sweep above and
-# grouped into the escape bins/thresholds defined earlier.
+# FIGURE: switch curve (continuous, deterministic) + sampled patient
+# population relative to the escape threshold. Mirrors MC_ec50_lzd.py's
+# combined switch/population figure, direction-flipped for Emax_l: escape is
+# the LOW side, suppression the HIGH side.
 # ---------------------------------------------------------------------------
 final_R_b   = np.nan_to_num(R_b_hist[:, -1],   nan=0.0)
 final_R_res = np.nan_to_num(R_res_hist[:, -1], nan=0.0)
 
-final_box_panels = [
-    (final_R_b,   "Final $R_b$ (CFU/mL)",     1e6),
-    (final_R_res, "Final $R_{res}$ (CFU/mL)", 8e7),
-]
+FLOOR = LOD * 0.5   # display floor for values that fell below the LOD (i.e. 0)
 
-fig2, axes2 = plt.subplots(1, 2, figsize=(12, 5))
-fig2.suptitle(r"Final Resistant Bacterial Counts vs $Emax_L$ — Monte Carlo Sweep (linezolid)",
-              fontsize=12, fontweight="bold")
+disp_sweep_R_b   = np.where(sweep_R_b   <= LOD, FLOOR, sweep_R_b)
+disp_sweep_R_res = np.where(sweep_R_res <= LOD, FLOOR, sweep_R_res)
 
-for ax, (final_vals, ylabel, ylim) in zip(axes2.flat, final_box_panels):
-    box_data = []
-    for b in range(N_EMAX_L_BINS):
-        mask = emax_in_range & (emax_bin_idx == b)
-        vals = final_vals[mask]
-        box_data.append(np.where(vals <= 0, FLOOR, vals))
+escaped_mask    = final_R_res > LOD
+frac_escape     = escaped_mask.mean()
+escaped_emax    = emax_l_samples[escaped_mask]
+suppressed_emax = emax_l_samples[~escaped_mask]
 
-    bp = ax.boxplot(box_data, positions=range(N_EMAX_L_BINS), widths=0.6,
-                     patch_artist=True, showfliers=True,
-                     medianprops=dict(color="black", lw=1.5))
-    for patch, color in zip(bp["boxes"], emax_bin_colors):
-        patch.set_facecolor(color)
-        patch.set_alpha(0.65)
+fig1, (ax_top, ax_hist) = plt.subplots(
+    2, 1, figsize=(11, 8.5), sharex=True,
+    gridspec_kw={"height_ratios": [3, 1.1], "hspace": 0.08},
+)
+fig1.suptitle(r"Resistant Escape Switch vs $Emax_L$ (linezolid)",
+              fontsize=19, fontweight="bold")
 
-    ax.axhline(LOD, color="black", ls=":", lw=0.9, alpha=0.6, label="LOD (10 CFU/mL)")
-    ax.set_xticks(range(N_EMAX_L_BINS))
-    ax.set_xticklabels(EMAX_L_LABELS)
-    ax.set_yscale("log")
-    ax.set_ylim(LOD * 0.3, ylim)
-    ax.set_xlabel(r"$Emax_L$ (h$^{-1}$)")
-    ax.set_ylabel(ylabel)
-    ax.set_title(ylabel, fontsize=10, pad=12)
-    ax.grid(True, which="both", axis="y", ls=":", alpha=0.35)
-    ax.legend(handles=regime_handles + [ax.get_legend_handles_labels()[0][0]],
-              labels=[h.get_label() for h in regime_handles] + ["LOD (10 CFU/mL)"],
-              fontsize=6.5, loc="upper right")
+# --- Top: continuous switch curve ---
+ax_top.axvspan(SWEEP_MIN, ESCAPE_THRESH, color=REGIME_COLORS["escape"],     alpha=0.10)
+ax_top.axvspan(ESCAPE_THRESH, SWEEP_MAX, color=REGIME_COLORS["suppressed"], alpha=0.10)
+ax_top.axhline(LOD, color="black", ls=":", lw=1.0, alpha=0.7, label=f"LOD ({int(LOD)} CFU/mL)")
+ax_top.axvline(ESCAPE_THRESH, color="black", ls="--", lw=1.4,
+               label=fr"Switch ($Emax_L$ = {ESCAPE_THRESH:.2g})")
 
-plt.tight_layout()
-plt.savefig("mc_emax_lzd_final_boxplot.png", dpi=300, bbox_inches="tight")
-print("Saved: mc_emax_lzd_final_boxplot.png")
+ax_top.plot(sweep_emax, disp_sweep_R_res, color="indianred", lw=2.2,
+            label="Final $R_{res}$ (reservoir)")
+ax_top.plot(sweep_emax, disp_sweep_R_b, color="darkred", lw=2.2,
+            label="Final $R_b$ (blood)")
+
+ax_top.set_yscale("log")
+ax_top.set_ylim(FLOOR * 0.8, max(sweep_R_b.max(), sweep_R_res.max()) * 3)
+ax_top.set_ylabel("Final resistant count (CFU/mL)")
+ax_top.grid(True, which="both", ls=":", alpha=0.35)
+ax_top.legend(loc="upper right", fontsize=13, framealpha=0.9)
+
+# --- Bottom: where the sampled patient population falls, by actual outcome ---
+bin_edges = np.linspace(SWEEP_MIN, SWEEP_MAX, 31)
+ax_hist.hist(suppressed_emax, bins=bin_edges, color=REGIME_COLORS["suppressed"],
+             alpha=0.75, edgecolor="white", linewidth=0.4,
+             label=f"Suppressed ({(1 - frac_escape) * 100:.0f}% of patients)")
+ax_hist.hist(escaped_emax, bins=bin_edges, color=REGIME_COLORS["escape"],
+             alpha=0.75, edgecolor="white", linewidth=0.4,
+             label=f"Escape ({frac_escape * 100:.0f}% of patients)")
+ax_hist.axvline(ESCAPE_THRESH, color="black", ls="--", lw=1.4)
+
+ax_hist.set_xlim(SWEEP_MIN, SWEEP_MAX)
+ax_hist.set_xlabel(r"$Emax_L$ (h$^{-1}$)")
+ax_hist.set_ylabel("Patients\n(n)")
+ax_hist.grid(True, axis="y", ls=":", alpha=0.35)
+ax_hist.legend(loc="upper right", fontsize=12, framealpha=0.9)
+
+fig1.savefig("mc_emax_lzd_switch.png", dpi=300, bbox_inches="tight")
+print("Saved: mc_emax_lzd_switch.png")
 
 
 # ---------------------------------------------------------------------------

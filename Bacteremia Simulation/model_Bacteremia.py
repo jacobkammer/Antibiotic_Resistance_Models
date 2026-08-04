@@ -209,7 +209,7 @@ if __name__ == "__main__":
         'rho_S':           rho_S,
         'rho_R':           rho_R,
         'rho_res_S':       0.175,   # Scaled 5x (from 0.035) alongside rho_S
-        'rho_res_R':       0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.ClinicalResponse.py
+        'rho_res_R':       0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
         'Emax_v':          0.40,
         'EC50_V':          0.245,
         'Emax_l':          0.8,    # Fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")

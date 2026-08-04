@@ -48,10 +48,20 @@ import numpy as np
 from scipy.integrate import odeint
 from scipy.optimize import brentq
 
+plt.rcParams.update({
+    "font.size": 16,
+    "axes.titlesize": 18,
+    "axes.labelsize": 16,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 14,
+    "legend.fontsize": 14,
+    "figure.titlesize": 20,
+})
+
 # ---------------------------------------------------------------------------
 # Load model
 # ---------------------------------------------------------------------------
-MODULE_NAME = "model.ClinicalResponse.py"
+MODULE_NAME = "model_Bacteremia.py"
 if not os.path.exists(MODULE_NAME):
     print(f"ERROR: Cannot find '{MODULE_NAME}' in the current directory.", file=sys.stderr)
     sys.exit(1)
@@ -80,7 +90,9 @@ vanco_start_days = vanco_start / 24.0
 lzd_start_days   = (vanco_start + pk.van_duration) / 24.0
 lzd_end_days     = (vanco_start + pk.van_duration + pk.lzd_duration) / 24.0
 
-rho_S        = 0.60    # lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
+rho_S        = 0.61    # raised from 0.60 to match MC_emax_lzd.py / the EC50_L and immune-response
+                        # threshold sweeps -- shifts the Emax_l escape threshold from 0.8027 up
+                        # to 0.8161 h^-1 (see MC_emax_lzd.py's own rho_S sensitivity analysis)
 rho_R        = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
 EMAX_L_BASE = 0.8   # fixed, decoupled from rho_S = 0.6 (was tied for "perfect bacteriostasis")
@@ -89,7 +101,7 @@ BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
     "rho_res_S":        0.175,  # scaled 5x (from 0.035) alongside rho_S
-    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.ClinicalResponse.py
+    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
     "Emax_v":           0.40,
     "EC50_V":           0.245,
     "EC50_L":           1.0,
@@ -186,10 +198,10 @@ fig, ax = plt.subplots(figsize=(11, 6.5))
 
 if threshold_R_res is not None:
     ax.axvspan(EMAX_MIN, threshold_R_res, color="lightcoral", alpha=0.15,
-               label=f"$R_{{res}}$ escapes ($Emax_L \\leq$ {threshold_R_res:.3f})")
+               label=f"$R_{{res}}$ escapes ($Emax_L \\leq$ {threshold_R_res:.2g})")
 if threshold_R_b is not None:
     ax.axvspan(EMAX_MIN, threshold_R_b, color="firebrick", alpha=0.18,
-               label=f"$R_b$ escapes ($Emax_L \\leq$ {threshold_R_b:.3f})")
+               label=f"$R_b$ escapes ($Emax_L \\leq$ {threshold_R_b:.2g})")
 
 ax.axhline(LOD, color="black", ls=":", lw=1.0, alpha=0.7, label=f"LOD ({int(LOD)} CFU/mL)")
 ax.axvline(EMAX_L_BASE, color="gray", ls="-.", lw=1.2, alpha=0.7,
@@ -211,12 +223,60 @@ ax.set_ylim(FLOOR * 0.8, max(FLOOR * 20, final_R_b.max(), final_R_res.max()) * 2
 ax.set_xlabel(r"$Emax_L$ (h$^{-1}$)")
 ax.set_ylabel("Final resistant bacterial count (CFU/mL)")
 ax.set_title(r"Resistant Escape Threshold vs $Emax_L$ (linezolid) — end-of-simulation counts",
-             fontsize=12, fontweight="bold")
+             fontsize=19, fontweight="bold")
 ax.grid(True, which="both", ls=":", alpha=0.35)
-ax.legend(loc="upper right", fontsize=8.5, framealpha=0.85)
+ax.legend(loc="upper right", fontsize=15, framealpha=0.85)
 
 fig.tight_layout()
 fig.savefig("emax_lzd_threshold_sweep.png", dpi=300, bbox_inches="tight")
 print("\nSaved: emax_lzd_threshold_sweep.png")
 
-plt.show()
+# ---------------------------------------------------------------------------
+# FIGURE: "Terminal burden vs Emax_L" -- same design as
+# ec50_terminal_burden_vs_ec50.png (EC50_lzd_threshold_sweep.py), but mirrored
+# left-to-right: for Emax_l, LOW values are the escape zone and HIGH values
+# are suppression (the opposite of EC50_L). One marker per swept Emax_l value
+# (subsampled for legibility), open circles pinned to the LOD for runs that
+# clear, filled circles at their actual final count for runs that escape,
+# split by the bisected threshold.
+# ---------------------------------------------------------------------------
+SUBSAMPLE = 24
+idx = np.linspace(0, N_POINTS - 1, SUBSAMPLE).astype(int)
+scatter_emax  = emax_sweep[idx]
+scatter_R_res = final_R_res[idx]
+
+escaped = scatter_R_res > LOD
+thr = threshold_R_res if threshold_R_res is not None else EMAX_MAX
+
+fig2, ax2 = plt.subplots(figsize=(10, 5.5))
+
+ax2.axvspan(EMAX_MIN, thr, color="#c44e52", alpha=0.12)
+ax2.axvspan(thr, EMAX_MAX, color="#4c72b0", alpha=0.12)
+ax2.text(0.02, 0.94, "escape", transform=ax2.transAxes, fontsize=15,
+         color="#8c2f34", fontweight="bold", va="top")
+ax2.text(0.98, 0.94, "suppression", transform=ax2.transAxes, fontsize=15,
+         color="#2f4f7a", fontweight="bold", va="top", ha="right")
+
+ax2.axhline(LOD, color="gray", ls="--", lw=1.0, label=f"LOD ({int(LOD)} CFU/mL)")
+ax2.axvline(thr, color="black", ls="--", lw=1.2, label=fr"Switch ($Emax_L$ = {thr:.2g})")
+
+ax2.scatter(scatter_emax[~escaped], np.full((~escaped).sum(), LOD),
+            facecolors="none", edgecolors="#4c72b0", s=70, linewidths=1.6,
+            label="At or below LOD (suppressed)")
+ax2.scatter(scatter_emax[escaped], scatter_R_res[escaped],
+            facecolors="#c44e52", edgecolors="black", s=70, linewidths=0.6,
+            label="Escape (final $R_{res}$)")
+
+ax2.set_yscale("log")
+ax2.set_ylim(LOD * 0.5, final_R_res.max() * 3)
+ax2.set_xlim(EMAX_MIN, EMAX_MAX)
+ax2.set_xlabel(r"$Emax_L$ (h$^{-1}$)")
+ax2.set_ylabel("Terminal $R_{res}$ burden (CFU/mL)")
+ax2.set_title(fr"Terminal Burden vs $Emax_L$ — switch at {thr:.2g} h$^{{-1}}$",
+              fontsize=18, fontweight="bold", pad=14)
+ax2.grid(True, which="both", ls=":", alpha=0.3)
+ax2.legend(loc="center right", fontsize=12, framealpha=0.9)
+
+fig2.tight_layout()
+fig2.savefig("emax_terminal_burden_vs_emax.png", dpi=300, bbox_inches="tight")
+print("Saved: emax_terminal_burden_vs_emax.png")

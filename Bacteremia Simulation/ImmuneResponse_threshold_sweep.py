@@ -3,12 +3,12 @@
 #
 # Mirrors EC50_lzd_threshold_sweep.py / Emax_lzd_threshold_sweep.py, but for
 # the host immune clearance rate (k_immune) instead of a drug parameter.
-# Baseline k_immune = 0.12 h^-1. model.ClinicalResponse.py's own __main__
+# Baseline k_immune = 0.12 h^-1. model_Bacteremia.py's own __main__
 # asserts net_growth_blood = rho_S - eff_blood*k_immune > 0 (the host must
 # not clear the infection on its own before any antibiotic is given), i.e.
 # k_immune < rho_S/eff_blood. With rho_S = 0.6 and eff_blood = 1.0 (a
 # strain-specific eff_blood_S/eff_blood_R split was tried and reverted -- see
-# model.ClinicalResponse.py's ImmuneResponse class), that ceiling is 0.6
+# model_Bacteremia.py's ImmuneResponse class), that ceiling is 0.6
 # h^-1, well above the existing [0.02, 0.155] range.
 #
 # Like Emax_l, LOWER k_immune is worse here: a weaker immune system lets
@@ -34,6 +34,12 @@
 # but only barely -- a modestly weaker immune system (k_immune > 0.1255)
 # would suppress them instead.
 #
+# rho_S was then raised 0.60 -> 0.61 (see MC_ec50_lzd.py's rho_S sensitivity
+# analysis) to match every other threshold-sweep/MC script in this project.
+# This pushed the crossing point from 0.1255 up to 0.1521 h^-1. Baseline
+# k_immune = 0.12 is still comfortably below it, so R_b/R_res still escape
+# at baseline -- now with more margin than before, not less.
+#
 # This script runs a fine, deterministic (non-Monte-Carlo) sweep of k_immune,
 # records the FINAL R_b / R_res at the end of each run, selects the k_immune
 # values that finish above the LOD, and locates the exact crossing point for
@@ -48,10 +54,20 @@ import numpy as np
 from scipy.integrate import odeint
 from scipy.optimize import brentq
 
+plt.rcParams.update({
+    "font.size": 16,
+    "axes.titlesize": 18,
+    "axes.labelsize": 16,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 14,
+    "legend.fontsize": 14,
+    "figure.titlesize": 20,
+})
+
 # ---------------------------------------------------------------------------
 # Load model
 # ---------------------------------------------------------------------------
-MODULE_NAME = "model.ClinicalResponse.py"
+MODULE_NAME = "model_Bacteremia.py"
 if not os.path.exists(MODULE_NAME):
     print(f"ERROR: Cannot find '{MODULE_NAME}' in the current directory.", file=sys.stderr)
     sys.exit(1)
@@ -75,16 +91,19 @@ pk = model_mod.PharmacokineticModel()
 van_func = pk.concentration_function("vancomycin", total_h, vanco_start)
 lzd_func = pk.concentration_function("linezolid",  total_h, vanco_start + pk.van_duration)
 
-rho_S = 0.60    # lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
+rho_S = 0.61    # raised from 0.60 to match MC_immune_response.py / the EC50_L and Emax_l
+                # threshold sweeps -- this shifts the k_immune escape threshold up from
+                # 0.1255 to 0.1521 h^-1 (bisected and confirmed directly against this
+                # script's own BASE_PARAMS)
 rho_R = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
-K_IMMUNE_BASE = 0.12   # model.ClinicalResponse.py's own default
+K_IMMUNE_BASE = 0.12   # model_Bacteremia.py's own default
 
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
     "rho_res_S":        0.175,  # scaled 5x (from 0.035) alongside rho_S
-    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.ClinicalResponse.py
+    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
     "Emax_v":           0.40,
     "EC50_V":           0.245,
     "Emax_l":           0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
@@ -115,7 +134,9 @@ def final_counts(k_immune):
 # ---------------------------------------------------------------------------
 # Fine sweep across k_immune in [0.02, 0.155]
 # ---------------------------------------------------------------------------
-KIM_MIN, KIM_MAX = 0.02, 0.155
+KIM_MIN, KIM_MAX = 0.02, 0.22   # widened from 0.155 -- at rho_S=0.61 the threshold (0.1521)
+                                 # sits too close to the old upper bound to show the
+                                 # "clears" side of the switch
 N_POINTS = 101
 
 kim_sweep   = np.linspace(KIM_MIN, KIM_MAX, N_POINTS)
@@ -184,14 +205,14 @@ _describe("R_res", threshold_R_res, escape_R_res)
 
 if threshold_R_res is not None:
     below_threshold = K_IMMUNE_BASE < threshold_R_res
-    print(f"\nmodel.ClinicalResponse.py's own default k_immune = {K_IMMUNE_BASE} is "
+    print(f"\nmodel_Bacteremia.py's own default k_immune = {K_IMMUNE_BASE} is "
           f"{'BELOW' if below_threshold else 'AT/ABOVE'} the R_res escape threshold "
           f"({threshold_R_res:.4f}) -> R_res {'escapes' if below_threshold else 'clears'}")
 elif len(escape_R_res) == N_POINTS:
-    print(f"\nmodel.ClinicalResponse.py's own default k_immune = {K_IMMUNE_BASE} -> "
+    print(f"\nmodel_Bacteremia.py's own default k_immune = {K_IMMUNE_BASE} -> "
           f"R_res escapes (stays above LOD) regardless of k_immune in [{KIM_MIN}, {KIM_MAX}].")
 else:
-    print(f"\nmodel.ClinicalResponse.py's own default k_immune = {K_IMMUNE_BASE} -> "
+    print(f"\nmodel_Bacteremia.py's own default k_immune = {K_IMMUNE_BASE} -> "
           f"R_res clears regardless of k_immune in [{KIM_MIN}, {KIM_MAX}].")
 
 # ---------------------------------------------------------------------------
@@ -207,10 +228,10 @@ fig, ax = plt.subplots(figsize=(11, 6.5))
 
 if threshold_R_res is not None:
     ax.axvspan(KIM_MIN, threshold_R_res, color="lightcoral", alpha=0.15,
-               label=f"$R_{{res}}$ escapes ($k_{{immune}} \\leq$ {threshold_R_res:.3f})")
+               label=f"$R_{{res}}$ escapes ($k_{{immune}} \\leq$ {threshold_R_res:.2g})")
 if threshold_R_b is not None:
     ax.axvspan(KIM_MIN, threshold_R_b, color="firebrick", alpha=0.18,
-               label=f"$R_b$ escapes ($k_{{immune}} \\leq$ {threshold_R_b:.3f})")
+               label=f"$R_b$ escapes ($k_{{immune}} \\leq$ {threshold_R_b:.2g})")
 
 ax.axhline(LOD, color="black", ls=":", lw=1.0, alpha=0.7, label=f"LOD ({int(LOD)} CFU/mL)")
 ax.axvline(K_IMMUNE_BASE, color="gray", ls="-.", lw=1.2, alpha=0.7,
@@ -232,9 +253,9 @@ ax.set_ylim(FLOOR * 0.8, max(FLOOR * 20, final_R_b.max(), final_R_res.max()) * 2
 ax.set_xlabel(r"$k_{immune}$ (h$^{-1}$)")
 ax.set_ylabel("Final resistant bacterial count (CFU/mL)")
 ax.set_title(r"Resistant Escape Threshold vs $k_{immune}$ (host immune clearance) — end-of-simulation counts",
-             fontsize=12, fontweight="bold")
+             fontsize=19, fontweight="bold")
 ax.grid(True, which="both", ls=":", alpha=0.35)
-ax.legend(loc="upper right", fontsize=8.5, framealpha=0.85)
+ax.legend(loc="upper right", fontsize=15, framealpha=0.85)
 
 fig.tight_layout()
 fig.savefig("immune_response_threshold_sweep.png", dpi=300, bbox_inches="tight")

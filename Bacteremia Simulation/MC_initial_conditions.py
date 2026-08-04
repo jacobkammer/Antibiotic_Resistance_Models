@@ -4,8 +4,18 @@ import matplotlib.pyplot as plt
 import importlib.util
 import os
 
+plt.rcParams.update({
+    "font.size": 16,
+    "axes.titlesize": 18,
+    "axes.labelsize": 16,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 14,
+    "legend.fontsize": 14,
+    "figure.titlesize": 20,
+})
+
 # Load model
-MODULE_NAME = "model.ClinicalResponse.py"
+MODULE_NAME = "model_Bacteremia.py"
 spec = importlib.util.spec_from_file_location("model_mod", MODULE_NAME)
 model_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model_mod)
@@ -22,14 +32,18 @@ immune_model = model_mod.ImmuneResponse()
 van_func = pk.concentration_function("vancomycin", total_h, vanco_start)
 lzd_func = pk.concentration_function("linezolid", total_h, vanco_start + pk.van_duration)
 
-rho_S = 0.60    # lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
+rho_S = 0.61    # raised from 0.60 -- see rho_S sensitivity analysis. Unlike the EC50_L/
+                # Emax_l/k_immune analyses, this script's outcome (governed by the
+                # reservoir's own S_res_0/R_res_0 persistence threshold) showed no
+                # detectable change at rho_S=0.61 in a single-point check, since rho_S
+                # does not appear in the dS_res/dR_res equations at all
 rho_R = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
 params = {
     "rho_S":           rho_S,
     "rho_R":           rho_R,
     "rho_res_S":       0.175,  # scaled 5x (from 0.035) alongside rho_S
-    "rho_res_R":       0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.ClinicalResponse.py
+    "rho_res_R":       0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
     "Emax_v":          0.40,
     "EC50_V":          0.245,
     "Emax_l":          0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
@@ -48,18 +62,28 @@ S_res_history = np.zeros((num_iterations, len(t_eval)))
 R_res_history = np.zeros((num_iterations, len(t_eval)))
 
 np.random.seed(42)
-sigma    = 0.6   # widened from 0.4 -- drops resolution from ~70.7% to ~64.7% (wider spread
-                 # pushes more R_res_0 samples above the ~7.57 CFU/mL escape threshold, even
-                 # though the median stays ~6 CFU/mL)
-s_res_mu = np.log(1000)
-r_res_mu = 1.78   # median R_res_0 ~= 5.93 CFU/mL, lowered from log(100) so ~70% of samples
-                  # start below the reservoir persistence threshold (R_res_0 ~= 7.57 CFU/mL,
-                  # found by bisection at rho_res_R=0.1765) and resolve the infection --
-                  # S_res_0 has no effect on this threshold (S_res and R_res don't compete
-                  # for the shared reservoir carrying capacity the way S_b/R_b do in blood)
+# CV = sqrt(exp(σ²) - 1)  →  σ = sqrt(ln(1 + CV²))
+# μ  = ln(mean) - σ²/2   ensures E[S_res_0] = S_RES_0_BASE, E[R_res_0] = R_RES_0_BASE
+# (same mean-corrected, CV-based convention as MC_ec50_lzd.py / MC_emax_lzd.py / MC_immune_response.py)
+CV = 60.0    # deliberately extreme: with both means fixed at 100 CFU/mL (matching the
+             # other MC scripts), reaching ~70% resolution against the ~7.57 CFU/mL
+             # reservoir persistence threshold requires this much right-skew -- illustrates
+             # just how uncertain/heterogeneous the true founding reservoir population is
 
-S_res_0_samples = np.random.lognormal(s_res_mu, sigma, num_iterations)
-R_res_0_samples = np.random.lognormal(r_res_mu, sigma, num_iterations)
+S_RES_0_BASE = 100    # matches the fixed reservoir initial condition used in the other
+                       # MC scripts (MC_ec50_lzd.py, MC_emax_lzd.py, MC_immune_response.py)
+R_RES_0_BASE = 100    # reservoir persistence threshold (R_res_0 ~= 7.57 CFU/mL, found by
+                       # bisection at rho_res_R=0.1765) determines clinical resolution --
+                       # S_res_0 has no effect on this threshold (S_res and R_res don't
+                       # compete for the shared reservoir carrying capacity the way
+                       # S_b/R_b do in blood)
+
+sigma_ln = np.sqrt(np.log(1.0 + CV**2))
+s_res_mu = np.log(S_RES_0_BASE) - sigma_ln**2 / 2.0
+r_res_mu = np.log(R_RES_0_BASE) - sigma_ln**2 / 2.0
+
+S_res_0_samples = np.random.lognormal(s_res_mu, sigma_ln, num_iterations)
+R_res_0_samples = np.random.lognormal(r_res_mu, sigma_ln, num_iterations)
 
 for i in range(num_iterations):
     y0 = [0.0, 0.0, S_res_0_samples[i], R_res_0_samples[i]]
@@ -91,7 +115,7 @@ def format_kinetic_panel(ax, title, y_max, label, legend_loc="lower right"):
     ax.set_ylabel(f"{label} (CFU/mL)")
     ax.set_title(title)
     ax.grid(True, which="both", ls=":", alpha=0.4)
-    ax.legend(loc=legend_loc, fontsize="x-small")
+    ax.legend(loc=legend_loc, fontsize="small")
 
 
 # Panel A: Sensitive Blood

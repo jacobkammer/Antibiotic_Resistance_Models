@@ -1,41 +1,45 @@
 # =============================================================================
 # Deterministic EC50_L threshold sweep (0.3 - 2.0 mg/L)
 #
-# Growth rates (rho_S/rho_R/rho_res_S/rho_res_R) were scaled 5x and Emax_l
-# raised to match; EC50_L was independently raised 0.7 -> 1.0.
-# B_max_reservoir was also lowered 4.5e6 -> 1e4 (see baseline_reservoir_
-# clearance.py) so an escaped R_res plateaus far below its old level.
-# rho_S/rho_R were lowered 0.80/0.64 -> 0.60/0.55, and Emax_l was UNCOUPLED
-# from rho_S and fixed at 0.8 -- since 0.8 then exceeded every species'
-# growth rate, linezolid became bactericidal against everything, pushing this
-# threshold up to 1.796 mg/L and making ALL FOUR compartments clear at
-# baseline (EC50_L = 1.0), the only point in this project where that
-# happened.
 #
-# rho_res_R was then raised 0.145 -> 0.20 (precise clearance threshold
-# 0.17594055, found by root-finding) -- now a fitness ADVANTAGE over
-# rho_res_S (0.175) rather than a cost. This pulled the EC50_L escape
-# threshold back down to 0.573 mg/L: baseline EC50_L = 1.0 sat back ABOVE
-# it, so R_b and R_res persisted again, with R_b visibly CLEARING during the
-# linezolid course itself before relapsing after treatment ends. BUT at
-# rho_res_R = 0.20, R_res's reservoir growth advantage over S_res (0.175)
-# was large enough that R_b won the pretreatment race for blood's shared
-# carrying capacity outright, crowding S_b out entirely (S_b never
-# established a visible infection in any of these sweeps or the MC scripts).
 #
 # rho_res_R was finally narrowed to 0.1765 -- just above the reservoir's own
 # 0.17594055 persistence threshold, but below the ~0.1766-0.1770 point where
 # R_b starts winning the blood race -- so S_b CAN also establish a visible
 # infection (peak ~4.8e3 CFU/mL). This is a much thinner margin: the EC50_L
-# escape threshold moved to 0.988 mg/L, right next to baseline (1.0), so
-# roughly half of EC50_L samples in MC_ec50_lzd.py will show the reservoir
-# fully clearing rather than persisting. This is accepted -- the point is to
-# show S_b establishing, not to guarantee persistence in every sample.
+# escape threshold moved to 0.988 mg/L at rho_S=0.61 -- right next to baseline
+# (1.0), so roughly half of EC50_L samples would show the reservoir fully
+# clearing rather than persisting. This is accepted -- the point is to show
+# S_b establishing, not to guarantee persistence in every sample.
+#
+# rho_S was then raised 0.60 -> 0.61 (see MC_ec50_lzd.py's own rho_S
+# sensitivity analysis: a vancomycin-driven competitive-release effect, where
+# S_b grows larger pre-vancomycin then gets cleared, leaving more of blood's
+# shared carrying capacity open for R_b to claim), which pulled the escape
+# threshold down further to 0.932 mg/L -- confirmed by this script's own
+# bisection below.
 #
 # This script runs a fine, deterministic (non-Monte-Carlo) sweep of EC50_L
 # across [0.3, 2.0], records the FINAL R_b / R_res at the end of each run,
 # selects the EC50_L values that finish above the LOD, and locates the exact
 # crossing point for each compartment via root-finding.
+#
+# What it does, step by step:
+#   1. Runs one fixed-parameter ODE simulation per EC50_L value on a 171-point
+#      grid (step 0.01) across [0.3, 2.0] mg/L, keeping every other parameter
+#      at BASE_PARAMS, and records only the final R_b/R_res at end-of-sim.
+#   2. Flags which EC50_L values finish above the LOD (10 CFU/mL) -- i.e.
+#      where the resistant strain persists/relapses rather than clearing.
+#   3. Uses scipy.optimize.brentq (bisection) to pinpoint the *precise*
+#      EC50_L where final R_b (and, separately, final R_res) crosses the LOD,
+#      rather than relying on the coarse grid resolution.
+#   4. Plots final R_b/R_res vs. EC50_L (log y-axis), shades the escape
+#      zone(s) above each threshold, and saves ec50_lzd_threshold_sweep.png.
+#
+# This is the tool used to derive/verify the exact ESCAPE_THRESH value
+# consumed by MC_ec50_lzd.py: every time rho_res_S/rho_res_R was retuned in
+# that file's history (see narrative above), this script was rerun to
+# re-locate where the threshold moved to.
 # =============================================================================
 import importlib.util
 import os
@@ -46,10 +50,20 @@ import numpy as np
 from scipy.integrate import odeint
 from scipy.optimize import brentq
 
+plt.rcParams.update({
+    "font.size": 16,
+    "axes.titlesize": 18,
+    "axes.labelsize": 16,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 14,
+    "legend.fontsize": 14,
+    "figure.titlesize": 20,
+})
+
 # ---------------------------------------------------------------------------
 # Load model
 # ---------------------------------------------------------------------------
-MODULE_NAME = "model.ClinicalResponse.py"
+MODULE_NAME = "model_Bacteremia.py"
 if not os.path.exists(MODULE_NAME):
     print(f"ERROR: Cannot find '{MODULE_NAME}' in the current directory.", file=sys.stderr)
     sys.exit(1)
@@ -60,7 +74,8 @@ sys.modules["model_mod"] = model_mod
 spec.loader.exec_module(model_mod)
 
 # ---------------------------------------------------------------------------
-# Simulation settings (matches MC_ec50_lzd.py)
+# Simulation settings (matches MC_ec50_lzd.py: rho_S=0.61, shifting the escape
+# threshold to 0.932 mg/L -- down from 0.988 mg/L at rho_S=0.60)
 # ---------------------------------------------------------------------------
 LOD = 10.0   # limit of detection (CFU/mL)
 
@@ -79,14 +94,14 @@ vanco_start_days = vanco_start / 24.0
 lzd_start_days   = (vanco_start + pk.van_duration) / 24.0
 lzd_end_days     = (vanco_start + pk.van_duration + pk.lzd_duration) / 24.0
 
-rho_S        = 0.60    # lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
-rho_R        = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
+rho_S        = 0.61    # raised from 0.60 to match MC_ec50_lzd.py's rho_S sensitivity analysis
+rho_R        = 0.55    # directly tuned (~10% fitness cost relative to rho_S, down from 20%)
 
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
     "rho_res_S":        0.175,  # scaled 5x (from 0.035) alongside rho_S
-    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.ClinicalResponse.py
+    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
     "Emax_v":           0.40,
     "EC50_V":           0.245,
     "Emax_l":           0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
@@ -144,6 +159,16 @@ print(f"EC50_L values in [{EC50_MIN}, {EC50_MAX}] with final R_res > LOD: "
 
 # ---------------------------------------------------------------------------
 # Precise crossing point (root of final_count(EC50_L) - LOD) via bisection
+#---------------------------------------------------------------------------
+#How it works: f(ec50_l) runs one full ODE simulation at a candidate EC50_L 
+#and returns final_count - LOD — positive if the compartment ends up above the detection limit, 
+#negative if below. scipy.optimize.brentq(f, EC50_MIN, EC50_MAX, xtol=1e-3) 
+#(imported at the top, from scipy.optimize import brentq) then does bisection-based root-finding on that function, 
+#homing in on the exact EC50_L where f crosses zero — i.e., where the final count exactly equals the LOD — to a tolerance of 0.001 mg/L.
+# It's called once for compartment_idx=1 (R_b) and once for compartment_idx=3 (R_res), which is why the earlier rerun printed two threshold values
+#(both landing at 0.932 mg/L, since R_b and R_res share the same eff_blood and cross together).
+##The f(EC50_MIN) > 0 or f(EC50_MAX) < 0 guard is brentq's precondition — it requires the function to have opposite signs at the two endpoints
+#(i.e., a genuine crossing exists in range) before bisecting, otherwise it returns None rather than raising.
 # ---------------------------------------------------------------------------
 def find_threshold(compartment_idx):
     """Bisect for the EC50_L where the final count first crosses the LOD."""
@@ -182,10 +207,10 @@ fig, ax = plt.subplots(figsize=(11, 6.5))
 
 if threshold_R_res is not None:
     ax.axvspan(threshold_R_res, EC50_MAX, color="lightcoral", alpha=0.15,
-               label=f"$R_{{res}}$ escapes ($EC_{{50,L}} \\geq$ {threshold_R_res:.2f})")
+               label=f"$R_{{res}}$ escapes ($EC_{{50,L}} \\geq$ {threshold_R_res:.2g})")
 if threshold_R_b is not None:
     ax.axvspan(threshold_R_b, EC50_MAX, color="firebrick", alpha=0.18,
-               label=f"$R_b$ escapes ($EC_{{50,L}} \\geq$ {threshold_R_b:.2f})")
+               label=f"$R_b$ escapes ($EC_{{50,L}} \\geq$ {threshold_R_b:.2g})")
 
 ax.axhline(LOD, color="black", ls=":", lw=1.0, alpha=0.7, label=f"LOD ({int(LOD)} CFU/mL)")
 
@@ -205,12 +230,58 @@ ax.set_ylim(FLOOR * 0.8, max(FLOOR * 20, final_R_b.max(), final_R_res.max()) * 2
 ax.set_xlabel(r"$EC_{50,L}$ (mg/L)")
 ax.set_ylabel("Final resistant bacterial count (CFU/mL)")
 ax.set_title(r"Resistant Escape Threshold vs $EC_{50,L}$ (linezolid) — end-of-simulation counts",
-             fontsize=12, fontweight="bold")
+             fontsize=19, fontweight="bold")
 ax.grid(True, which="both", ls=":", alpha=0.35)
-ax.legend(loc="upper left", fontsize=8.5, framealpha=0.85)
+ax.legend(loc="upper left", fontsize=15, framealpha=0.85)
 
 fig.tight_layout()
 fig.savefig("ec50_lzd_threshold_sweep.png", dpi=300, bbox_inches="tight")
 print("\nSaved: ec50_lzd_threshold_sweep.png")
 
-plt.show()
+# ---------------------------------------------------------------------------
+# FIGURE: "Terminal burden vs EC50_L" -- recreates, with real simulated data,
+# the schematic Panel B design sketched earlier (invented data, illustrative
+# only): one marker per swept EC50_L value (subsampled for legibility), open
+# circles pinned to the LOD for runs that clear, filled circles at their
+# actual final count for runs that escape, split by the bisected threshold.
+# ---------------------------------------------------------------------------
+SUBSAMPLE = 24
+idx = np.linspace(0, N_POINTS - 1, SUBSAMPLE).astype(int)
+scatter_ec50  = ec50_sweep[idx]
+scatter_R_res = final_R_res[idx]
+
+escaped = scatter_R_res > LOD
+thr = threshold_R_res if threshold_R_res is not None else EC50_MIN
+
+fig2, ax2 = plt.subplots(figsize=(10, 5.5))
+
+ax2.axvspan(EC50_MIN, thr, color="#4c72b0", alpha=0.12)
+ax2.axvspan(thr, EC50_MAX, color="#c44e52", alpha=0.12)
+ax2.text(0.02, 0.94, "suppression", transform=ax2.transAxes, fontsize=15,
+         color="#2f4f7a", fontweight="bold", va="top")
+ax2.text(0.98, 0.94, "escape", transform=ax2.transAxes, fontsize=15,
+         color="#8c2f34", fontweight="bold", va="top", ha="right")
+
+ax2.axhline(LOD, color="gray", ls="--", lw=1.0, label=f"LOD ({int(LOD)} CFU/mL)")
+ax2.axvline(thr, color="black", ls="--", lw=1.2, label=fr"Switch ($EC_{{50,L}}$ = {thr:.2g})")
+
+ax2.scatter(scatter_ec50[~escaped], np.full((~escaped).sum(), LOD),
+            facecolors="none", edgecolors="#4c72b0", s=70, linewidths=1.6,
+            label="At or below LOD (suppressed)")
+ax2.scatter(scatter_ec50[escaped], scatter_R_res[escaped],
+            facecolors="#c44e52", edgecolors="black", s=70, linewidths=0.6,
+            label="Escape (final $R_{res}$)")
+
+ax2.set_yscale("log")
+ax2.set_ylim(LOD * 0.5, final_R_res.max() * 3)
+ax2.set_xlim(EC50_MIN, EC50_MAX)
+ax2.set_xlabel(r"$EC_{50,L}$ (mg/L)")
+ax2.set_ylabel("Terminal $R_{res}$ burden (CFU/mL)")
+ax2.set_title(fr"Terminal Burden vs $EC_{{50,L}}$ — switch at {thr:.2g} mg/L",
+              fontsize=18, fontweight="bold", pad=14)
+ax2.grid(True, which="both", ls=":", alpha=0.3)
+ax2.legend(loc="center left", fontsize=12, framealpha=0.9)
+
+fig2.tight_layout()
+fig2.savefig("ec50_terminal_burden_vs_ec50.png", dpi=300, bbox_inches="tight")
+print("Saved: ec50_terminal_burden_vs_ec50.png")

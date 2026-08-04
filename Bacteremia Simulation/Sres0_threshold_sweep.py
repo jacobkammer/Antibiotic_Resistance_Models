@@ -1,7 +1,7 @@
 # =============================================================================
 # Deterministic S_res_0 sensitivity sweep (1 - 2000 CFU/mL)
 #
-# baseline_reservoir_clearance.py showed that with model.ClinicalResponse.py's own
+# baseline_reservoir_clearance.py showed that with model_Bacteremia.py's own
 # defaults (S_res_0 = 100, rho_S = 0.60, rho_R = 0.55, rho_res_S = 0.175,
 # EC50_L = 1.0, eff_blood = 1.0, B_max_reservoir = 1e4, Emax_l = 0.8 --
 # UNCOUPLED from rho_S, which previously made it auto-follow rho_S down to
@@ -23,7 +23,7 @@
 # 0.17594055 persistence threshold, but below the point (~0.1766-0.1770)
 # where R_b starts winning the blood race outright -- so S_b CAN also
 # establish a visible infection (peak ~4.8e3 CFU/mL, confirmed via
-# model.ClinicalResponse.py's own __main__). This is a much thinner
+# model_Bacteremia.py's own __main__). This is a much thinner
 # margin for R_res's own persistence, so some Monte Carlo samples in other
 # scripts (which also vary EC50_L, Emax_l, etc.) may show the reservoir
 # fully clearing rather than persisting -- accepted, since the point is to
@@ -45,10 +45,20 @@ import numpy as np
 from scipy.integrate import odeint
 from scipy.optimize import brentq
 
+plt.rcParams.update({
+    "font.size": 16,
+    "axes.titlesize": 18,
+    "axes.labelsize": 16,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 14,
+    "legend.fontsize": 14,
+    "figure.titlesize": 20,
+})
+
 # ---------------------------------------------------------------------------
 # Load model
 # ---------------------------------------------------------------------------
-MODULE_NAME = "model.ClinicalResponse.py"
+MODULE_NAME = "model_Bacteremia.py"
 if not os.path.exists(MODULE_NAME):
     print(f"ERROR: Cannot find '{MODULE_NAME}' in the current directory.", file=sys.stderr)
     sys.exit(1)
@@ -58,7 +68,7 @@ model_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model_mod)
 
 # ---------------------------------------------------------------------------
-# Simulation settings (matches model.ClinicalResponse.py's own __main__ block)
+# Simulation settings (matches model_Bacteremia.py's own __main__ block)
 # ---------------------------------------------------------------------------
 LOD = 10.0   # limit of detection (CFU/mL)
 
@@ -75,13 +85,13 @@ lzd_func = pk.concentration_function("linezolid",  total_h, vanco_start + pk.van
 rho_S        = 0.60    # lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
 rho_R        = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
-SRES0_BASE = 100   # model.ClinicalResponse.py's own default
+SRES0_BASE = 100   # model_Bacteremia.py's own default
 
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
     "rho_res_S":        0.175,  # scaled 5x (from 0.035) alongside rho_S
-    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.ClinicalResponse.py
+    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
     "Emax_v":           0.40,
     "EC50_V":           0.245,
     "Emax_l":           0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
@@ -181,15 +191,15 @@ _describe("R_res", threshold_R_res, escape_R_res)
 
 if threshold_R_res is not None:
     below_threshold = SRES0_BASE < threshold_R_res
-    print(f"\nmodel.ClinicalResponse.py's own default S_res_0 = {SRES0_BASE} is "
+    print(f"\nmodel_Bacteremia.py's own default S_res_0 = {SRES0_BASE} is "
           f"{'BELOW' if below_threshold else 'AT/ABOVE'} the R_res clearance threshold "
           f"({threshold_R_res:.1f}) -> R_res {'escapes' if below_threshold else 'clears'}")
 elif len(escape_R_res) == N_POINTS:
-    print(f"\nmodel.ClinicalResponse.py's own default S_res_0 = {SRES0_BASE} -> "
+    print(f"\nmodel_Bacteremia.py's own default S_res_0 = {SRES0_BASE} -> "
           f"R_res escapes (stays above LOD) regardless of S_res_0 in "
           f"[{SRES0_MIN}, {SRES0_MAX}] (rho_res_R = 0.1765 is high enough on its own).")
 else:
-    print(f"\nmodel.ClinicalResponse.py's own default S_res_0 = {SRES0_BASE} -> "
+    print(f"\nmodel_Bacteremia.py's own default S_res_0 = {SRES0_BASE} -> "
           f"R_res clears regardless of S_res_0 in [{SRES0_MIN}, {SRES0_MAX}].")
 
 # ---------------------------------------------------------------------------
@@ -211,7 +221,7 @@ if threshold_R_b is not None:
 
 ax.axhline(LOD, color="black", ls=":", lw=1.0, alpha=0.7, label=f"LOD ({int(LOD)} CFU/mL)")
 ax.axvline(SRES0_BASE, color="gray", ls="-.", lw=1.5, alpha=0.8,
-           label=f"model.ClinicalResponse.py default ($S_{{res,0}}$ = {SRES0_BASE})")
+           label=f"model_Bacteremia.py default ($S_{{res,0}}$ = {SRES0_BASE})")
 
 ax.plot(sres0_sweep, disp_R_res, color="indianred", lw=2.0, marker="o", ms=3,
         label="Final $R_{res}$ (reservoir)")
@@ -229,9 +239,9 @@ ax.set_ylim(FLOOR * 0.8, max(FLOOR * 20, final_R_b.max(), final_R_res.max()) * 2
 ax.set_xlabel(r"Initial reservoir sensitive load $S_{res,0}$ (CFU/mL)")
 ax.set_ylabel("Final resistant bacterial count (CFU/mL)")
 ax.set_title(r"Resistant Reservoir Escape vs Initial $S_{res,0}$ — end-of-simulation counts",
-             fontsize=12, fontweight="bold")
+             fontsize=19, fontweight="bold")
 ax.grid(True, which="both", ls=":", alpha=0.35)
-ax.legend(loc="upper right", fontsize=8.5, framealpha=0.85)
+ax.legend(loc="upper right", fontsize=15, framealpha=0.85)
 
 fig.tight_layout()
 fig.savefig("sres0_threshold_sweep.png", dpi=300, bbox_inches="tight")

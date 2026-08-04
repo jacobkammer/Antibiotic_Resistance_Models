@@ -1,0 +1,233 @@
+% =============================================================================
+% Results section excerpt -- assembled from the manuscript draft, with all
+% figure-vs-supplement edits applied (EC50, Emax, k_immune, transfer rates).
+% This is NOT a full paper: it holds only the Results section so it can be
+% compiled standalone for review. Merge \section{Results} below into the
+% main manuscript .tex file, and make sure the main file's own preamble
+% loads amsmath, graphicx, hyperref, and cleveref (all used here).
+% =============================================================================
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue]{hyperref}
+\usepackage[capitalize]{cleveref}
+\usepackage{float}
+
+\title{Results (excerpt)}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Results}
+
+Prior to initiation of Vancomycin, bacterial populations established a
+quasi-steady-state equilibrium across both compartments. The
+vancomycin-sensitive \textit{S. aureus} strain in the blood compartment
+exhibited a growth rate of $\rho_s = 0.61\text{ h}^{-1}$ while the resistant
+strain growth was $\rho_r = 0.55\text{ h}^{-1}$. In the bone reservoir, local
+tissue conditions reduced bacterial replication rates to $\rho_s^r =
+0.175\text{ h}^{-1}$ for the sensitive strain and $\rho_r^r = 0.1765\text{
+h}^{-1}$ for the resistant strain. Asymmetric exchange between compartments
+leads to seeding of the blood compartment from the reservoir.
+
+The clinical simulation captures the transition from osteomyelitis to
+secondary bacteremia and subsequent infective endocarditis. Vancomycin
+administration (1000~mg every 8 hours), models clinically recommended
+steady-state peak and trough plasma concentrations. Vancomycin therapy drove
+rapid killing of susceptible \textit{S. aureus} subpopulations ($S_b$ and
+$S_{\text{res}}$). However, vancomycin exerted no growth inhibition on
+resistant strains ($R_b$ and $R_{\text{res}}$; MIC = 32~mg/dL). Following
+laboratory confirmation of vancomycin-resistant MRSA, therapy was switched to
+Linezolid (600~mg every 12 hours), yielding recommended steady-state serum
+concentrations. Linezolid administration drove a reduction in bacterial
+counts across both compartments. However, due to reduced local immune
+efficacy, bacterial clearance from the reservoir lagged significantly behind
+vascular clearance.
+
+Monte Carlo simulation of linezolid potency ($EC_{50,L}$), maximum killing
+capacity ($E_{max,L}$), host immune clearance ($k_{immune}$) and transfer
+rates between compartments each varied a single mechanistic parameter around
+its calibrated baseline while holding all other parameters fixed. All
+samples were propagated through the full 81-day dual-reservoir model to
+quantify how uncertainty in each parameter translates into heterogeneity in
+clinical outcome.
+
+% -----------------------------------------------------------------------
+% EC50,L
+% -----------------------------------------------------------------------
+Sampling $EC_{50,L}$ from a log-normal distribution with mean
+$1.0~\mathrm{mg/L}$ and $\mathrm{CV}=1.117$ produced escape of both the
+blood ($R_b$) and reservoir ($R_{res}$) resistant subpopulations in 34.7\%
+of simulations. The $R_b$ and $R_{res}$ escaped in the identical set of runs
+in every case, consistent with a single shared escape boundary at
+$EC_{50,L} \approx 0.93~\mathrm{mg/L}$ (\Cref{fig:ec50_terminal_burden}),
+located by a companion deterministic threshold sweep and reproduced
+independently by the continuous Monte Carlo switch curve (Supplementary
+Figs.~S1, S2). Because roughly a third of the sampled $EC_{50,L}$ values
+(median $0.70$, 95th percentile $2.81~\mathrm{mg/L}$) exceeded this
+threshold, reduced linezolid potency was sufficient on its own to convert a
+clearing infection into a persistent one, independent of variation in any
+other model parameter.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/ec50_terminal_burden_vs_ec50.png}
+    \caption{Terminal $R_{res}$ burden versus $EC_{50,L}$: open circles
+    pinned to the LOD for runs that clear, filled circles at their actual
+    final count for runs that escape, split by the bisected switch at
+    $0.932~\mathrm{mg/L}$.}
+    \label{fig:ec50_terminal_burden}
+\end{figure}
+
+% -----------------------------------------------------------------------
+% Emax,L
+% -----------------------------------------------------------------------
+Sampling $E_{max,L}$ from a log-normal distribution (mean
+$0.8~\mathrm{h}^{-1}$ and $\mathrm{CV} = 0.30$) produced an escape rate of
+56.5\% (565/1000) for both $R_b$ and $R_{res}$. Because the bisected
+threshold ($0.8161~\mathrm{h}^{-1}$) sits just \emph{above} the sampled
+mean, just over half of simulated patients drew an $E_{max,L}$ value too low
+to clear the infection, with the population split occurring at the same
+threshold as the deterministic sweep (Supplementary Fig.~S12).
+
+The deterministic threshold sweep located a shared escape boundary at
+$E_{max,L} \approx 0.8161~\mathrm{h}^{-1}$ (Supplementary Fig.~S11): both
+the blood ($R_b$) and reservoir ($R_{res}$) compartments escaped below this
+value and cleared above it, crossing the limit of detection (LOD) at the
+same $E_{max,L}$, consistent with the single escape boundary observed across
+all four sensitivity analyses. \Cref{fig:emax_terminal_burden} shows the
+switch point where the terminal $R_{res}$ burden moves from the LOD floor to
+its plateau at the bisected threshold.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/emax_terminal_burden_vs_emax.png}
+    \caption{Terminal $R_{res}$ burden versus $E_{max,L}$: open circles
+    pinned to the LOD for runs that clear, filled circles at their actual
+    final count for runs that escape, split by the bisected switch at
+    $0.8161~\mathrm{h}^{-1}$.}
+    \label{fig:emax_terminal_burden}
+\end{figure}
+
+% -----------------------------------------------------------------------
+% k_immune
+% -----------------------------------------------------------------------
+Sampling $k_{immune}$ from a log-normal distribution with mean
+$0.17~\mathrm{h}^{-1}$ and $\mathrm{CV} = 0.25$ produced a relapse rate of
+35.7\% (357/1000): both compartments remained above the LOD at the end of
+follow-up in these runs, while the remaining 64.3\% cleared entirely, with
+the population split occurring exactly at the same threshold as the
+deterministic sweep (Supplementary Fig.~S10). Because this threshold sits
+below the sampled mean, most simulated patients draw a $k_{immune}$ value
+sufficient to clear the resistant subpopulations -- but with $\mathrm{CV} =
+0.25$, over a third draw a value too low to do so, indicating that
+resistant-strain persistence in this model remains meaningfully sensitive to
+inter-patient variability in host immune clearance even though the majority
+of the population resolves the infection.
+
+The deterministic threshold sweep located a shared escape boundary at
+$k_{immune} \approx 0.15~\mathrm{h}^{-1}$ (Supplementary Fig.~S9): both the
+blood ($R_b$) and reservoir ($R_{res}$) compartments escaped below this
+value and cleared above it, crossing the limit of detection (LOD) at the
+same $k_{immune}$ -- a shared threshold rather than two independent ones,
+consistent with the single escape boundary observed across all four
+sensitivity analyses. The model's own default, $k_{immune} =
+0.12~\mathrm{h}^{-1}$, falls well within the escape zone.
+
+\Cref{fig:mc_immune_response} shows the resulting full time-course kinetics
+as the median and 5th--95th percentile envelope across all 1000 sampled
+trajectories. Both sensitive subpopulations ($S_b$, $S_{res}$) rise to their
+pretreatment plateau and clear below the LOD during the vancomycin window,
+regardless of the sampled $k_{immune}$ value. $R_b$ shows a modest early
+peak that declines through the remainder of the pretreatment period, then
+spikes sharply during the vancomycin-to-linezolid transition before clearing
+for the full 42-day linezolid course; $R_{res}$ follows the same
+transition-period spike but only partially clears, settling at a
+reduced-but-detectable plateau (on the order of $10^2~\mathrm{CFU/mL}$) for
+the remainder of therapy. Both resistant compartments relapse to their
+pretreatment/carrying-capacity levels within days of linezolid
+discontinuation, consistent with the reservoir acting as a persistent source
+that reseeds blood once treatment pressure is removed.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/mc_immune_response.png}
+    \caption{Monte Carlo sweep of $k_{immune}$ ($n = 1000$): full
+    time-course kinetics for $S_b$, $R_b$, $S_{res}$, and $R_{res}$, shown
+    as individual trajectories (light), median (solid), and 5th--95th
+    percentile envelope (shaded).}
+    \label{fig:mc_immune_response}
+\end{figure}
+
+% -----------------------------------------------------------------------
+% Transfer rates
+% -----------------------------------------------------------------------
+Full time-course kinetics for both sweeps, shown as the median and
+5th--95th percentile envelope across all 193 grid points, are given in
+\Cref{fig:mc_frb_sweep_kinetics,fig:mc_fbr_sweep_kinetics}. Because 160 of
+the 193 grid points are concentrated in the $[10^{-3},
+10^{-2}]\,\mathrm{h}^{-1}$ band -- a band where, as detailed below, both
+compartments are already established -- these median trajectories are
+dominated by near-baseline behavior rather than by the low-rate regime
+detailed below: $S_b$ and $S_{res}$ clear below the LOD during the combined
+vancomycin/linezolid course, $R_b$ transiently exceeds the LOD during the
+vancomycin-to-linezolid transition before also clearing, and $R_{res}$
+persists at a reduced but detectable level throughout linezolid therapy
+before regrowing to its reservoir carrying capacity after treatment
+discontinuation, reseeding a detectable $R_b$ relapse by the end of
+follow-up.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/mc_frb_sweep_kinetics.png}
+    \caption{Full time-course kinetics, Sweep 1: $f_{r \to b}$ (reservoir
+    $\to$ blood) varied across the log-spaced grid, $f_{b \to r}$ held at
+    baseline ($1\times10^{-5}\,\mathrm{h}^{-1}$). Lines show the median and
+    5th--95th percentile envelope across all 193 grid points.}
+    \label{fig:mc_frb_sweep_kinetics}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/mc_fbr_sweep_kinetics.png}
+    \caption{Full time-course kinetics, Sweep 2: $f_{b \to r}$ (blood $\to$
+    reservoir) varied across the log-spaced grid, $f_{r \to b}$ held at
+    baseline ($5\times10^{-5}\,\mathrm{h}^{-1}$). Lines show the median and
+    5th--95th percentile envelope across all 193 grid points.}
+    \label{fig:mc_fbr_sweep_kinetics}
+\end{figure}
+
+For $f_{r \to b}$ (Sweep 1), peak $S_b$, peak $R_b$, and final $R_b$
+remained at or near zero for $f_{r \to b} \lesssim
+3\times10^{-5}\,\mathrm{h}^{-1}$: blood is seeded exclusively through
+reservoir-to-blood transfer (blood compartments start sterile), so
+vanishingly small $f_{r \to b}$ leaves bacteremia unestablished for the
+entire simulated course. All three then switch sharply to their full
+baseline levels within roughly half a log-decade of the model's own
+baseline value ($5\times10^{-5}\,\mathrm{h}^{-1}$; Supplementary Fig.~S4;
+sampling grid in Supplementary Fig.~S8). Peak $S_{res}$ is the only one of
+the four outcomes that is genuinely flat across the full six-decade range,
+varying by less than 10\% from $10^{-8}$ to $10^{-2}\,\mathrm{h}^{-1}$. At
+the opposite end of the range, final $R_b$ undergoes a second, independent
+transition: it drops back to zero for $f_{r \to b} \gtrsim
+5\times10^{-3}\,\mathrm{h}^{-1}$ even as peak $R_b$ continues to rise,
+indicating that $R_b$ still establishes and peaks at these rates but no
+longer relapses by the end of follow-up (Supplementary Fig.~S5).
+
+For $f_{b \to r}$ (Sweep 2), peak $S_b$, peak $R_b$, and final $R_b$ are
+flat to within 1\% across roughly the lower four and a half of the six
+log-decades sampled ($10^{-8}$ to $10^{-3.5}\,\mathrm{h}^{-1}$;
+Supplementary Fig.~S6), consistent with $f_{b \to r}$ acting only as an
+efflux from blood rather than a seeding route for either compartment. Peak
+$S_{res}$, however, is not flat over this same upper range: it rises from
+its baseline value of $\sim$4560~CFU/mL to a maximum of $\sim$6270~CFU/mL
+($+$37\%) near $f_{b \to r} \approx 3\times10^{-3}\,\mathrm{h}^{-1}$, before
+collapsing back toward baseline as peak $S_b$ simultaneously collapses
+toward zero, both by $f_{b \to r} = 1\times10^{-2}\,\mathrm{h}^{-1}$
+(Supplementary Fig.~S7).
+
+\end{document}

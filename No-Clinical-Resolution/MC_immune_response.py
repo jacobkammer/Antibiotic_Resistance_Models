@@ -1,16 +1,13 @@
 """
 Monte Carlo simulation varying k_immune with a log-normal distribution.
-k_immune ~ LogNormal(mean=0.14719, CV=0.25)
+k_immune ~ LogNormal(mean=0.142, CV=0.2)
 4-panel figure: S_b, R_b, S_res, R_res — each with individual MC trajectories,
 5th–95th percentile band, and median.
 
 Mean raised from the model's own default (0.12) to 0.142 so that ~70% of
 samples land above the R_b/R_res escape threshold (k_immune = 0.1255 h^-1,
 see ImmuneResponse_threshold_sweep.py) and resolve the infection -- at the
-model default, only ~31-37% of samples resolved. CV was then widened from
-0.20 to 0.25 (dropping resolution to ~64%), so the mean was re-solved to
-0.14719 -- the 30th percentile of LogNormal(mean, CV=0.25) sits exactly at
-the 0.1255 threshold -- restoring resolution to ~70%.
+model default, only ~31-37% of samples resolved. CV left unchanged at 0.20.
 """
 
 import importlib.util
@@ -21,7 +18,7 @@ import numpy as np
 from scipy.integrate import odeint
 
 # ── Load model module ─────────────────────────────────────────────────────────
-spec = importlib.util.spec_from_file_location("model_mod", "model.ClinicalResponse.py")
+spec = importlib.util.spec_from_file_location("model_mod", "model.NoClinicalResponse.py")
 model_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model_mod)
 
@@ -43,7 +40,7 @@ params = {
     "rho_S":           rho_S,
     "rho_R":           rho_R,
     "rho_res_S":       0.175,  # scaled 5x (from 0.035) alongside rho_S
-    "rho_res_R":       0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.ClinicalResponse.py
+    "rho_res_R":       0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model.NoClinicalResponse.py
     "Emax_v":          0.40,
     "EC50_V":          0.245,
     "Emax_l":          0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
@@ -61,9 +58,9 @@ Y0 = [0.0, 0.0, 100.0, 100.0]
 
 # ── Log-normal sampling of k_immune ──────────────────────────────────────────
 # CV = sqrt(exp(σ²) - 1)  →  σ = sqrt(ln(1 + CV²))
-# μ  = ln(mean) - σ²/2   ensures E[k_immune] = 0.12
-K_IMMUNE_MEAN = 0.14719   # re-tuned from 0.142 after CV widened to 0.25, to hold resolution at ~70%
-CV            = 0.25      # widened from 0.20
+# μ  = ln(mean) - σ²/2   ensures E[k_immune] = 0.142
+K_IMMUNE_MEAN = 0.142   # raised from 0.12 so ~70% of samples resolve (see module docstring)
+CV            = 0.20
 
 sigma_ln = np.sqrt(np.log(1.0 + CV**2))
 mu_ln    = np.log(K_IMMUNE_MEAN) - sigma_ln**2 / 2.0

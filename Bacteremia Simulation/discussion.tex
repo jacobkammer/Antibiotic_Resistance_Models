@@ -1,0 +1,172 @@
+% =============================================================================
+% Discussion section excerpt -- covers EC50,L, Emax,L, k_immune, and the
+% compartment exchange rates. This is NOT a full paper: it holds only the
+% Discussion section so it can be compiled and reviewed standalone. Merge
+% \section{Discussion} below into the main manuscript .tex file; the main
+% file's own preamble must load amsmath and graphicx (both used here).
+% =============================================================================
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue]{hyperref}
+
+\title{Discussion (excerpt)}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Discussion}
+
+Across four mechanistically unrelated parameters -- linezolid potency
+($EC_{50,L}$), linezolid's bacteriostatic ceiling ($E_{max,L}$), host
+immune clearance ($k_{immune}$), and the rates of exchange between blood and
+reservoir ($f_{r \to b}$, $f_{b \to r}$) -- the model returns the same
+qualitative result: the blood ($R_b$) and reservoir ($R_{res}$) resistant
+subpopulations never escape or clear independently. In every deterministic
+sweep and every Monte Carlo sample, the two compartments cross the limit of
+detection together, defining a single shared boundary between a clearing and
+a relapsing infection rather than two separate ones. That consistency,
+reproduced across four independent analyses, is itself a principal finding
+of this work, and it shapes how each individual parameter should be
+interpreted below.
+
+Linezolid potency produces the least intuitive result of the four
+parameters, because the model's calibrated baseline itself, not just its
+sampled variability, is the striking finding. $EC_{50,L}$ is held fixed at
+$1.0~\mathrm{mg/L}$ in every other analysis in this paper, and that same
+value is the arithmetic mean of the log-normal distribution sampled here --
+yet $1.0~\mathrm{mg/L}$ sits \emph{above} the bisected escape boundary
+($EC_{50,L} \approx 0.93~\mathrm{mg/L}$). In other words, the model's own
+calibrated operating point for linezolid potency already predicts a
+relapsing, not a clearing, infection, before any inter-patient variability
+is introduced at all -- the same pattern seen below for $k_{immune}$. The
+reported median ($0.70~\mathrm{mg/L}$) is a different quantity, pulled well
+below that mean by the heavy right skew of a $\mathrm{CV}=1.117$ log-normal,
+and it happens to fall on the clearing side of the threshold. The practical
+result is a reversal of the naive expectation: it is not that variability
+introduces a one-in-three chance of relapse into an otherwise safe baseline;
+it is that the deterministic baseline alone predicts relapse, and it is the
+variability -- specifically, the heavy tail of a right-skewed distribution
+pulling most patients' effective potency below the population mean -- that
+gives 65.3\% of simulated patients a chance at clearance despite operating,
+on average, at the same potency as the model's own escaping baseline.
+Clinically, the underlying mechanism is not exotic: sub-MIC drug exposure
+from poor tissue penetration, protein binding, or early low-grade
+heteroresistance could all plausibly shift an isolate's effective
+$EC_{50,L}$, and the true population distribution of such effects is
+unlikely to be symmetric around its mean.
+
+$E_{max,L}$ is the more consequential of the two pharmacodynamic parameters
+examined. Because $E_{max,L}$ is a ceiling rather than a potency, escape
+occurs \emph{below} the threshold: a weaker maximum bacteriostatic effect,
+not a right-shifted dose-response curve, is what allows resistant growth to
+outrun drug pressure. The bisected threshold
+($0.8161~\mathrm{h}^{-1}$) sits just above the assumed sampling mean
+($0.8~\mathrm{h}^{-1}$), so more than half of the simulated population
+(56.5\%) draws an $E_{max,L}$ value insufficient to clear the infection.
+Unlike $EC_{50,L}$, where escape is a minority outcome under realistic
+variability, $E_{max,L}$ variability alone is sufficient to make relapse the
+\emph{majority} outcome. This asymmetry is worth emphasizing to a clinical
+audience: potency (captured by MIC-type susceptibility testing) is the
+parameter clinicians already track, while the ceiling effect -- which
+depends on local drug exposure, tissue penetration, and any biofilm- or
+persister-associated tolerance in the bone reservoir -- is not routinely
+measured at all, despite the model identifying it as the more fragile of
+the two.
+
+Host immune clearance is the one parameter where the model's own calibrated
+default is not a robust operating point. The bisected escape threshold,
+$k_{immune} \approx 0.15~\mathrm{h}^{-1}$, sits \emph{above} the model's own
+baseline assumption ($k_{immune} = 0.12~\mathrm{h}^{-1}$), meaning the
+default patient in this model already lacks sufficient endogenous immune
+clearance to resolve the resistant subpopulations without antibiotic
+pressure -- consistent with the underlying clinical picture of a
+reservoir infection (osteomyelitis progressing to endocarditis) that host
+immunity alone has already failed to control. Sampling $k_{immune}$ from a
+distribution centered above this threshold (mean $0.17~\mathrm{h}^{-1}$,
+$\mathrm{CV}=0.25$) still yields clearance in most simulated patients
+(64.3\%), but the remaining 35.7\% relapse from immune variability alone.
+Clinically, this maps onto exactly the comorbidities known to predict poor
+outcomes in osteoarticular \textit{S. aureus} infection -- diabetes,
+immunosuppression, advanced age -- and suggests that host factors are not a
+secondary modifier of treatment response in this model but a comparably
+large driver of relapse risk to the drug's own pharmacodynamics.
+
+The two exchange rates behave differently from the three pharmacodynamic/
+host parameters above, both in method (a deterministic log-spaced grid
+rather than log-normal Monte Carlo sampling) and in structure: rather than
+a single threshold separating escape from clearance, each rate exhibits two
+flat, insensitive regimes bracketing one narrow transition band. That
+structure has a direct mechanistic explanation once the exchange rate is
+read as a timescale rather than a bare rate constant: $1/f$ is roughly how
+long exchange takes to matter, and the transition band identified for both
+rates, $[10^{-3}, 10^{-2}]~\mathrm{h}^{-1}$, corresponds almost exactly to
+$1/(10^{-3}~\mathrm{h}^{-1}) \approx 42$~days and
+$1/(10^{-2}~\mathrm{h}^{-1}) \approx 4$~days -- the linezolid and
+vancomycin course lengths, respectively. Below $10^{-3}~\mathrm{h}^{-1}$,
+exchange is too slow to complete even once during the entire linezolid
+course, so the compartments behave as though decoupled and the outcome is
+insensitive to the exact rate; above $10^{-2}~\mathrm{h}^{-1}$, exchange is
+faster than even the shorter vancomycin window, so the two compartments
+equilibrate and the outcome again saturates, this time at the well-mixed
+limit. The rate only matters clinically in the narrow band where its own
+timescale is comparable to a treatment-phase duration -- neither negligible
+nor effectively instantaneous. This gives a general, testable rule for
+compartmental models of this kind: a coupling parameter is worth measuring
+precisely only when its reciprocal falls within the range of the therapy's
+own phase durations, and can otherwise be treated as a coarse order-of-
+magnitude estimate without materially affecting predicted outcomes. Given
+how difficult exchange/penetration rates are to measure directly in bone
+and cardiac vegetations \emph{in vivo}, this is a practically useful
+distinction: it tells the modeler, and by extension the clinician
+interpreting the model, which unmeasured parameters actually need to be
+pinned down.
+
+A further pattern emerges when the three Monte Carlo analyses are placed
+side by side. Approximating each escape fraction as the probability that a
+log-normal draw exceeds (or, for $E_{max,L}$ and $k_{immune}$, falls below)
+the bisected threshold reproduces all three reported fractions to within a
+few percentage points using only the threshold, the assumed median, and the
+sampling $\mathrm{CV}$: $EC_{50,L}$ ($z \approx 0.32$, predicting
+$\approx$37\% against a reported 34.7\%), $E_{max,L}$ ($z \approx 0.21$,
+predicting $\approx$58\% against a reported 56.5\%), and $k_{immune}$
+($z \approx -0.39$, predicting $\approx$35\% against a reported 35.7\%).
+Every threshold, in other words, sits within roughly four-tenths of a
+standard deviation of its own sampled median. This does not mean the Monte
+Carlo results are circular -- the threshold itself is located independently
+by deterministic
+bisection on the mechanistic model, not fit to the sampling distribution --
+but it does mean the escape fractions above are better read as a
+consequence of \emph{where the calibrated model happens to sit relative to
+its own threshold} than as an independent measurement of clinical risk in
+absolute terms. The finding worth stating plainly is that the calibrated
+model is not comfortably clear of relapse in any of the three dimensions
+examined; it is poised close to criticality in all three, independently.
+Whether that reflects a property of this particular calibration or a more
+general feature of relapsing reservoir infections that have already reached
+the point of requiring salvage linezolid therapy is a question this model
+cannot resolve on its own, but the consistency across three unrelated
+parameters is at least suggestive of the latter.
+
+Finally, the fact that $R_b$ and $R_{res}$ never escape independently
+across any of the four analyses is itself a structural property of the
+model worth making explicit rather than treating as an incidental
+observation. The two resistant subpopulations are coupled by strictly
+positive bidirectional exchange ($f_{r \to b}, f_{b \to r} > 0$) in every
+parameter regime examined, which is a plausible mechanistic reason for the
+two compartments to share fate rather than fail independently: near the
+detection floor, growth in either compartment is damped by the model's
+smooth-floor terms, but the linear exchange coupling between them is not,
+so whichever compartment begins to escape first can reseed the other before
+either clears. A fully rigorous stability argument for this coupling --
+accounting for the model's nonlinear floor terms rather than a naive
+linearization at exact extinction -- is beyond the scope of the present
+analysis, but formalizing it is a natural next step, and would convert an
+empirical regularity observed four times over into a proven structural
+property of the model.
+
+\end{document}

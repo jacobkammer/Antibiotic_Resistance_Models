@@ -1,0 +1,348 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue]{hyperref}
+\usepackage[capitalize]{cleveref}
+\usepackage{float}
+
+% --- Supplementary numbering: figures/tables as S1, S2, ... (continuous, not per-section) ---
+\renewcommand{\thefigure}{S\arabic{figure}}
+\renewcommand{\thetable}{S\arabic{table}}
+\renewcommand{\theequation}{S\arabic{equation}}
+
+\title{Supplementary Material}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\setcounter{page}{1}
+\renewcommand{\thepage}{S\arabic{page}}
+
+\section*{Supplementary Methods}
+
+All analyses below use the same dual-reservoir pharmacokinetic/pharmacodynamic
+model, treatment protocol, and baseline parameters as the main text
+(vancomycin 1000~mg q8h for 4~days, followed by linezolid 600~mg q12h for
+42~days, 21~days of pre-treatment equilibration and 14~days of post-treatment
+follow-up; total simulated course 81~days). The limit of detection (LOD) is
+10~CFU/mL in both compartments. Unless otherwise noted, growth rates are held
+at their calibrated baseline values ($\rho_S = 0.61~\mathrm{h}^{-1}$,
+$\rho_R = 0.55~\mathrm{h}^{-1}$, $\rho_S^r = 0.175~\mathrm{h}^{-1}$,
+$\rho_R^r = 0.1765~\mathrm{h}^{-1}$), and only the single parameter under
+study is varied. Escape thresholds are located by bisection
+(\texttt{scipy.optimize.brentq}) on the difference between the final
+simulated compartment count and the LOD, rather than read off a coarse grid,
+so each reported boundary is precise to the stated tolerance.
+
+% =============================================================================
+\section{Deterministic escape threshold in linezolid potency ($EC_{50,L}$)}
+\label{sec:s1}
+
+\Cref{fig:ec50_threshold_sweep} shows the final $R_b$/$R_{res}$ burden across
+a fine, deterministic sweep of $EC_{50,L} \in [0.3, 2.0]~\mathrm{mg/L}$
+(171 points, step 0.01~mg/L), with every other parameter fixed at baseline.
+Both compartments clear below the LOD for $EC_{50,L}$ below the bisected
+threshold and persist above it, crossing together --- consistent with the
+single shared escape boundary reported across all four sensitivity analyses
+in the main text (\Cref{sec:s2} below reproduces this same threshold from the
+Monte Carlo sweep). This confirms that the $EC_{50,L} \approx
+0.932~\mathrm{mg/L}$ threshold quoted in the main text is a genuine, sharp
+switch rather than an artifact of the coarser Monte Carlo sampling grid.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/ec50_lzd_threshold_sweep.png}
+    \caption{Final $R_b$/$R_{res}$ burden versus $EC_{50,L}$ from the
+    continuous deterministic sweep ($n = 171$ points, $EC_{50,L} \in
+    [0.3, 2.0]~\mathrm{mg/L}$), with the bisected escape threshold marked for
+    each compartment and the escape zone shaded.}
+    \label{fig:ec50_threshold_sweep}
+\end{figure}
+
+% =============================================================================
+\section{Monte Carlo escape switch in linezolid potency ($EC_{50,L}$)}
+\label{sec:s2}
+
+\Cref{fig:mc_ec50_switch} places the $n = 1000$ Monte Carlo patient
+population sampled from $EC_{50,L} \sim \mathrm{LogNormal}$
+(mean $1.0~\mathrm{mg/L}$, $\mathrm{CV} = 1.117$; the same sample used to
+generate the $34.7\%$ escape fraction reported in the main text) against the
+continuous deterministic switch curve from \Cref{sec:s1}. The top panel shows
+final $R_b$/$R_{res}$ burden along a dense 121-point deterministic sweep of
+the same range, with the bisected threshold marked; the bottom panel shows
+where the sampled patient population actually falls relative to that switch,
+with each patient colored by their own simulated outcome (escape vs.\
+suppressed) rather than by which side of the threshold their sampled
+$EC_{50,L}$ happens to fall on. The two panels agree exactly on where the
+population divides, confirming that the Monte Carlo escape fraction reported
+in the main text is driven entirely by this single deterministic boundary
+rather than by any other source of between-run variability.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/mc_ec50_lzd_switch.png}
+    \caption{Top: final $R_b$/$R_{res}$ burden versus $EC_{50,L}$ from the
+    continuous deterministic sweep, with the bisected switch marked. Bottom:
+    the $n = 1000$ Monte Carlo-sampled patient population, colored by each
+    patient's own simulated outcome (escape vs.\ suppressed), split at the
+    same threshold.}
+    \label{fig:mc_ec50_switch}
+\end{figure}
+
+% =============================================================================
+\section{Deterministic escape threshold in initial reservoir burden ($S_{res,0}$)}
+\label{sec:s3}
+
+\Cref{fig:sres0_threshold_sweep} sweeps the initial reservoir sensitive-strain
+load $S_{res,0} \in [1, 2000]~\mathrm{CFU/mL}$ (101 points), holding
+$R_{res,0} = 100~\mathrm{CFU/mL}$ and every other parameter at baseline, to
+test how sensitive the escape outcome is to the size of the pre-treatment
+reservoir population rather than to any pharmacodynamic parameter. Unlike the
+$EC_{50,L}$ sweep in \Cref{sec:s1}, no clearance threshold exists anywhere in
+the swept range: both $R_b$ and $R_{res}$ finish above the LOD at every one
+of the 101 tested $S_{res,0}$ values, from 1 to 2000~CFU/mL. The model's own
+default, $S_{res,0} = 100~\mathrm{CFU/mL}$, is marked directly on the panel
+for reference, but is not distinguished from any other tested value in its
+outcome. Resistant escape in this model is therefore not an artifact of the
+specific initial reservoir burden assumed in the main text --- it persists
+regardless of where $S_{res,0}$ is set within a two-decade range around that
+default.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/sres0_threshold_sweep.png}
+    \caption{Final $R_b$/$R_{res}$ burden versus initial reservoir sensitive
+    load $S_{res,0}$, from a continuous deterministic sweep
+    ($n = 101$ points, $S_{res,0} \in [1, 2000]~\mathrm{CFU/mL}$), with the
+    model's own default ($S_{res,0} = 100$) marked. Both compartments remain
+    above the LOD across the entire swept range; no clearance threshold
+    exists in $S_{res,0}$ under baseline parameters.}
+    \label{fig:sres0_threshold_sweep}
+\end{figure}
+
+% =============================================================================
+\section{Scalar outcome sweeps for the compartment exchange rates}
+\label{sec:s4}
+
+\Cref{fig:supp_frb_outcomes,fig:supp_frb_outcomes_zoom} give the full-range
+and zoomed scalar-outcome views for Sweep~1 ($f_{r \to b}$ varied, $f_{b \to
+r}$ held at baseline). Peak $S_b$, peak $R_b$, and final $R_b$ all sit at or
+near zero for $f_{r \to b} \lesssim 3\times10^{-5}~\mathrm{h}^{-1}$ --- blood
+is seeded exclusively through reservoir-to-blood transfer, so vanishingly
+small $f_{r \to b}$ leaves bacteremia unestablished for the entire simulated
+course --- then switch sharply to their full baseline levels within roughly
+half a log-decade of the model's own baseline rate
+($5\times10^{-5}~\mathrm{h}^{-1}$). Peak $S_{res}$ is flat across the full
+six-decade range. At the upper end, final $R_b$ undergoes a second,
+independent transition, dropping back to zero for
+$f_{r \to b} \gtrsim 5\times10^{-3}~\mathrm{h}^{-1}$ even as peak $R_b$
+continues to rise --- $R_b$ still establishes and peaks at these rates, but no
+longer relapses by the end of follow-up.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/mc_frb_sweep_outcomes.png}
+    \caption{Scalar outcomes (peak $S_b$, peak $R_b$, peak $S_{res}$, final
+    $R_b$) versus $f_{r \to b}$ across the full log-spaced grid,
+    $f_{b \to r}$ held at baseline.}
+    \label{fig:supp_frb_outcomes}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/mc_frb_sweep_outcomes_zoom.png}
+    \caption{Scalar outcomes versus $f_{r \to b}$, restricted to the
+    $[1\times10^{-3}, 1\times10^{-2}]~\mathrm{h}^{-1}$ transition band.}
+    \label{fig:supp_frb_outcomes_zoom}
+\end{figure}
+
+\Cref{fig:supp_fbr_outcomes,fig:supp_fbr_outcomes_zoom} give the same two
+views for Sweep~2 ($f_{b \to r}$ varied, $f_{r \to b}$ held at baseline).
+Peak $S_b$, peak $R_b$, and final $R_b$ are flat to within 1\% across roughly
+the lower four and a half of the six log-decades sampled
+($10^{-8}$--$10^{-3.5}~\mathrm{h}^{-1}$), consistent with $f_{b \to r}$
+acting only as an efflux from blood rather than a seeding route for either
+compartment. Peak $S_{res}$ is not flat over the upper range, however: it
+rises from its baseline value ($\sim$4560~CFU/mL) to a maximum of
+$\sim$6270~CFU/mL ($+37\%$) near $f_{b \to r} \approx
+3\times10^{-3}~\mathrm{h}^{-1}$, before collapsing back toward baseline as
+peak $S_b$ simultaneously collapses toward zero, both by
+$f_{b \to r} = 1\times10^{-2}~\mathrm{h}^{-1}$.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/mc_fbr_sweep_outcomes.png}
+    \caption{Scalar outcomes (peak $S_b$, peak $R_b$, peak $S_{res}$, final
+    $R_b$) versus $f_{b \to r}$ across the full log-spaced grid,
+    $f_{r \to b}$ held at baseline.}
+    \label{fig:supp_fbr_outcomes}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/mc_fbr_sweep_outcomes_zoom.png}
+    \caption{Scalar outcomes versus $f_{b \to r}$, restricted to the
+    $[1\times10^{-3}, 1\times10^{-2}]~\mathrm{h}^{-1}$ transition band.}
+    \label{fig:supp_fbr_outcomes_zoom}
+\end{figure}
+
+% =============================================================================
+\section{Sampling grid for the compartment exchange-rate sweeps}
+\label{sec:s5}
+
+The two exchange-rate sweeps in \Cref{sec:s4}
+($f_{r \to b}$, reservoir $\to$ blood; $f_{b \to r}$, blood $\to$ reservoir)
+each step their target rate across a shared log-spaced grid spanning six
+decades ($10^{-8}$--$10^{-2}~\mathrm{h}^{-1}$), while holding the other
+exchange rate fixed at its own baseline value
+($f_{r \to b} = 5\times10^{-5}~\mathrm{h}^{-1}$,
+$f_{b \to r} = 1\times10^{-5}~\mathrm{h}^{-1}$). Because both transition bands
+identified in the main text fall within $[10^{-3}, 10^{-2}]~\mathrm{h}^{-1}$,
+the grid is deliberately non-uniform: a coarse 40-point log-spaced pass covers
+the full six-decade range for context, supplemented by a dense 160-point pass
+restricted to that transition band, so that the sharp switches reported in
+\Cref{fig:supp_frb_outcomes_zoom,fig:supp_fbr_outcomes_zoom} are resolved
+rather than aliased. \Cref{fig:transfer_rate_grid} shows the resulting grid
+coverage for both sweeps directly, with each sweep's own baseline rate
+marked.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/mc_transfer_rate_sweep_grid.png}
+    \caption{Log-spaced grid coverage used for the two exchange-rate sweeps
+    reported in the main text ($n = 193$ points per sweep). Top: grid for
+    Sweep~1 ($f_{r \to b}$ varied, $f_{b \to r}$ held at baseline). Bottom:
+    grid for Sweep~2 ($f_{b \to r}$ varied, $f_{r \to b}$ held at baseline).
+    Each sweep concentrates 160 of its 193 points inside the
+    $[10^{-3}, 10^{-2}]~\mathrm{h}^{-1}$ transition band identified in the
+    main text, with the remaining 33 points spread log-uniformly across the
+    full six-decade range for context. The band's boundaries are not
+    arbitrary: $1/(10^{-3}~\mathrm{h}^{-1}) \approx 42$~days and
+    $1/(10^{-2}~\mathrm{h}^{-1}) \approx 4$~days match the linezolid
+    (42-day) and vancomycin (4-day) course lengths almost exactly, so this
+    band brackets the regime where the exchange timescale is comparable to a
+    treatment-phase duration -- below $10^{-3}~\mathrm{h}^{-1}$ exchange is
+    too slow to complete even once during the linezolid course, and above
+    $10^{-2}~\mathrm{h}^{-1}$ the compartments equilibrate within the
+    (shorter) vancomycin window, so outcomes saturate on either side.}
+    \label{fig:transfer_rate_grid}
+\end{figure}
+
+% =============================================================================
+\section{Deterministic escape threshold in host immune clearance ($k_{immune}$)}
+\label{sec:s9}
+
+\Cref{fig:immune_threshold_sweep} shows the final $R_b$/$R_{res}$ burden
+across a fine, deterministic sweep of $k_{immune} \in
+[0.02, 0.22]~\mathrm{h}^{-1}$ (101 points), with every other parameter fixed
+at baseline. As with $E_{max,L}$, escape occurs \emph{below} the threshold
+rather than above it: $k_{immune}$ is a clearance rate, so weaker immune
+clearance favors persistence. Both compartments clear above the bisected
+threshold and persist below it, crossing together --- consistent with the
+single shared escape boundary reported across all four sensitivity analyses
+in the main text. The model's own default, $k_{immune} =
+0.12~\mathrm{h}^{-1}$, is marked directly on the panel and falls well within
+the escape zone (\Cref{sec:s6} below reproduces this same threshold from the
+Monte Carlo sweep).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/immune_response_threshold_sweep.png}
+    \caption{Final $R_b$/$R_{res}$ burden versus $k_{immune}$ from the
+    continuous deterministic sweep ($n = 101$ points, $k_{immune} \in
+    [0.02, 0.22]~\mathrm{h}^{-1}$), with the bisected escape threshold and
+    the model's own default ($k_{immune} = 0.12~\mathrm{h}^{-1}$) marked.}
+    \label{fig:immune_threshold_sweep}
+\end{figure}
+
+% =============================================================================
+\section{Monte Carlo escape switch in host immune clearance ($k_{immune}$)}
+\label{sec:s6}
+
+\Cref{fig:supp_immune_switch} places the $n = 1000$ Monte Carlo patient
+population sampled from $k_{immune} \sim \mathrm{LogNormal}$
+(mean $0.17~\mathrm{h}^{-1}$, $\mathrm{CV} = 0.25$; the same sample used to
+generate the $35.7\%$ relapse rate reported in the main text) against the
+continuous deterministic switch curve from \Cref{sec:s9}. As with
+$EC_{50,L}$ in \Cref{sec:s2}, the top panel
+shows the continuous deterministic switch and the bottom panel shows where
+the sampled patient population falls relative to it, each patient colored by
+its own simulated outcome rather than by which side of the threshold its
+sampled $k_{immune}$ happens to fall on. Because the bisected threshold sits
+below the sampled mean, most simulated patients draw a $k_{immune}$ value
+sufficient to clear the resistant subpopulations --- but with
+$\mathrm{CV} = 0.25$, just over a third draw a value too low to do so,
+confirming that resistant-strain persistence remains meaningfully sensitive
+to inter-patient variability in host immune clearance even though the
+majority of the population resolves the infection.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/mc_immune_response_switch.png}
+    \caption{Top: final $R_b$/$R_{res}$ burden versus $k_{immune}$ from the
+    continuous deterministic sweep, with the bisected switch marked. Bottom:
+    the $n = 1000$ Monte Carlo-sampled patient population, colored by each
+    patient's own simulated outcome (escape vs.\ suppressed), split at the
+    same threshold.}
+    \label{fig:supp_immune_switch}
+\end{figure}
+
+% =============================================================================
+\section{Deterministic escape threshold in linezolid killing capacity ($E_{max,L}$)}
+\label{sec:s7}
+
+\Cref{fig:emax_threshold_sweep} shows the final $R_b$/$R_{res}$ burden across
+a fine, deterministic sweep of $E_{max,L} \in [0.0, 1.0]~\mathrm{h}^{-1}$
+(101 points, step 0.01), with every other parameter fixed at baseline.
+Unlike $EC_{50,L}$, escape here occurs \emph{below} the threshold rather than
+above it: $E_{max,L}$ is linezolid's ceiling effect, so a weaker ceiling
+fails to hold resistant growth in check. Both compartments clear above the
+bisected threshold and persist below it, crossing together --- consistent
+with the single shared escape boundary reported across all four sensitivity
+analyses in the main text (\Cref{sec:s8} below reproduces this same
+threshold from the Monte Carlo sweep).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/emax_lzd_threshold_sweep.png}
+    \caption{Final $R_b$/$R_{res}$ burden versus $E_{max,L}$ from the
+    continuous deterministic sweep ($n = 101$ points, $E_{max,L} \in
+    [0.0, 1.0]~\mathrm{h}^{-1}$), with the bisected escape threshold marked
+    for each compartment and the escape zone shaded.}
+    \label{fig:emax_threshold_sweep}
+\end{figure}
+
+% =============================================================================
+\section{Monte Carlo escape switch in linezolid killing capacity ($E_{max,L}$)}
+\label{sec:s8}
+
+\Cref{fig:supp_emax_switch} places the $n = 1000$ Monte Carlo patient
+population sampled from $E_{max,L} \sim \mathrm{LogNormal}$
+(mean $0.8~\mathrm{h}^{-1}$, $\mathrm{CV} = 0.30$; the same sample used to
+generate the $56.5\%$ escape fraction reported in the main text) against the
+continuous deterministic switch curve from \Cref{sec:s7}. As with
+$EC_{50,L}$ in \Cref{sec:s2}, the top panel shows the continuous switch and
+the bottom panel shows where the sampled patient population falls relative
+to it, each patient colored by its own simulated outcome rather than by
+which side of the threshold its sampled $E_{max,L}$ happens to fall on.
+Because the bisected threshold ($0.8161~\mathrm{h}^{-1}$) sits just above
+the sampled mean, just over half of simulated patients drew an $E_{max,L}$
+value too low to clear the infection, and the population divides exactly at
+the same threshold located by the deterministic sweep.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/mc_emax_lzd_switch.png}
+    \caption{Top: final $R_b$/$R_{res}$ burden versus $E_{max,L}$ from the
+    continuous deterministic sweep, with the bisected switch marked. Bottom:
+    the $n = 1000$ Monte Carlo-sampled patient population, colored by each
+    patient's own simulated outcome (escape vs.\ suppressed), split at the
+    same threshold.}
+    \label{fig:supp_emax_switch}
+\end{figure}
+
+\end{document}
