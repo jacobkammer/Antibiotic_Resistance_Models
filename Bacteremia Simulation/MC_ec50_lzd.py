@@ -11,10 +11,10 @@
 # offset.
 #
 # 
-# rho_S/rho_R were lowered 0.80/0.64 -> 0.61/0.55, and Emax_l was UNCOUPLED
-# from rho_S and fixed at 0.8 -- at that point Emax_l exceeded every species'
-# growth rate and ALL FOUR compartments cleared at baseline, the only point
-# in this project where that happened.
+# Current baseline: rho_S = 0.61, rho_R = 0.55 (~10% fitness cost), and
+# Emax_l = 0.8 (fixed and decoupled from rho_S). The EC50_L escape threshold
+# is now bisected directly in this script, rather than hard-coded.
+
 #
 # 
 #
@@ -27,6 +27,10 @@
 # relapse. Both outcomes are accepted here -- the point of this rho_res_R is
 # to let S_b establish, not to guarantee reservoir persistence in every
 # sample.
+# this file generates 3 figures:
+# 1. mc_ec50_lzd_sweep_kinetics.png
+# 2. mc_ec50_lzd_sweep_outcomes.png
+# 3. mc_ec50_lzd_switch.png 
 # =============================================================================
 import importlib.util
 import os
@@ -49,24 +53,26 @@ plt.rcParams.update({
 
 # ---------------------------------------------------------------------------
 # Load model
+# import model_Bacteremia would also load the model, however the code below
+# is more explicit and allows for better error handling.
 # ---------------------------------------------------------------------------
-MODULE_NAME = "model_Bacteremia.py"
+MODULE_NAME = "model_Bacteremia.py"#file to load
 if not os.path.exists(MODULE_NAME):
-    print(f"ERROR: Cannot find '{MODULE_NAME}' in the current directory.", file=sys.stderr)
+    print(f"ERROR: Cannot find '{MODULE_NAME}' in the current directory.", file=sys.stderr)#check if file exists
     sys.exit(1)
 
-spec = importlib.util.spec_from_file_location("model_mod", MODULE_NAME)
-model_mod = importlib.util.module_from_spec(spec)
-sys.modules["model_mod"] = model_mod
-spec.loader.exec_module(model_mod)
+spec = importlib.util.spec_from_file_location("model_mod", MODULE_NAME)#create spec from file location
+model_mod = importlib.util.module_from_spec(spec)#create module from spec
+sys.modules["model_mod"] = model_mod#add module to sys.modules
+spec.loader.exec_module(model_mod)#execute module
 
 # ---------------------------------------------------------------------------
 # Simulation settings
 # ---------------------------------------------------------------------------
-NUM_ITERATIONS = 1000
-LOD            = 10.0       # limit of detection (CFU/mL)
-CV             = 1.117      # log-normal spread applied to EC50_L 
-SEED           = 44
+NUM_ITERATIONS = 1000#number of iterations
+LOD            = 10.0       # limit of detection (CFU/mL)#limit of detection
+CV             = 1.117      # log-normal spread applied to EC50_L #coefficient of variation
+SEED           = 44#seed for random number generator
 
 total_h      = 1944  # 21d pre-tx + 4d vancomycin + 42d linezolid + 14d post-tx follow-up
 vanco_start  = 504
@@ -86,8 +92,8 @@ lzd_end_days     = (vanco_start + pk.van_duration + pk.lzd_duration) / 24.0
 # ---------------------------------------------------------------------------
 # Fixed parameters (all except EC50_L held at baseline)
 # ---------------------------------------------------------------------------
-rho_S        = 0.61    # 
-rho_R        = 0.55    # (10%fitness cost)
+rho_S        = 0.61    
+rho_R        = 0.55    #10% fitness cost
 
 EC50_L_BASE = 1.0
 
@@ -174,9 +180,12 @@ R_res_hist = np.full((NUM_ITERATIONS, len(t_eval)), np.nan)
 
 print(f"Running {NUM_ITERATIONS} iterations (sweep: EC50_L, baseline={EC50_L_BASE:.2f})...",
       flush=True)
+# ---------------------------------------------------------------------------
+# Monte Carlo Simulation loop for each iteration
+# ---------------------------------------------------------------------------
 
 for i in range(NUM_ITERATIONS):
-    params_i = {**BASE_PARAMS, "EC50_L": ec50_l_samples[i]}
+    params_i = {**BASE_PARAMS, "EC50_L": ec50_l_samples[i]} # copies the baseline parameters and overrides EC50_L
 
     sol = odeint(
         model_mod.dual_reservoir_model,
@@ -185,20 +194,20 @@ for i in range(NUM_ITERATIONS):
         rtol=1e-7, atol=1e-9, mxstep=5000,
     )
 
-    sb   = np.where(sol[:, 0] < LOD, 0.0, sol[:, 0])
-    rb   = np.where(sol[:, 1] < LOD, 0.0, sol[:, 1])
-    sres = np.where(sol[:, 2] < LOD, 0.0, sol[:, 2])
-    rres = np.where(sol[:, 3] < LOD, 0.0, sol[:, 3])
+    sb   = np.where(sol[:, 0] < LOD, 0.0, sol[:, 0]) #replaces any values below LOD with 0.0
+    rb   = np.where(sol[:, 1] < LOD, 0.0, sol[:, 1]) #replaces any values below LOD with 0.0
+    sres = np.where(sol[:, 2] < LOD, 0.0, sol[:, 2]) #replaces any values below LOD with 0.0
+    rres = np.where(sol[:, 3] < LOD, 0.0, sol[:, 3]) #replaces any values below LOD with 0.0    
 
-    S_b_hist[i]   = sb
-    R_b_hist[i]   = rb
-    S_res_hist[i] = sres
-    R_res_hist[i] = rres
+    S_b_hist[i]   = sb #stores the full time course for S_b
+    R_b_hist[i]   = rb #stores the full time course for R_b
+    S_res_hist[i] = sres #stores the full time course for S_res
+    R_res_hist[i] = rres #stores the full time course for R_res
 
-    if (i + 1) % 50 == 0:
+    if (i + 1) % 50 == 0: #prints progress every 50 iterations
         print(f"  {i + 1}/{NUM_ITERATIONS} complete", flush=True)
 
-print("Simulations complete. Generating figure...", flush=True)
+print("Simulations complete. Generating figure...", flush=True)# prints completion message
 
 
 # ---------------------------------------------------------------------------

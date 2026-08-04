@@ -1,0 +1,81 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{hyperref}
+
+\title{Comparison: EC50\_L Threshold Calculation Methods}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section*{Question}
+Do \texttt{EC50\_lzd\_threshold\_sweep.py} and \texttt{MC\_ec50\_lzd.py} compute the
+linezolid resistance-escape threshold ($EC_{50,L}$) the same way?
+
+\section*{Conclusion}
+Both scripts define and locate the threshold identically in principle; they differ
+only in scope and robustness.
+
+\subsection*{Shared methodology}
+\begin{itemize}
+  \item Identical \texttt{BASE\_PARAMS}, initial conditions $Y_0$, and ODE solver
+        settings:
+        \[
+          \texttt{odeint(rtol=1e-7,\ atol=1e-9,\ mxstep=5000)}
+        \]
+  \item Threshold defined as the value of $EC_{50,L}$ at which the
+        \emph{final} resistant reservoir count, $R_{res}(t_{\text{end}})$,
+        crosses the limit of detection:
+        \[
+          f(EC_{50,L}) = R_{res}(t_{\text{end}};\,EC_{50,L}) - \mathrm{LOD}, \qquad \mathrm{LOD} = 10\ \text{CFU/mL}
+        \]
+  \item Root found via bisection using \texttt{scipy.optimize.brentq} over
+        $EC_{50,L} \in [0.3,\,2.0]$ mg/L.
+  \item Both scripts agree numerically: threshold $\approx 0.932$ mg/L at
+        $\rho_S = 0.61$.
+\end{itemize}
+
+\subsection*{Differences}
+
+\begin{enumerate}
+  \item \textbf{Compartments bisected.}
+  \begin{itemize}
+    \item \texttt{EC50\_lzd\_threshold\_sweep.py} bisects \emph{both}
+          $R_b$ (blood, index 1) and $R_{res}$ (reservoir, index 3)
+          separately via \texttt{find\_threshold(compartment\_idx)}.
+    \item \texttt{MC\_ec50\_lzd.py} bisects only $R_{res}$, producing a
+          single \texttt{ESCAPE\_THRESH} used to classify Monte Carlo
+          samples.
+  \end{itemize}
+
+  \item \textbf{Sweep resolution (diagnostic only).}
+  \begin{itemize}
+    \item \texttt{threshold\_sweep.py}: 171 points, step $0.01$ mg/L.
+    \item \texttt{MC\_ec50\_lzd.py}: 121 points, step $\approx 0.014$ mg/L.
+  \end{itemize}
+  These grids feed only the visualization; \texttt{brentq} itself is
+  continuous and unaffected by grid spacing.
+
+  \item \textbf{No-crossing fallback behavior.}
+  \begin{itemize}
+    \item \texttt{threshold\_sweep.py}: if $f(EC50_{\min}) > 0$ or
+          $f(EC50_{\max}) < 0$ (no sign change), returns \texttt{None}.
+    \item \texttt{MC\_ec50\_lzd.py}: in the same situation, falls back to a
+          coarse grid-based estimate,
+          \[
+            \texttt{ESCAPE\_THRESH} = \texttt{sweep\_ec50[argmax(sweep\_R\_res > LOD)]}
+          \]
+          so the Monte Carlo run does not fail outright.
+  \end{itemize}
+\end{enumerate}
+
+\subsection*{Interpretation}
+\texttt{EC50\_lzd\_threshold\_sweep.py} functions as the more rigorous
+diagnostic tool (dual-compartment thresholds, finer sweep, strict
+no-crossing handling), while \texttt{MC\_ec50\_lzd.py} only needs a single
+$R_{res}$ threshold to partition its 1000-sample Monte Carlo population
+into ``suppressed'' vs. ``escape'' outcomes, favoring robustness
+(graceful fallback) over strictness.
+
+\end{document}

@@ -1,10 +1,10 @@
 # =============================================================================
 # Baseline reservoir clearance check
 #
-# Runs model_Bacteremia.py exactly as written (its own __main__ block defaults:
-# EC50_L = 1.0, Emax_l = rho_S = 0.6, S_res_0 = R_res_0 = 100 CFU/mL) as a
-# single deterministic simulation, and plots blood vs. reservoir kinetics for
-# both strains to show whether each compartment clears below the LOD by the
+# Runs a single deterministic simulation with the baseline parameters defined
+# below (rho_S = 0.61, rho_R = 0.55, Emax_l = 0.8, EC50_L = 1.0, reservoir
+# seed = 100 CFU/mL each), then plots blood vs. reservoir kinetics for both
+# strains to show whether each compartment clears below the LOD by the
 # end of the simulation.
 # =============================================================================
 import importlib.util
@@ -15,14 +15,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import odeint
 
+
+# code below sets global matplotlib parameters for consistent figure formatting
 plt.rcParams.update({
-    "font.size": 16,
-    "axes.titlesize": 18,
-    "axes.labelsize": 16,
-    "xtick.labelsize": 14,
-    "ytick.labelsize": 14,
-    "legend.fontsize": 14,
-    "figure.titlesize": 20,
+    "font.size": 16, # base font size
+    "axes.titlesize": 18, # title font size
+    "axes.labelsize": 16, # axis label font size
+    "xtick.labelsize": 14, # x-axis tick label font size
+    "ytick.labelsize": 14, # y-axis tick label font size
+    "legend.fontsize": 14, # legend font size
+    "figure.titlesize": 20, # figure title font size
 })
 
 MODULE_NAME = "model_Bacteremia.py"
@@ -55,28 +57,39 @@ vanco_start_days = vanco_start / 24.0
 lzd_start_days   = lzd_start / 24.0
 lzd_end_days     = lzd_end / 24.0
 
-rho_S        = 0.60    # lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
-rho_R        = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
+rho_S        = 0.61   
+rho_R        = 0.55    
 
 # Baseline params, identical to model_Bacteremia.py's __main__ block
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
-    "rho_res_S":        0.175,  # scaled 5x (from 0.035) alongside rho_S
+    "rho_res_S":        0.175,  
     "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
     "Emax_v":           0.40,
     "EC50_V":           0.245,
-    "Emax_l":           0.8,    # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
+    "Emax_l":           0.8,    # fixed, decoupled from rho_S 
     "EC50_L":           1.0,
     "B_max_blood":      6000,
-    "B_max_reservoir":  1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
+    "B_max_reservoir":  1e4,    
     "van_res_fraction": 0.15,
     "lzd_res_fraction": 0.45,
-    "f_r_b":            5e-5,  # restored to original
+    "f_r_b":            5e-5,  
     "f_b_r":            1e-5,
 }
 
 Y0 = [0.0, 0.0, 100.0, 100.0]   # model_Bacteremia.py's own default reservoir seed
+
+#------------------------------------------------------------------------
+# Simulation: integrate the dual-reservoir ODE model
+#   - model_mod.dual_reservoir_model: the RHS function for the ODEs
+#   - Y0: initial conditions [S_b, R_b, S_res, R_res]
+#   - t_eval: time points at which the solution is returned
+#   - args: (BASE_PARAMS, van_func, lzd_func, immune_model) — fixed
+#           parameters plus vancomycin/linezolid concentrations and immunity
+#   - rtol=1e-8, atol=1e-10: relative and absolute integration tolerances
+#   - mxstep=5000: maximum internal steps the solver is allowed
+#------------------------------------------------------------------------
 
 sol = odeint(
     model_mod.dual_reservoir_model, Y0, t_eval,

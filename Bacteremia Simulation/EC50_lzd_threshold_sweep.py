@@ -40,6 +40,10 @@
 # consumed by MC_ec50_lzd.py: every time rho_res_S/rho_res_R was retuned in
 # that file's history (see narrative above), this script was rerun to
 # re-locate where the threshold moved to.
+# this file creates two figures:
+#   1. ec50_lzd_threshold_sweep.png - final R_b/R_res vs. EC50_L (log y-axis), shades the escape
+#      zone(s) above each threshold
+#   2. ec50_lzd_threshold_sweep_zoom.png - zoomed view of the escape zone
 # =============================================================================
 import importlib.util
 import os
@@ -62,16 +66,18 @@ plt.rcParams.update({
 
 # ---------------------------------------------------------------------------
 # Load model
+# import model_Bacteremia.py will also work, however the code below is more explicit
+# and allows for better error handling.
 # ---------------------------------------------------------------------------
-MODULE_NAME = "model_Bacteremia.py"
+MODULE_NAME = "model_Bacteremia.py"#file to load
 if not os.path.exists(MODULE_NAME):
-    print(f"ERROR: Cannot find '{MODULE_NAME}' in the current directory.", file=sys.stderr)
+    print(f"ERROR: Cannot find '{MODULE_NAME}' in the current directory.", file=sys.stderr)# check if file exists
     sys.exit(1)
 
-spec = importlib.util.spec_from_file_location("model_mod", MODULE_NAME)
-model_mod = importlib.util.module_from_spec(spec)
-sys.modules["model_mod"] = model_mod
-spec.loader.exec_module(model_mod)
+spec = importlib.util.spec_from_file_location("model_mod", MODULE_NAME)#create spec from file location
+model_mod = importlib.util.module_from_spec(spec)# create module from spec
+sys.modules["model_mod"] = model_mod#add module to sys.modules
+spec.loader.exec_module(model_mod)#execute module
 
 # ---------------------------------------------------------------------------
 # Simulation settings (matches MC_ec50_lzd.py: rho_S=0.61, shifting the escape
@@ -100,34 +106,37 @@ rho_R        = 0.55    # directly tuned (~10% fitness cost relative to rho_S, do
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
-    "rho_res_S":        0.175,  # scaled 5x (from 0.035) alongside rho_S
-    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
+    "rho_res_S":        0.175,  
+    "rho_res_R":        0.1765,  
     "Emax_v":           0.40,
     "EC50_V":           0.245,
-    "Emax_l":           0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
+    "Emax_l":           0.8,  
     "B_max_blood":      6000,
-    "B_max_reservoir":  1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
+    "B_max_reservoir":  1e4,    
     "van_res_fraction": 0.15,
     "lzd_res_fraction": 0.45,
-    "f_r_b":            5e-5,  # restored to original
+    "f_r_b":            5e-5,  
     "f_b_r":            1e-5,
 }
 
 Y0 = [0.0, 0.0, 100.0, 100.0]
 
-
+#-------------------------------------------------------------------------------------
+# Function to run deterministic simulation. Used by sweep and by find_threshold to evaluate
+# the effectiveness of linezolid at different EC50_L values.
+#-------------------------------------------------------------------------------------
 def final_counts(ec50_l):
     """Run one deterministic simulation at a given EC50_L; return (final R_b, final R_res)."""
-    params_i = {**BASE_PARAMS, "EC50_L": ec50_l}
+    params_i = {**BASE_PARAMS, "EC50_L": ec50_l} #creates a parameter dictionary with the given EC50_L value
     sol = odeint(
         model_mod.dual_reservoir_model,
         Y0, t_eval,
         args=(params_i, van_func, lzd_func, immune_model),
         rtol=1e-7, atol=1e-9, mxstep=5000,
     )
-    r_b   = sol[-1, 1]
-    r_res = sol[-1, 3]
-    return r_b, r_res
+    r_b   = sol[-1, 1] #final R_b value
+    r_res = sol[-1, 3] #final R_res value
+    return r_b, r_res #returns the final values of R_b and R_res as a tuple
 
 
 # ---------------------------------------------------------------------------
