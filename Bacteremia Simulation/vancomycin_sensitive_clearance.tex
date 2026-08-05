@@ -1,0 +1,111 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{float}
+
+\title{Effect of Vancomycin Treatment on the Sensitive Strain\\
+\large \texttt{model\_Bacteremia.py}}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Summary}
+
+Under baseline parameters, the 4-day vancomycin course
+(\texttt{van\_duration} $= 96$ h, starting at \texttt{vanco\_start} $=
+504$ h) drives the vancomycin-sensitive strain to functional extinction in
+both compartments -- blood ($S_b$) and reservoir ($S_{res}$) -- before
+linezolid is ever started. Vancomycin monotherapy is therefore sufficient,
+in this model, to clear the sensitive strain; it does not require the
+subsequent linezolid course.
+
+\section{Mechanism}
+
+Vancomycin acts only on $S_b$ and $S_{res}$ (the model gives resistant
+bacteria, $R_b$/$R_{res}$, no vancomycin susceptibility term at all). Its
+effect enters as a saturating $E_{max}$ term,
+\begin{equation}
+E_V(t) = \frac{E_{max,V}\, V(t)}{EC_{50,V} + V(t)},
+\end{equation}
+with $E_{max,V} = 0.40$ h$^{-1}$ and $EC_{50,V} = 0.245$ mg/L. Because
+q8h dosing (1000 mg, $V_d = 50$ L, $f_u = 0.50$) keeps free drug well above
+$EC_{50,V}$ for nearly the whole interval, $E_V(t)$ sits close to its
+ceiling $E_{max,V}$ for most of the 96-h course rather than fluctuating
+with the dosing troughs.
+
+In the blood compartment, the net rate governing $S_b$ during the
+vancomycin window (before linezolid starts, so $E_L = 0$) is
+\begin{equation}
+\dot S_b \approx \Big[\rho_S \cdot \underbrace{\big(1 - \tfrac{S_b+R_b}{B_{max,blood}}\big)}_{\text{logistic}} - k_{immune}\,\mathrm{eff}_{blood} - E_V(t)\Big] S_b ,
+\end{equation}
+with $\rho_S = 0.60$ h$^{-1}$, $k_{immune}\,\mathrm{eff}_{blood} = 0.12$
+h$^{-1}$, and $E_V \to E_{max,V} = 0.40$ h$^{-1}$ at saturating
+concentrations. Once $S_b$ is small relative to $B_{max,blood} = 6000$
+CFU/mL, the logistic term is $\approx 1$ and the bracketed net rate is
+$0.60 - 0.12 - 0.40 = +0.08$ h$^{-1}$ -- i.e.\ growth alone would still
+edge $S_b$ upward. Clearance instead comes from the reservoir side: $S_{res}$
+is subject to the same vancomycin effect, scaled by tissue penetration
+(\texttt{van\_res\_fraction} $= 0.15$), plus immune killing at
+$\mathrm{eff}_{res} = 0.1$, and collapses first; once $S_{res}\to 0$ the
+reseeding term $f_{r\to b}\,S_{res}$ that feeds $S_b$ vanishes, and the
+smooth low-density floor built into the growth term ($S_b^2/(10^2+S_b^2)$)
+suppresses further net growth as $S_b$ itself approaches zero, letting both
+compartments run down together rather than settling at a low endemic
+level.
+
+\section{Quantitative trajectory}
+
+Numerically integrating \texttt{dual\_reservoir\_model} with baseline
+parameters ($\rho_S = 0.60$, $\rho_R = 0.55$, $\rho_{res,S} = 0.175$,
+$\rho_{res,R} = 0.1765$, $E_{max,V} = 0.40$, $EC_{50,V} = 0.245$,
+$B_{max,blood} = 6000$, $B_{max,res} = 10^4$, $f_{r\to b} = 5\times10^{-5}$,
+$f_{b\to r} = 1\times10^{-5}$, $Y_0 = [0,0,100,100]$) gives the sensitive-strain
+time course in Table~\ref{tab:sb}.
+
+\begin{table}[H]
+\centering
+\large %Increase text size within the table
+\renewcommand{\arraystretch}{1.35} % Adds vertical breathing room between rows
+\caption{$S_b$, $R_b$, and $S_{res}$ across the 4-day vancomycin course.
+Peak $S_b$ prior to treatment onset is $4.80\times10^{3}$ CFU/mL.}
+\vspace{0.5cm} % Adds 0.5cm of space before caption
+\begin{tabular}{l l l l}  % 4 columns
+\hline
+\textbf{Time} & \textbf{$S_b$ (CFU/mL)} & \textbf{$R_b$ (CFU/mL)} & \textbf{$S_{res}$ (CFU/mL)} \\
+\hline
+Vancomycin start ($t=504$ h) & $4.62\times10^{3}$ & $2.10$ & $4.34\times10^{3}$ \\
+$+24$ h & $9.90\times10^{2}$ & $5.37$ & $2.27$ \\
+$+48$ h & $5.36\times10^{2}$ & $1.79\times10^{3}$ & $2.0\times10^{-2}$ \\
+$+72$ h & $3.63\times10^{-2}$ & $4.69\times10^{3}$ & $3.5\times10^{-5}$ \\
+Vancomycin end ($+96$ h, $t=600$ h) & $1.5\times10^{-7}$ & $4.29\times10^{3}$ & $5.9\times10^{-9}$ \\
+\hline
+\end{tabular}
+\label{tab:sb}
+\end{table}
+
+By the end of the course, $S_b$ and $S_{res}$ have both fallen to
+$\sim 10^{-7}$--$10^{-9}$ CFU/mL -- many orders of magnitude below any
+realistic limit of detection (LOD $=10$ CFU/mL is used elsewhere in this
+project) -- so the sensitive strain is cleared in every practical sense.
+The decline is not monotonically smooth in log-space over the full window:
+$S_b$ falls quickly at first as the reservoir source term collapses, dips
+further, and only reaches its final near-zero value once both compartments
+have run down together.
+
+\section{Competitive release of the resistant strain}
+
+Vancomycin has no effect on $R_b$ (\texttt{dual\_reservoir\_model} gives
+$R_b$ no vancomycin-kill term at all -- it is susceptible only to
+linezolid). As $S_b$ is cleared, blood carrying capacity
+($B_{max,blood} = 6000$ CFU/mL) that was previously occupied by the
+sensitive population is vacated, and $R_b$ expands into it: over the same
+96-h window $R_b$ rises from $2.10$ to $4.29\times10^{3}$ CFU/mL (Table
+\ref{tab:sb}). In this model, vancomycin's complete clearance of the
+sensitive strain is therefore the mechanism that permits the resistant
+strain's emergence in blood, rather than a side effect independent of it.
+
+\end{document}

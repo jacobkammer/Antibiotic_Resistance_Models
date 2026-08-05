@@ -115,10 +115,15 @@ S_COLOR = "steelblue"
 R_COLOR = "firebrick"
 
 
+# ---------------------------------------------------------------------------
+# Helper function to plot a single panel
+# axvspan draws a vertical span (rectangle) across the plot
+# axhline draws a horizontal line across the plot   
+# ---------------------------------------------------------------------------
 def _plot_panel(ax, S, R, title, y_max):
-    ax.axvspan(vanco_start_days, lzd_start_days, color="gray", alpha=0.12, label="Vancomycin window")
-    ax.axvspan(lzd_start_days,  lzd_end_days,    color="gold", alpha=0.12, label="Linezolid window")
-    ax.axhline(LOD, color="black", ls=":", lw=1.0, alpha=0.7, label=f"LOD ({int(LOD)} CFU/mL)")
+    ax.axvspan(vanco_start_days, lzd_start_days, color="gray", alpha=0.12, label="Vancomycin window") # Vancomycin window, light gray band from start to end of vancomycin treatment
+    ax.axvspan(lzd_start_days,  lzd_end_days,    color="gold", alpha=0.12, label="Linezolid window") # Linezolid window, light yellow band from start to end of linezolid treatment
+    ax.axhline(LOD, color="black", ls=":", lw=1.0, alpha=0.7, label=f"LOD ({int(LOD)} CFU/mL)") # Limit of detection line, black dotted line
 
     ax.plot(t_days, np.where(S <= 0, np.nan, S), color=S_COLOR, lw=2.0, label="Sensitive")
     ax.plot(t_days, np.where(R <= 0, np.nan, R), color=R_COLOR, lw=2.0, label="Resistant")

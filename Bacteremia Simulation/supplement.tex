@@ -136,12 +136,37 @@ is seeded exclusively through reservoir-to-blood transfer, so vanishingly
 small $f_{r \to b}$ leaves bacteremia unestablished for the entire simulated
 course --- then switch sharply to their full baseline levels within roughly
 half a log-decade of the model's own baseline rate
-($5\times10^{-5}~\mathrm{h}^{-1}$). Peak $S_{res}$ is flat across the full
-six-decade range. At the upper end, final $R_b$ undergoes a second,
-independent transition, dropping back to zero for
-$f_{r \to b} \gtrsim 5\times10^{-3}~\mathrm{h}^{-1}$ even as peak $R_b$
-continues to rise --- $R_b$ still establishes and peaks at these rates, but no
-longer relapses by the end of follow-up.
+($5\times10^{-5}~\mathrm{h}^{-1}$). This transition is a threshold across
+independent simulated courses --- each grid point holds its own $f_{r \to
+b}$ fixed for the entire simulated course --- rather than a switch occurring
+partway through any single patient's timeline. Peak $S_{res}$ is flat
+across the full six-decade range.
+
+Across the broad plateau separating the two transitions ($\sim3\times10^{-5}$
+to $\sim5\times10^{-3}~\mathrm{h}^{-1}$), $R_b$ that reaches carrying
+capacity stays there: final $R_b$ closely tracks peak $R_b$, so once
+resistant bacteremia establishes it persists through the remainder of
+linezolid therapy and relapses to the same level after treatment ends, for
+essentially the entire escape range.
+
+At the upper end of the range, final $R_b$ undergoes a second, independent
+transition, dropping back to zero for $f_{r \to b} \gtrsim
+5\times10^{-3}~\mathrm{h}^{-1}$ even as peak $R_b$ continues to rise ---
+$R_b$ still establishes and peaks at these rates, but no longer relapses by
+the end of follow-up. Unlike the plateau regime, this second transition
+\textit{is} a genuine within-course dynamic: $R_b$ rises to near carrying
+capacity during the outbreak and is then driven back down by linezolid and
+the immune response before follow-up ends --- and $R_{res}$ collapses along
+with it. Because $f_{b \to r}$ is held at its baseline value while $f_{r \to
+b}$ climbs a further two decades, transfer becomes strongly
+one-directional: reservoir bacteria are funneled into blood, where they are
+exposed to immune killing an order of magnitude stronger than in the
+reservoir, and to linezolid's full, undiscounted effect (rather than the
+reservoir's tissue-penetration-scaled fraction), faster than they return. At
+sufficiently high $f_{r \to b}$, the reservoir therefore stops acting as a
+protected sanctuary and instead feeds the resistant population into a
+compartment where it is cleared, driving both $R_b$ and $R_{res}$ to
+extinction together.
 
 \begin{figure}[H]
     \centering
@@ -234,7 +259,7 @@ marked.
 
 % =============================================================================
 \section{Deterministic escape threshold in host immune clearance ($k_{immune}$)}
-\label{sec:s9}
+\label{sec:s6}
 
 \Cref{fig:immune_threshold_sweep} shows the final $R_b$/$R_{res}$ burden
 across a fine, deterministic sweep of $k_{immune} \in
@@ -246,7 +271,7 @@ threshold and persist below it, crossing together --- consistent with the
 single shared escape boundary reported across all four sensitivity analyses
 in the main text. The model's own default, $k_{immune} =
 0.12~\mathrm{h}^{-1}$, is marked directly on the panel and falls well within
-the escape zone (\Cref{sec:s6} below reproduces this same threshold from the
+the escape zone (\Cref{sec:s7} below reproduces this same threshold from the
 Monte Carlo sweep).
 
 \begin{figure}[H]
@@ -261,13 +286,13 @@ Monte Carlo sweep).
 
 % =============================================================================
 \section{Monte Carlo escape switch in host immune clearance ($k_{immune}$)}
-\label{sec:s6}
+\label{sec:s7}
 
 \Cref{fig:supp_immune_switch} places the $n = 1000$ Monte Carlo patient
 population sampled from $k_{immune} \sim \mathrm{LogNormal}$
 (mean $0.17~\mathrm{h}^{-1}$, $\mathrm{CV} = 0.25$; the same sample used to
 generate the $35.7\%$ relapse rate reported in the main text) against the
-continuous deterministic switch curve from \Cref{sec:s9}. As with
+continuous deterministic switch curve from \Cref{sec:s6}. As with
 $EC_{50,L}$ in \Cref{sec:s2}, the top panel
 shows the continuous deterministic switch and the bottom panel shows where
 the sampled patient population falls relative to it, each patient colored by
@@ -293,7 +318,7 @@ majority of the population resolves the infection.
 
 % =============================================================================
 \section{Deterministic escape threshold in linezolid killing capacity ($E_{max,L}$)}
-\label{sec:s7}
+\label{sec:s8}
 
 \Cref{fig:emax_threshold_sweep} shows the final $R_b$/$R_{res}$ burden across
 a fine, deterministic sweep of $E_{max,L} \in [0.0, 1.0]~\mathrm{h}^{-1}$
@@ -303,7 +328,7 @@ above it: $E_{max,L}$ is linezolid's ceiling effect, so a weaker ceiling
 fails to hold resistant growth in check. Both compartments clear above the
 bisected threshold and persist below it, crossing together --- consistent
 with the single shared escape boundary reported across all four sensitivity
-analyses in the main text (\Cref{sec:s8} below reproduces this same
+analyses in the main text (\Cref{sec:s9} below reproduces this same
 threshold from the Monte Carlo sweep).
 
 \begin{figure}[H]
@@ -318,13 +343,13 @@ threshold from the Monte Carlo sweep).
 
 % =============================================================================
 \section{Monte Carlo escape switch in linezolid killing capacity ($E_{max,L}$)}
-\label{sec:s8}
+\label{sec:s9}
 
 \Cref{fig:supp_emax_switch} places the $n = 1000$ Monte Carlo patient
 population sampled from $E_{max,L} \sim \mathrm{LogNormal}$
 (mean $0.8~\mathrm{h}^{-1}$, $\mathrm{CV} = 0.30$; the same sample used to
 generate the $56.5\%$ escape fraction reported in the main text) against the
-continuous deterministic switch curve from \Cref{sec:s7}. As with
+continuous deterministic switch curve from \Cref{sec:s8}. As with
 $EC_{50,L}$ in \Cref{sec:s2}, the top panel shows the continuous switch and
 the bottom panel shows where the sampled patient population falls relative
 to it, each patient colored by its own simulated outcome rather than by
@@ -344,5 +369,197 @@ the same threshold located by the deterministic sweep.
     same threshold.}
     \label{fig:supp_emax_switch}
 \end{figure}
+
+% =============================================================================
+\section{Base model: dual-reservoir PK/PD structure}
+\label{sec:s10}
+
+All analyses above share a single underlying model, implemented in
+\texttt{model\_Bacteremia.py}. It has three parts: (1) a two-drug
+pharmacokinetic (PK) model that converts a fixed dosing regimen into a
+free-drug concentration function of time, (2) a fixed-rate host immune
+response, and (3) a four-compartment pharmacodynamic (PD) ODE system,
+\texttt{dual\_reservoir\_model}, coupling a blood compartment and a
+reservoir (deep-tissue/endocardial vegetation) compartment, each split into
+a vancomycin/linezolid-sensitive strain and a linezolid-only-susceptible
+resistant strain.
+
+\subsection{Pharmacokinetic model}
+
+\texttt{PharmacokineticModel} (\texttt{model\_Bacteremia.py:11-57}) is a
+one-compartment model with fixed linear clearance for each drug --- repeated
+IV bolus dosing with first-order elimination, no absorption phase. For a
+drug with elimination rate $k_e = CL/V_d$, dose $D$, dosing interval
+$\tau$, and free fraction $f_u$, the free-drug concentration from dose $n$
+(given at $t_n = t_{start} + n\tau$) is
+
+\begin{equation}
+C(t) = f_u \sum_{n\,:\,t_n \le t} \frac{D}{V_d}\, e^{-k_e (t - t_n)},
+\qquad t_n \in [t_{start},\, t_{start}+\text{duration}),
+\end{equation}
+
+implemented numerically as a superposition of exponential decay tails on a
+dense time grid (10 points/hour) and returned as an interpolating function
+\texttt{conc\_func(t)}. Concentration is clamped to zero before
+\texttt{start\_h}. Two drugs are parameterized (\Cref{tab:pk}); both use
+the same functional form, called once each to build \texttt{van\_func(t)}
+and \texttt{lzd\_func(t)}, which are then passed unchanged into the ODE
+system as forcing functions of time.
+
+\begin{table}[H]
+\centering
+\large
+\renewcommand{\arraystretch}{1.35}
+\caption{Fixed PK parameters, \texttt{PharmacokineticModel.\_\_init\_\_}
+(\texttt{model\_Bacteremia.py:22-37}).}
+\vspace{0.5cm}
+\begin{tabular}{l l l l}
+\hline
+\textbf{Parameter} & \textbf{Vancomycin} & \textbf{Linezolid} & \textbf{Meaning} \\
+\hline
+Dose & 1000 mg & 600 mg & per administration \\
+Interval & 8 h & 12 h & q8h / q12h dosing \\
+Duration & 96 h (4 d) & 1008 h (42 d) & length of course \\
+$V_d$ & 50 L & 45 L & volume of distribution \\
+$f_u$ & 0.50 & 0.70 & free (unbound) fraction \\
+Clearance & 5.0 L/h & 6.0 L/h & \\
+$k_e = CL/V_d$ & 0.10 h$^{-1}$ & 0.133 h$^{-1}$ & elimination rate \\
+$t_{1/2}$ & 6.9 h & 5.2 h & elimination half-life \\
+\hline
+\end{tabular}
+\label{tab:pk}
+\end{table}
+
+\subsection{Immune response}
+
+\texttt{ImmuneResponse} (\texttt{model\_Bacteremia.py:60-79}) is a constant
+(time-independent) host clearance rate, $k_{immune}$, scaled independently
+per compartment by two multipliers: $\mathrm{eff}_{blood}$ (default $1.0$)
+and $\mathrm{eff}_{res}$ (default $0.1$). The reservoir compartment is
+therefore, by construction, an order of magnitude harder for the immune
+system to clear than blood --- representing reduced immune access to a
+deep-seated/vegetative focus of infection. A code comment at
+\texttt{model\_Bacteremia.py:64-73} records that a strain-specific (rather
+than compartment-specific) immune multiplier was tried and rejected: it
+produced a bimodal switch (resistant blood infection either never appears or
+relapses to $\gtrsim4\times10^3$ CFU/mL) with no stable intermediate
+behavior, so the model reverted to a single shared $k_{immune}$ per
+compartment.
+
+\subsection{Pharmacodynamics}
+
+Both drugs act through saturating $E_{max}$ (Hill, $h=1$) kill/inhibition
+terms:
+
+\begin{equation}
+E_V(t) = \frac{E_{max,V}\, V(t)}{EC_{50,V} + V(t)}, \qquad
+E_L(t) = \frac{E_{max,L}\, L(t)}{EC_{50,L} + L(t)},
+\end{equation}
+
+where $V(t)$, $L(t)$ are the free vancomycin/linezolid concentrations from
+the PK model above. Vancomycin is modeled as \textbf{bactericidal} ---
+$E_V$ enters the sensitive-strain equations as an added death-rate term.
+Linezolid is modeled as \textbf{bacteriostatic} --- $E_L$ enters as a
+death-rate term for \emph{both} strains (it is the resistant strain's only
+source of drug susceptibility in this model; $R_b$/$R_{res}$ have no
+vancomycin term at all). Reservoir exposure to each drug is discounted
+relative to blood by fixed tissue-penetration fractions,
+\texttt{van\_res\_fraction} (default $0.15$) and \texttt{lzd\_res\_fraction}
+(default $0.45$), reflecting reduced drug penetration into a
+vegetation/deep-tissue focus; the reservoir's linezolid $E_{max}$ is
+additionally rescaled by the ratio of reservoir to blood sensitive-strain
+growth rates, $E_{max,L}^{res} = E_{max,L} \cdot \rho_{res,S}/\rho_S$
+(\texttt{model\_Bacteremia.py:161}).
+
+\subsection{Compartment structure and the ODE system}
+
+\texttt{dual\_reservoir\_model} (\texttt{model\_Bacteremia.py:83-184}) tracks
+four state variables: $S_b$/$R_b$ (sensitive/resistant strain, blood) and
+$S_{res}$/$R_{res}$ (sensitive/resistant strain, reservoir). Each population
+grows logistically toward a compartment-specific carrying capacity
+($B_{max,blood}$, shared by $S_b+R_b$; $B_{max,reservoir}$, shared by
+$S_{res}+R_{res}$), is killed by the immune response and, where susceptible,
+by drug, and exchanges with its counterpart compartment at fixed
+first-order rates $f_{r \to b}$ (reservoir $\to$ blood) and $f_{b \to r}$
+(blood $\to$ reservoir) --- the same exchange rates swept in
+\Cref{sec:s4,sec:s5}. A smooth low-density floor, $x^2/(10^2+x^2)$,
+multiplies each growth term so that populations run down to true extinction
+rather than stalling at a small positive value as they approach zero, and
+also prevents solver stiffness there. The full system:
+
+\begin{align}
+\dot S_b &= \rho_S S_b \Big(1-\tfrac{S_b+R_b}{B_{max,blood}}\Big)
+\tfrac{S_b^2}{10^2+S_b^2} - E_L S_b - \mathrm{eff}_{blood}\,k_{immune}\,S_b
+- E_V S_b + f_{r\to b} S_{res} - f_{b\to r} S_b \\[2pt]
+\dot R_b &= \rho_R R_b \Big(1-\tfrac{S_b+R_b}{B_{max,blood}}\Big)
+\tfrac{R_b^2}{10^2+R_b^2} - E_L R_b - \mathrm{eff}_{blood}\,k_{immune}\,R_b
++ f_{r\to b} R_{res} - f_{b\to r} R_b \\[2pt]
+\dot S_{res} &= \rho_{res,S} S_{res} \Big(1-\tfrac{S_{res}+R_{res}}{B_{max,res}}\Big)
+\tfrac{S_{res}^2}{10^2+S_{res}^2} - E_L^{res} S_{res} - \mathrm{eff}_{res}\,k_{immune}\,S_{res}
+- E_V^{res} S_{res} - f_{r\to b} S_{res} + f_{b\to r} S_b \\[2pt]
+\dot R_{res} &= \rho_{res,R} R_{res} \Big(1-\tfrac{S_{res}+R_{res}}{B_{max,res}}\Big)
+\tfrac{R_{res}^2}{10^2+R_{res}^2} - E_L^{res} R_{res} - \mathrm{eff}_{res}\,k_{immune}\,R_{res}
+- f_{r\to b} R_{res} + f_{b\to r} R_b
+\end{align}
+
+Note the asymmetry that drives the model's central resistance narrative:
+$R_b$ and $R_{res}$ have no vancomycin term at all (resistant to
+vancomycin by construction), while $S_b$/$S_{res}$ are killed by both drugs.
+$R_{res}$'s only loss terms are linezolid, the (weak) reservoir immune
+response, and net outward exchange --- so wherever $\rho_{res,R}$ exceeds
+those combined losses, $R_{res}$ persists in the reservoir independent of
+treatment and can continually reseed $R_b$ in blood through $f_{r\to b}$.
+
+\subsection{Baseline parameters and simulation protocol}
+
+The module's own \texttt{\_\_main\_\_} block (\texttt{model\_Bacteremia.py:187-246})
+is a single demonstration run, not a calibrated reference case --- the
+sensitivity analyses above use their own \texttt{BASE\_PARAMS} (typically
+$\rho_S=0.61$ rather than this block's $\rho_S=0.60$). \Cref{tab:baseline}
+lists the values used in the demonstration run.
+
+\begin{table}[H]
+\centering
+\large
+\renewcommand{\arraystretch}{1.35}
+\caption{Parameters set in \texttt{model\_Bacteremia.py}'s
+\texttt{\_\_main\_\_} block (lines 205--223).}
+\vspace{0.5cm}
+\begin{tabular}{l l l}
+\hline
+\textbf{Parameter} & \textbf{Value} & \textbf{Note} \\
+\hline
+$\rho_S$ & 0.60 h$^{-1}$ & blood sensitive-strain growth \\
+$\rho_R$ & 0.55 h$^{-1}$ & $\sim$8.3\% fitness cost vs.\ $\rho_S$ \\
+$\rho_{res,S}$ & 0.175 h$^{-1}$ & reservoir sensitive-strain growth \\
+$\rho_{res,R}$ & 0.1765 h$^{-1}$ & just above reservoir persistence threshold ($\approx$0.17594) \\
+$E_{max,V}$ & 0.40 h$^{-1}$ & \\
+$EC_{50,V}$ & 0.245 mg/L & \\
+$E_{max,L}$ & 0.8 h$^{-1}$ & fixed, decoupled from $\rho_S$ \\
+$EC_{50,L}$ & 1.0 mg/L & \\
+$B_{max,blood}$ & 6000 CFU/mL & \\
+$B_{max,reservoir}$ & $10^4$ CFU/mL & \\
+\texttt{van\_res\_fraction} & 0.15 & vancomycin reservoir penetration \\
+\texttt{lzd\_res\_fraction} & 0.45 & linezolid reservoir penetration \\
+$f_{r\to b}$ & $5\times10^{-5}$ h$^{-1}$ & reservoir $\to$ blood \\
+$f_{b\to r}$ & $1\times10^{-5}$ h$^{-1}$ & blood $\to$ reservoir \\
+\hline
+\end{tabular}
+\label{tab:baseline}
+\end{table}
+
+The demonstration run simulates $Y_0 = [S_b, R_b, S_{res}, R_{res}] =
+[0,\,0,\,100,\,100]$ --- blood starts sterile; the reservoir starts seeded
+with 100 CFU/mL of each strain --- over $t \in [0, 1944]$ h (81 days),
+integrated with \texttt{scipy.integrate.odeint} (\texttt{rtol}=$10^{-8}$,
+\texttt{atol}=$10^{-10}$). The 1944-hour window is fixed by the treatment
+protocol used throughout this supplement: 21 days of pre-treatment
+equilibration, a 4-day vancomycin course starting at $t=504$ h, a
+consecutive 42-day linezolid course, and a 14-day post-treatment follow-up.
+After integration, the block prints the net pre-treatment blood growth
+rate, $\rho_S - \mathrm{eff}_{blood}\,k_{immune}$, and asserts it is
+positive --- a guard against an accidentally unrepresentative
+parameterization in which the untreated host would clear infection on its
+own --- and prints the peak $S_b$ reached before vancomycin is started.
 
 \end{document}

@@ -1,0 +1,192 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{hyperref}
+
+\title{Comparison of the Project's Monte Carlo Scripts}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+
+The project contains five scripts named \texttt{MC\_*.py}:
+\texttt{MC\_ec50\_lzd.py}, \texttt{MC\_emax\_lzd.py},
+\texttt{MC\_immune\_response.py}, \texttt{MC\_initial\_conditions.py}, and
+\texttt{MC\_transfer\_rates\_equilibrium.py}. The first four are genuine
+Monte Carlo (MC) uncertainty-propagation studies: each fixes every parameter
+of \texttt{model\_Bacteremia.py}'s \texttt{dual\_reservoir\_model} at
+baseline except one quantity, which is randomly sampled once per iteration
+from a log-normal distribution, and each iteration's full bacterial-kinetics
+trajectory is recorded. The fifth, despite the \texttt{MC\_} filename prefix,
+contains no randomness at all -- it is a deterministic log-spaced grid sweep
+and is treated separately in Section~\ref{sec:not-mc}.
+
+All four true MC scripts share a common skeleton (Section~\ref{sec:shared}),
+but differ in real, code-level ways (Section~\ref{sec:differences}) that
+affect how their results should be read and compared.
+
+\section{Shared skeleton}
+\label{sec:shared}
+
+Across \texttt{MC\_ec50\_lzd.py}, \texttt{MC\_emax\_lzd.py},
+\texttt{MC\_immune\_response.py}, and \texttt{MC\_initial\_conditions.py}:
+
+\begin{itemize}
+\item \textbf{Same model and timeline.} All four integrate
+\texttt{dual\_reservoir\_model} with \texttt{total\_h = 1944} h
+(21 pre-treatment days + a 4-day vancomycin course starting at
+\texttt{vanco\_start = 504} h + a 42-day linezolid course + a 14-day
+post-treatment follow-up).
+\item \textbf{Same fixed baseline.} Every parameter not being varied is held
+at the project's common baseline: $\rho_S = 0.61$, $\rho_R = 0.55$,
+$\rho_{res,S} = 0.175$, $\rho_{res,R} = 0.1765$, $E_{max,V} = 0.40$,
+$EC_{50,V} = 0.245$, $B_{max,blood} = 6000$, $B_{max,res} = 10^4$,
+$\mathtt{van\_res\_fraction} = 0.15$, $\mathtt{lzd\_res\_fraction} = 0.45$,
+$f_{r\to b} = 5\times10^{-5}$, $f_{b\to r} = 1\times10^{-5}$.
+\item \textbf{Same sampling formula.} The varied quantity $X$ is drawn from a
+mean-corrected log-normal,
+\begin{equation}
+\sigma_{\ln} = \sqrt{\ln(1+CV^2)}, \qquad
+\mu_{\ln} = \ln(\bar X) - \tfrac{1}{2}\sigma_{\ln}^2, \qquad
+X \sim \mathrm{LogNormal}(\mu_{\ln}, \sigma_{\ln}^2),
+\end{equation}
+so that $\mathbb{E}[X]$ lands exactly on the script's chosen baseline
+$\bar X$, regardless of $CV$.
+\item \textbf{Same loop shape.} \texttt{NUM\_ITERATIONS} (or
+\texttt{NUM\_ITER}) $= 1000$ independent draws; one \texttt{odeint} call per
+draw, with every other parameter fixed; full four-compartment trajectories
+stored; summary statistics (median, 5th/95th percentile) and figures
+computed afterward.
+\end{itemize}
+
+\section{Where they actually diverge}
+\label{sec:differences}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}p{2.6cm}p{2.5cm}p{2.5cm}p{3.1cm}p{3.3cm}@{}}
+\toprule
+Aspect & \texttt{MC\_ec50\_lzd} & \texttt{MC\_emax\_lzd} & \texttt{MC\_immune\_response} & \texttt{MC\_initial\_conditions} \\
+\midrule
+Varied quantity &
+$EC_{50,L}$ (1 param) &
+$E_{max,L}$ (1 param) &
+$k_{\mathrm{immune}}$ (1 param, via a new \texttt{ImmuneResponse} instance per sample) &
+$S_{res,0}$ \emph{and} $R_{res,0}$ (2 independent draws per iteration) \\
+\addlinespace
+RNG API / seed &
+\texttt{np.random.\allowbreak default\_rng(44)} &
+\texttt{np.random.\allowbreak default\_rng(44)} &
+legacy \texttt{np.random.\allowbreak seed(42)} + \texttt{np.random.\allowbreak lognormal} &
+legacy \texttt{np.random.\allowbreak seed(42)} + \texttt{np.random.\allowbreak lognormal} \\
+\addlinespace
+Inline deterministic switch curve + \texttt{brentq} threshold &
+Yes (\texttt{SWEEP\_MIN}/\texttt{MAX}, \texttt{ESCAPE\_THRESH}) &
+Yes &
+Yes &
+\textbf{No} -- performed instead by the standalone \texttt{Sres0\_threshold\_sweep.py} \\
+\addlinespace
+ODE solver tolerances &
+\texttt{rtol=1e-7}, \texttt{atol=1e-9}, \texttt{mxstep=5000} &
+same &
+same &
+\textbf{default \texttt{odeint} tolerances} (none passed) \\
+\addlinespace
+Sub-LOD convention &
+floored to $0.0$ &
+floored to $0.0$ &
+set to \texttt{NaN} (plus \texttt{np.clip} for negatives) &
+floored to $0.0$ \\
+\addlinespace
+\texttt{t\_eval} resolution &
+1150 pts &
+1150 pts &
+1450 pts &
+1450 pts \\
+\addlinespace
+Kinetics-trace selection &
+first 20 iterations, in order &
+\emph{(no kinetics figure)} &
+random subsample of 40 via a separately-seeded \texttt{default\_rng(0)} &
+first 15 iterations, in order \\
+\addlinespace
+Figures produced &
+3: kinetics, outcomes scatter, switch+histogram &
+\textbf{1: switch+histogram only} &
+2: kinetics, switch+histogram &
+2: kinetics, initial-condition sampling histograms (no switch curve) \\
+\bottomrule
+\end{tabular}
+\caption{Divergences between the project's four true Monte Carlo scripts. All four share the skeleton in Section~\ref{sec:shared}; every cell above is a concrete difference in the code, not merely presentation.}
+\end{table}
+
+\subsection{Notes on individual divergences}
+
+\begin{itemize}
+\item \textbf{Two RNG conventions coexist.} \texttt{MC\_ec50\_lzd.py} and
+\texttt{MC\_emax\_lzd.py} use the modern NumPy \texttt{Generator} API
+(\texttt{np.random.default\_rng}, seed $44$), while
+\texttt{MC\_immune\_response.py} and \texttt{MC\_initial\_conditions.py} use
+the legacy global-state API (\texttt{np.random.seed}, seed $42$, followed by
+a bare \texttt{np.random.lognormal} call). Both are statistically valid, but
+the seed and the underlying bit generator differ, so runs are not
+cross-reproducible between the two conventions even at matched $CV$.
+\item \textbf{Only three of the four scripts locate an escape threshold
+inline.} \texttt{MC\_ec50\_lzd.py}, \texttt{MC\_emax\_lzd.py}, and
+\texttt{MC\_immune\_response.py} each run their own deterministic sweep and
+\texttt{scipy.optimize.brentq} root-find for \texttt{ESCAPE\_THRESH} before
+their Monte Carlo loop, then use it to color/split the sampled population in
+a switch-curve figure. \texttt{MC\_initial\_conditions.py} does not do this
+at all -- it neither computes nor plots an escape threshold; the analogous
+sensitivity analysis for its two varied initial conditions was instead
+externalized to the standalone diagnostic \texttt{Sres0\_threshold\_sweep.py}.
+\item \textbf{Solver tolerances are not uniform.} The three PD/host-parameter
+scripts explicitly tighten \texttt{odeint} beyond its defaults
+(\texttt{rtol=1e-7}, \texttt{atol=1e-9}, \texttt{mxstep=5000}).
+\texttt{MC\_initial\_conditions.py} calls \texttt{odeint} with no tolerance
+arguments at all, so it runs at SciPy's default tolerances -- a real
+(if likely small) difference in numerical precision from the other three.
+\item \textbf{Sub-LOD handling differs in a way that affects percentile
+plots.} Flooring to $0.0$ (as in \texttt{MC\_ec50\_lzd.py},
+\texttt{MC\_emax\_lzd.py}, \texttt{MC\_initial\_conditions.py}) versus
+setting to \texttt{NaN} (as in \texttt{MC\_immune\_response.py}) are not
+interchangeable under \texttt{np.percentile}: the former scripts must
+explicitly re-map $0 \to \mathtt{NaN}$ after computing percentiles (to avoid
+plotting a spurious log-scale floor), while \texttt{MC\_immune\_response.py}
+uses \texttt{np.nanpercentile} directly since \texttt{NaN} is already its
+sentinel for "below detection."
+\item \textbf{Figure count is not uniform.} \texttt{MC\_emax\_lzd.py} is the
+only one of the four that skips the 4-panel kinetics figure entirely,
+producing only the switch-curve/population-histogram figure --
+despite its header comment describing itself as mirroring
+\texttt{MC\_ec50\_lzd.py}.
+\end{itemize}
+
+\section{\texttt{MC\_transfer\_rates\_equilibrium.py} is not a Monte Carlo script}
+\label{sec:not-mc}
+
+Although its filename follows the \texttt{MC\_*.py} convention,
+\texttt{MC\_transfer\_rates\_equilibrium.py} contains no random sampling: it
+calls neither \texttt{np.random.seed}/\texttt{default\_rng} nor
+\texttt{lognormal} anywhere in the file. Instead, it runs two independent
+\emph{deterministic log-spaced grid sweeps} -- one over $f_{r\to b}$
+(reservoir$\to$blood transfer rate) holding $f_{b\to r}$ at baseline, and one
+over $f_{b\to r}$ holding $f_{r\to b}$ at baseline -- each stepping its rate
+across a shared grid built by \texttt{np.logspace} (a coarse pass over
+$[10^{-8}, 10^{-2}]$ plus a dense zoom pass over $[10^{-3}, 10^{-2}]$, the
+transition band identified by the coarse pass). Every grid point is run
+exactly once, in a fixed, non-random order, with the same
+\texttt{odeint} tolerances (\texttt{rtol=1e-7}, \texttt{atol=1e-9},
+\texttt{mxstep=5000}) as the PD/host-parameter MC scripts. It otherwise
+follows the same "fixed baseline + per-point \texttt{odeint} + LOD floor +
+kinetics/outcomes figures" pattern as \texttt{MC\_ec50\_lzd.py}, but with a
+swept grid point substituted for a random draw at each step -- a sensitivity
+sweep, not an uncertainty-propagation study.
+
+\end{document}

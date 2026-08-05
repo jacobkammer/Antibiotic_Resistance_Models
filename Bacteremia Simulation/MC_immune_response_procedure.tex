@@ -1,0 +1,293 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\title{Step-by-Step Monte Carlo Procedure\\
+\large \texttt{MC\_immune\_response.py}}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\noindent This document walks through the Monte Carlo (MC) procedure in
+\texttt{MC\_immune\_response.py} in the exact order it executes, referencing
+the variable and function names used in the code so it can be read alongside
+the file.
+
+\begin{enumerate}
+
+\item \textbf{Load the model.} \texttt{model\_Bacteremia.py} is loaded
+dynamically via \texttt{importlib} into \texttt{model\_mod}, giving access
+to \texttt{PharmacokineticModel}, \texttt{ImmuneResponse}, and
+\texttt{dual\_reservoir\_model}.
+
+\item \textbf{Fix run-level constants.} \texttt{NUM\_ITER = 1000},
+\texttt{LOD = 10.0} CFU/mL, \texttt{TOTAL\_H = 1944} h,
+\texttt{VANCO\_START = 504} h, and a shared evaluation grid
+\texttt{t\_eval = linspace(0, 1944, 1450)}, reused by every ODE solve in the
+script.
+
+\item \textbf{Build the drug-concentration callables once.}
+\texttt{PharmacokineticModel().concentration\_function(...)} is called once
+for vancomycin and once for linezolid, producing \texttt{van\_func(t)} and
+\texttt{lzd\_func(t)}. These are reused unmodified in every solve below.
+
+\item \textbf{Fix all parameters except $k_{\mathrm{immune}}$.} A single
+\texttt{params} dictionary is built once (values in Table~\ref{tab:params})
+and used, unmodified, by every solve in the script. The initial state
+\texttt{Y0 = [0.0, 0.0, 100.0, 100.0]} ($S_b, R_b, S_{res}, R_{res}$) is
+likewise fixed for every iteration. $k_{\mathrm{immune}}$ is deliberately
+absent from \texttt{params}: it lives instead in a separate
+\texttt{ImmuneResponse} object that is reconstructed per solve (steps 8 and
+11), since the immune-clearance rate is stored on that object rather than
+in the parameter dictionary consumed by \texttt{dual\_reservoir\_model}.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+Parameter & Value \\
+\midrule
+$\rho_S$ & $0.61$ h$^{-1}$ \\
+$\rho_R$ & $0.55$ h$^{-1}$ \\
+$\rho_{res,S}$ & $0.175$ h$^{-1}$ \\
+$\rho_{res,R}$ & $0.1765$ h$^{-1}$ \\
+$E_{max,V}$ & $0.40$ \\
+$EC_{50,V}$ & $0.245$ \\
+$E_{max,L}$ & $0.8$ \\
+$EC_{50,L}$ & $1.0$ \\
+$B_{max,blood}$ & $6000$ CFU/mL \\
+$B_{max,res}$ & $10^4$ CFU/mL \\
+$\mathtt{van\_res\_fraction}$ & $0.15$ \\
+$\mathtt{lzd\_res\_fraction}$ & $0.45$ \\
+$f_{r\to b}$ & $5\times10^{-5}$ h$^{-1}$ \\
+$f_{b\to r}$ & $1\times10^{-5}$ h$^{-1}$ \\
+\bottomrule
+\end{tabular}
+\caption{The fixed \texttt{params} dictionary. Every value here is identical across all iterations and both the switch-curve sweep and the Monte Carlo loop.}
+\label{tab:params}
+\end{table}
+
+\item \textbf{Compute the log-normal sampling parameters.} With
+\texttt{K\_IMMUNE\_MEAN = 0.172} and \texttt{CV = 0.25}:
+\begin{equation}
+\sigma_{\ln} = \sqrt{\ln(1+CV^2)}, \qquad
+\mu_{\ln} = \ln(\texttt{K\_IMMUNE\_MEAN}) - \tfrac{1}{2}\sigma_{\ln}^2.
+\end{equation}
+
+\item \textbf{Draw all 1000 samples at once.} \texttt{np.random.seed(42)}
+seeds NumPy's legacy global random state, then
+\texttt{k\_immune\_samples = np.random.lognormal(}$\mu_{\ln}, \sigma_{\ln},$
+\texttt{NUM\_ITER)} draws the full length-1000 vector in a single call.
+Sample $i$ of this vector is used by Monte Carlo iteration $i$ in step 11.
+The realized mean, standard deviation, $CV$, and 5th/95th percentiles of the
+drawn sample are printed immediately.
+
+\item \textbf{Compute the deterministic switch curve (101 points).} Before
+the Monte Carlo loop runs, a helper \texttt{\_final\_counts(k\_immune)}
+constructs a fresh \texttt{ImmuneResponse(k\_immune=k\_immune)}, integrates
+\texttt{dual\_reservoir\_model} with \texttt{odeint}
+(\texttt{rtol=1e-7}, \texttt{atol=1e-9}, \texttt{mxstep=5000}) from the fixed
+\texttt{Y0} over the fixed \texttt{t\_eval}, and returns only the final-time
+$R_b$ and $R_{res}$ (\texttt{sol[-1, 1]}, \texttt{sol[-1, 3]}). This is
+evaluated at \texttt{sweep\_k\_immune = linspace(0.02, 0.22, 101)}, storing
+the results in \texttt{sweep\_R\_b} and \texttt{sweep\_R\_res}.
+
+\item \textbf{Root-find \texttt{ESCAPE\_THRESH}.} Using the same
+\texttt{\_final\_counts}, \texttt{scipy.optimize.brentq} solves
+$R_{res}^{\mathrm{final}}(k_{\mathrm{immune}}) - \mathrm{LOD} = 0$ over
+$[0.02, 0.22]$ (falling back to the coarse sweep crossing if the endpoint
+signs don't bracket a root), giving a single precise threshold value,
+\texttt{ESCAPE\_THRESH}.
+
+\item \textbf{Pre-allocate the history arrays.} Four arrays
+\texttt{S\_b\_hist}, \texttt{R\_b\_hist}, \texttt{S\_res\_hist},
+\texttt{R\_res\_hist}, each of shape $1000 \times 1450$, are filled with
+\texttt{NaN} as placeholders to be overwritten row-by-row in step 11.
+
+\item \textbf{Main Monte Carlo loop (1000 iterations).} For each sampled
+value \texttt{k\_im} in \texttt{k\_immune\_samples} (iteration index $i$):
+\begin{enumerate}
+\item[(a)] build \texttt{immune\_i = ImmuneResponse(k\_immune=k\_im)} -- a
+fresh immune-response object carrying this iteration's sampled rate (the
+shared \texttt{params} dictionary itself is not touched);
+\item[(b)] integrate \texttt{dual\_reservoir\_model} from the fixed
+\texttt{Y0} over the fixed \texttt{t\_eval}, with \texttt{odeint}
+(\texttt{rtol=1e-7}, \texttt{atol=1e-9}, \texttt{mxstep=5000}), passing
+\texttt{immune\_i} in place of a shared immune model;
+\item[(c)] clip all four state trajectories to be non-negative
+(\texttt{np.clip(sol[:, j], 0, None)});
+\item[(d)] replace every value below \texttt{LOD} with \texttt{NaN}
+(\texttt{np.where(x < LOD, np.nan, x)}) for each of the four compartments --
+this is this script's sentinel for "below detection," used later so that
+\texttt{np.nanpercentile} and the log-scale plots simply skip those points;
+\item[(e)] store the resulting length-1450 trajectory for each compartment
+into row $i$ of the four history arrays;
+\item[(f)] print progress every 50 completed iterations.
+\end{enumerate}
+No parameter other than $k_{\mathrm{immune}}$ differs between iterations.
+
+\item \textbf{Render the 4-panel kinetics figure.} For each of the four
+compartments ($S_b$, $R_b$, $S_{res}$, $R_{res}$), the helper
+\texttt{\_draw\_panel}:
+\begin{enumerate}
+\item[(a)] shades the vancomycin and linezolid treatment windows and draws
+the LOD reference line;
+\item[(b)] selects \texttt{N\_TRACES = 40} of the 1000 stored trajectories
+at random, using a \emph{separately seeded} generator
+(\texttt{np.random.default\_rng(0).choice(NUM\_ITER, 40, replace=False)},
+independent of the \texttt{np.random.seed(42)} state used for sampling
+$k_{\mathrm{immune}}$), and plots each as a faint individual line;
+\item[(c)] computes the 5th/50th/95th percentile across all 1000 rows at
+each time point via \texttt{np.nanpercentile} (which ignores the
+\texttt{NaN}-masked sub-LOD entries from step 11d) and plots the
+5th--95th band and the median line.
+\end{enumerate}
+The resulting figure is saved as \texttt{mc\_immune\_response.png}.
+
+\item \textbf{Compute per-iteration final outcomes.}
+\texttt{final\_R\_b} and \texttt{final\_R\_res} take the last time point of
+each row of \texttt{R\_b\_hist}/\texttt{R\_res\_hist}
+(\texttt{hist[:, -1]}), mapping any remaining \texttt{NaN} back to $0$. A
+boolean mask \texttt{relapsed = (final\_R\_b > LOD) | (final\_R\_res > LOD)}
+marks each of the 1000 iterations as relapse (resistant infection persists
+in blood and/or reservoir) or resolution (both cleared); the relapse and
+resolution rates are printed as counts and percentages.
+
+\item \textbf{Render the switch-curve and population figure.} A second
+figure is built in two stacked panels sharing the $x$-axis
+($k_{\mathrm{immune}}$):
+\begin{enumerate}
+\item[(a)] the \emph{top} panel plots the deterministic
+\texttt{sweep\_k\_immune} vs.\ \texttt{sweep\_R\_b}/\texttt{sweep\_R\_res}
+curves from step 7 (values at or below \texttt{LOD} floored to a display
+value for the log axis), with the region below \texttt{ESCAPE\_THRESH}
+shaded as "escape" and the region above shaded as "suppressed" -- for
+$k_{\mathrm{immune}}$, \emph{low} values are the escape zone (weak host
+immunity), the reverse of the convention used for $EC_{50,L}$ in
+\texttt{MC\_ec50\_lzd.py};
+\item[(b)] the \emph{bottom} panel is a histogram of the same 1000 sampled
+\texttt{k\_immune\_samples} from step 6, split into two subsets by each
+sample's own simulated outcome from step 12
+(\texttt{escaped\_mask = final\_R\_res > LOD}) -- not merely by which side
+of \texttt{ESCAPE\_THRESH} the sampled value falls on -- and colored
+accordingly, with the fraction of escaped vs.\ suppressed patients reported
+in the legend.
+\end{enumerate}
+The resulting figure is saved as \texttt{mc\_immune\_response\_switch.png}.
+
+\end{enumerate}
+
+\section{Design rationale}
+
+The step-by-step procedure above describes \emph{what} the script does. This
+section explains \emph{why} its parameters and design choices take the
+values they do, drawn from the script's module docstring and inline
+comments.
+
+\subsection{Why $k_{\mathrm{immune}}$, and why this direction}
+
+This script isolates uncertainty in the host's innate immune clearance rate,
+$k_{\mathrm{immune}}$, mirroring \texttt{MC\_ec50\_lzd.py} and
+\texttt{MC\_emax\_lzd.py}'s pattern of varying one PD/host parameter while
+holding everything else at baseline -- but for host response rather than
+drug potency. As with $E_{max,L}$ (and unlike $EC_{50,L}$), \emph{low}
+values of $k_{\mathrm{immune}}$ are the escape zone: weak host immunity, like
+a weak linezolid ceiling effect, is what lets resistant growth escape
+control, so the switch-curve shading and histogram in step 13 use the same
+low-is-bad convention as \texttt{MC\_emax\_lzd.py}, the reverse of
+\texttt{MC\_ec50\_lzd.py}.
+
+\subsection{Calibration history of \texttt{K\_IMMUNE\_MEAN} and \texttt{CV}}
+
+The mean and $CV$ of the $k_{\mathrm{immune}}$ sampling distribution were
+tuned, and later re-tuned, against the escape threshold rather than chosen
+arbitrarily:
+
+\begin{itemize}
+\item At the model's own default, $k_{\mathrm{immune}} = 0.12$, only
+$\sim$31--37\% of a sampled population resolved the infection.
+\item The mean was first raised to $0.142$ so that $\sim$70\% of samples
+would land above the escape threshold identified by
+\texttt{ImmuneResponse\_threshold\_sweep.py}
+($k_{\mathrm{immune}} = 0.1255$ h$^{-1}$) and resolve.
+\item $CV$ was then widened from $0.20$ to $0.25$, which dropped resolution
+to $\sim$64\%, so the mean was re-solved to $0.14719$ -- chosen so that the
+30th percentile of $\mathrm{LogNormal}(\mathrm{mean}, CV{=}0.25)$ sits
+exactly at the $0.1255$ threshold, restoring resolution to $\sim$70\%. This
+value ($0.14719$) is what the module docstring at the top of the file still
+documents.
+\item Separately, $\rho_S$ was raised project-wide from $0.60$ to $0.61$
+(see the $\rho_S$ sensitivity analysis referenced throughout the project).
+Because of a vancomycin-driven competitive-release effect -- $S_b$ grows
+larger before vancomycin is given, is then cleared by it, and leaves more of
+blood's shared carrying capacity open for $R_b$ to claim -- this shifted the
+$k_{\mathrm{immune}}$ escape threshold itself from $0.1255$ up to
+$0.1521$ h$^{-1}$, a much larger sensitivity to the $\rho_S$ change than
+either $EC_{50,L}$'s or $E_{max,L}$'s thresholds showed under the same
+change.
+\item That shift was not accompanied by a re-tuning of the sampling
+distribution at the time: with the mean still at $0.14719$ but the threshold
+now at $0.1521$, resolution dropped to only $\sim$40\% ($\sim$60\% escape).
+\item \texttt{K\_IMMUNE\_MEAN} was therefore re-tuned a second time, to its
+current code value of $0.172$ -- targeting $\sim$65\% of samples above the
+(directly bisected, not estimated) $0.1521$ threshold, i.e.\ $\sim$35\%
+relapse, within a stated 30--40\% target band.
+\end{itemize}
+
+\noindent \textbf{Note:} the module docstring at the top of
+\texttt{MC\_immune\_response.py} still states
+"$k_{\mathrm{immune}} \sim \mathrm{LogNormal}(\mathrm{mean}=0.14719,
+CV=0.25)$," reflecting the \emph{first} re-tuning above. The code's actual
+\texttt{K\_IMMUNE\_MEAN} is $0.172$, from the \emph{second} re-tuning
+(triggered by the $\rho_S$ change) -- the docstring was not updated to match.
+A reader relying on the docstring alone would compute the wrong
+$\mu_{\ln}/\sigma_{\ln}$ for the distribution the code actually samples from.
+
+\subsection{Why the other fixed parameters take their values}
+
+\begin{itemize}
+\item $\rho_R = 0.55$ is directly tuned to a $\sim$8.3\% fitness cost
+relative to $\rho_S$, down from an earlier 20\% cost used elsewhere in the
+project's history.
+\item $\rho_{res,S} = 0.175$ was scaled $5\times$ (from an earlier $0.035$)
+alongside the $\rho_S$ scaling.
+\item $\rho_{res,R} = 0.1765$ is held in a narrow window just above the
+reservoir's own persistence threshold ($0.17594055$, below which $R_{res}$
+would clear on its own regardless of everything else) but below the point
+at which $R_b$ would win the pretreatment competition for blood's shared
+carrying capacity outright -- this is what allows $S_b$ to also establish a
+visible blood infection in these simulations (see
+\texttt{model\_Bacteremia.py}).
+\item $B_{max,reservoir} = 10^4$ was lowered from an earlier $4.5\times10^6$
+so that an escaped $R_{res}$ plateaus comfortably above the LOD but far
+below its old, much larger equilibrium level.
+\end{itemize}
+
+\subsection{Why the switch-curve sweep range and re-derivation}
+
+\texttt{SWEEP\_MIN}/\texttt{SWEEP\_MAX} $= [0.02, 0.22]$ is chosen to match
+the range already swept by the standalone
+\texttt{ImmuneResponse\_threshold\_sweep.py}, so the two scripts' derived
+thresholds are directly comparable. \texttt{ESCAPE\_THRESH} is computed by
+root-finding here rather than hardcoded, consistent with the same evolution
+away from hardcoded threshold constants seen in
+\texttt{MC\_ec50\_lzd.py} and \texttt{MC\_emax\_lzd.py} -- so that if
+upstream parameters change again, the threshold used for shading and
+population-splitting stays correct without manual updating.
+
+\subsection{Why the population histogram is colored by simulated outcome}
+
+The bottom panel of the switch-curve figure (step 13b) colors each sampled
+patient by their own simulated final $R_{res}$ relative to the LOD, not by
+which side of \texttt{ESCAPE\_THRESH} their sampled $k_{\mathrm{immune}}$
+falls on. This mirrors the same design choice in \texttt{MC\_ec50\_lzd.py}
+and \texttt{MC\_emax\_lzd.py}: it keeps the figure faithful to what the
+Monte Carlo simulation actually produced, rather than to the idealized
+deterministic switch, in case any samples land close enough to the threshold
+that numerical or dynamical effects put them on the "wrong" side of it.
+
+\end{document}

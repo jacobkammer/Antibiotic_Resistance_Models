@@ -1,0 +1,247 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\title{Monte Carlo Simulation of Linezolid $EC_{50}$ Variability\\
+\large \texttt{MC\_ec50\_lzd.py}}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{What it does}
+
+\texttt{MC\_ec50\_lzd.py} runs \texttt{model\_Bacteremia.py}'s
+\texttt{dual\_reservoir\_model} $N = 1000$ times from identical initial
+conditions ($S_b(0){=}R_b(0){=}0$, $S_{res}(0){=}R_{res}(0){=}100$ CFU/mL) and
+identical PD/PK parameters, varying only $EC_{50,L}$ -- linezolid's
+potency/susceptibility parameter in the $E_{max}$ pharmacodynamic sigmoid --
+once per iteration:
+\begin{equation}
+E_L(t) = \frac{E_{max,L}\, L(t)}{EC_{50,L} + L(t)}.
+\end{equation}
+$EC_{50,L}$ is sampled from a mean-corrected log-normal distribution,
+\begin{equation}
+\sigma_{\ln} = \sqrt{\ln(1+CV^2)}, \qquad
+\mu_{\ln} = \ln(EC_{50,L,\mathrm{base}}) - \tfrac{1}{2}\sigma_{\ln}^2, \qquad
+EC_{50,L} \sim \mathrm{LogNormal}(\mu_{\ln}, \sigma_{\ln}^2),
+\end{equation}
+with $EC_{50,L,\mathrm{base}} = 1.0$ mg/L and $CV = 1.117$, so that
+$\mathbb{E}[EC_{50,L}]$ lands exactly on baseline -- the same
+mean-corrected, CV-parameterized convention used by
+\texttt{MC\_immune\_response.py} and \texttt{MC\_emax\_lzd.py}. Isolating
+this one parameter quantifies how inter-patient variability in linezolid
+susceptibility alone -- independent of dosing, immune response, or growth
+fitness -- determines whether the resistant reservoir is suppressed or
+escapes.
+
+\section{Why $EC_{50,L}$ specifically, and not a fixed value}
+
+Growth rates ($\rho_S$, $\rho_R$) were scaled $5\times$ elsewhere in the
+project alongside an increase in $E_{max,L}$, but that scaling cannot
+substitute for varying $EC_{50,L}$: $EC_{50,L}$ independently controls how
+much linezolid effect is achieved at realistic, sub-saturating drug
+concentrations (the $E_{max}$ sigmoid above), which is mechanistically
+distinct from "linezolid works well for this patient" as expressed through
+growth-rate or fitness-cost parameters. A patient can have a normal fitness
+cost for resistance ($\rho_R/\rho_S$) yet still respond very differently to
+treatment purely because their $EC_{50,L}$ places them on a different part of
+the sigmoid at achievable drug levels. This script isolates that second,
+independent source of variability.
+
+\section{Fixed baseline parameters}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}llp{7.2cm}@{}}
+\toprule
+Parameter & Value & Note \\
+\midrule
+$\rho_S$ & $0.61$ h$^{-1}$ & \\
+$\rho_R$ & $0.55$ h$^{-1}$ & $\sim10\%$ fitness cost relative to $\rho_S$ \\
+$\rho_{res,S}$ & $0.175$ h$^{-1}$ & \\
+$\rho_{res,R}$ & $0.1765$ h$^{-1}$ & Held just above the reservoir's own persistence threshold ($0.17594055$) but below the point where $R_b$ wins the blood race outright, so $S_b$ can also establish a visible infection (peak $\sim4.8\times10^3$ CFU/mL) \\
+$E_{max,V}$ & $0.40$ & \\
+$EC_{50,V}$ & $0.245$ & \\
+$E_{max,L}$ & $0.8$ & Fixed, decoupled from $\rho_S$ \\
+$EC_{50,L,\mathrm{base}}$ & $1.0$ mg/L & Varied per MC iteration (this script's sampled parameter) \\
+$B_{max,blood}$ & $6000$ CFU/mL & \\
+$B_{max,res}$ & $10^4$ CFU/mL & \\
+$\mathtt{van\_res\_fraction}$ & $0.15$ & \\
+$\mathtt{lzd\_res\_fraction}$ & $0.45$ & \\
+$f_{r\to b}$ & $5\times10^{-5}$ h$^{-1}$ & \\
+$f_{b\to r}$ & $1\times10^{-5}$ h$^{-1}$ & \\
+\bottomrule
+\end{tabular}
+\caption{\texttt{BASE\_PARAMS} in \texttt{MC\_ec50\_lzd.py}. Every value is held fixed across all 1000 iterations; only $EC_{50,L}$ varies.}
+\end{table}
+
+\section{Step-by-step procedure, as implemented}
+
+This section follows the code's actual execution order.
+
+\begin{enumerate}
+\item \textbf{Load the model.} \texttt{model\_Bacteremia.py} is loaded
+dynamically via \texttt{importlib} (rather than a plain \texttt{import}) so
+a missing file produces an explicit error message instead of an
+\texttt{ImportError} traceback.
+
+\item \textbf{Fix run-level constants.} \texttt{NUM\_ITERATIONS = 1000},
+\texttt{LOD = 10.0} CFU/mL, \texttt{CV = 1.117}, \texttt{SEED = 44},
+\texttt{total\_h = 1944} h (21 pre-treatment days + 4-day vancomycin course
+starting at \texttt{vanco\_start = 504} h + 42-day linezolid course + 14-day
+post-treatment follow-up), and a shared evaluation grid
+\texttt{t\_eval = linspace(0, 1944, 1150)} used by every ODE solve.
+
+\item \textbf{Build the drug-concentration and immune-response callables
+once.} \texttt{PharmacokineticModel().concentration\_function(...)} is
+called once each for vancomycin and linezolid to produce \texttt{van\_func(t)}
+/ \texttt{lzd\_func(t)}, and \texttt{ImmuneResponse()} is instantiated once.
+These closures are reused, unmodified, by every one of the 1000 ODE solves
+below -- only $EC_{50,L}$ changes between iterations.
+
+\item \textbf{Fix \texttt{BASE\_PARAMS} and the initial state.} All
+parameters in Table 1 are set once. The initial state
+\texttt{Y0 = [0.0, 0.0, 100.0, 100.0]} ($S_b, R_b, S_{res}, R_{res}$) is
+likewise identical for every iteration; $EC_{50,L}$ is deliberately absent
+from \texttt{BASE\_PARAMS} and is instead merged in per-call (step 8).
+
+\item \textbf{Compute the log-normal sampling parameters.}
+$\sigma_{\ln} = \sqrt{\ln(1+CV^2)}$ and
+$\mu_{\ln} = \ln(EC_{50,L,\mathrm{base}}) - \sigma_{\ln}^2/2$ are computed
+once from $CV = 1.117$ and $EC_{50,L,\mathrm{base}} = 1.0$.
+
+\item \textbf{Draw all 1000 samples at once.} A seeded generator,
+\texttt{rng = np.random.default\_rng(44)}, draws the full vector
+\texttt{ec50\_l\_samples = rng.lognormal(} $\mu_{\ln}, \sigma_{\ln},$
+\texttt{1000)} in a single call -- so the run is fully reproducible given the
+fixed seed, and sample $i$ is used by MC iteration $i$ in step 8.
+
+\item \textbf{Compute the deterministic switch curve (121 points).} Before
+the Monte Carlo loop, \texttt{sweep\_ec50 = linspace(0.3, 2.0, 121)} is
+built, and for each swept value \texttt{\_final\_counts(ec50\_l)} solves the
+ODE (\texttt{odeint}, \texttt{rtol=1e-7}, \texttt{atol=1e-9},
+\texttt{mxstep=5000}) with $EC_{50,L}$ substituted into a copy of
+\texttt{BASE\_PARAMS}, recording only the final-time $R_b$ and $R_{res}$
+(\texttt{sol[-1, 1]}, \texttt{sol[-1, 3]}) into \texttt{sweep\_R\_b} /
+\texttt{sweep\_R\_res}.
+
+\item \textbf{Root-find \texttt{ESCAPE\_THRESH}.} On the same
+\texttt{\_final\_counts} function, \texttt{scipy.optimize.brentq} solves
+$R_{res}^{\mathrm{final}}(EC_{50,L}) - \mathrm{LOD} = 0$ over
+$[0.3, 2.0]$, provided the sign of $f$ differs at the two endpoints; if not,
+it falls back to the coarse sweep index where \texttt{sweep\_R\_res} first
+exceeds the LOD.
+
+\item \textbf{Main Monte Carlo loop (1000 iterations).} Pre-allocated
+\texttt{NaN}-filled arrays (\texttt{S\_b\_hist}, \texttt{R\_b\_hist},
+\texttt{S\_res\_hist}, \texttt{R\_res\_hist}, each shape
+$1000 \times 1150$) are filled by, for each $i = 0, \dots, 999$:
+\begin{enumerate}
+\item[(a)] build \texttt{params\_i = \{**BASE\_PARAMS, "EC50\_L":
+ec50\_l\_samples[i]\}} -- a fresh shallow copy of the fixed parameters with
+only $EC_{50,L}$ replaced by this iteration's sample;
+\item[(b)] integrate the ODE from the same fixed \texttt{Y0} over the same
+\texttt{t\_eval}, with \texttt{odeint} (\texttt{rtol=1e-7},
+\texttt{atol=1e-9}, \texttt{mxstep=5000});
+\item[(c)] floor every one of the four state trajectories to $0$ wherever
+it falls below \texttt{LOD} (\texttt{np.where(sol[:, k] < LOD, 0.0,
+sol[:, k])}), so sub-detection noise reads as true clearance in later
+plots/statistics rather than as a small positive count;
+\item[(d)] store the full length-1150 trajectory for each compartment into
+row $i$ of the four history arrays;
+\item[(e)] print progress every 50 completed iterations.
+\end{enumerate}
+No parameter other than $EC_{50,L}$ differs between iterations -- the
+100\% of the run-to-run variance in outcomes is attributable to sampled
+$EC_{50,L}$ alone.
+
+\item \textbf{Derive per-iteration summary metrics.} After the loop,
+\texttt{peak\_S\_b}, \texttt{peak\_R\_b}, \texttt{peak\_S\_res} are the
+per-row maxima (\texttt{np.nanmax(..., axis=1)}) of the corresponding
+history arrays, and \texttt{final\_R\_b}, \texttt{final\_R\_res} are the
+last time-point of each row (\texttt{hist[:, -1]}, with \texttt{NaN}
+mapped to $0$).
+
+\item \textbf{Render the three figures} (kinetics, outcomes, switch --
+described in Section~\ref{sec:outputs}) directly from the history arrays,
+the summary metrics, the deterministic sweep arrays, and
+\texttt{ESCAPE\_THRESH}; no further simulation is performed.
+
+\item \textbf{Print a console summary} of the sampled $EC_{50,L}$
+distribution (median, 5th/95th percentile) and, where any samples exceed
+the LOD, the median and 5th/95th percentile of peak $S_b$ and peak $R_b$
+across iterations.
+\end{enumerate}
+
+\section{Design: deterministic switch curve, then Monte Carlo}
+
+The script does two distinct things, in this order:
+
+\begin{enumerate}
+\item \textbf{Deterministic switch curve.} A single sweep of $EC_{50,L}$
+over $[0.3, 2.0]$ mg/L (121 evenly spaced points, \texttt{SWEEP\_MIN}/
+\texttt{SWEEP\_MAX}) is run first, recording final $R_b$ and final $R_{res}$
+at each point. The exact $EC_{50,L}$ at which final $R_{res}$ crosses the
+limit of detection (LOD $= 10$ CFU/mL) is located by root-finding
+(\texttt{scipy.optimize.brentq}) on
+\begin{equation}
+f(EC_{50,L}) = R_{res}^{\mathrm{final}}(EC_{50,L}) - \mathrm{LOD} = 0,
+\end{equation}
+giving a precise escape threshold, \texttt{ESCAPE\_THRESH}. This replaces an
+old hardcoded value (\texttt{ESCAPE\_THRESH} $=0.988$) that no longer
+matched this file's own $\rho_S = 0.61$ baseline; the same quantity is
+re-derived independently in a separate diagnostic script,
+\texttt{EC50\_lzd\_threshold\_sweep.py}, which bisects the same
+\texttt{BASE\_PARAMS} and finds $EC_{50,L} \approx 0.93$. This is the actual
+dose--response result: a continuous curve and a single crossing point, not a
+handful of coarse categorical bins.
+
+\item \textbf{Monte Carlo sampling.} The 1000-iteration loop then asks a
+different question: given realistic inter-patient $EC_{50,L}$ variability
+(the log-normal distribution above), what fraction of virtual patients land
+on each side of that deterministic switch, and what do their full bacterial
+kinetics look like over the treatment course. Each MC sample's outcome is
+colored, in the resulting figures, by its own simulated result (whether that
+patient's final $R_{res}$ is above or below the LOD), not merely by which
+side of \texttt{ESCAPE\_THRESH} its sampled $EC_{50,L}$ happens to fall on --
+so the outcome figures stay faithful to the simulated data rather than to
+the idealized deterministic switch.
+\end{enumerate}
+
+Under the current baseline, \texttt{ESCAPE\_THRESH} sits right next to
+baseline ($EC_{50,L,\mathrm{base}} = 1.0$): only $\sim47\%$ of sampled
+$EC_{50,L}$ values suppress the reservoir, versus $\sim53\%$ that let it
+persist and relapse after treatment ends. Both outcomes are accepted as
+realistic -- the purpose of the chosen $\rho_{res,R}$ is to let $S_b$
+establish a visible blood infection, not to guarantee reservoir persistence
+(or clearance) in every sample.
+
+\section{Outputs}
+\label{sec:outputs}
+
+The script generates three figures:
+\begin{enumerate}
+\item \textbf{\texttt{mc\_ec50\_lzd\_sweep\_kinetics.png}} -- a four-panel
+time-course figure ($S_b$, $R_b$, $S_{res}$, $R_{res}$) over the $1944$-h
+simulation window, each panel showing 20 individual sample trajectories plus
+the median and $5^{\mathrm{th}}$--$95^{\mathrm{th}}$-percentile band across
+all 1000 iterations, with the vancomycin and linezolid dosing windows
+overlaid.
+\item \textbf{\texttt{mc\_ec50\_lzd\_sweep\_outcomes.png}} -- four scatter
+panels (peak $S_b$, peak $R_b$, peak $S_{res}$, final $R_b$) plotted against
+$\log_{10}(EC_{50,L})$ for each of the 1000 samples, with the baseline
+$EC_{50,L}$ marked.
+\item \textbf{\texttt{mc\_ec50\_lzd\_switch.png}} -- a two-panel figure: the
+top panel is the continuous deterministic switch curve (final $R_b$/$R_{res}$
+vs.\ $EC_{50,L}$) with \texttt{ESCAPE\_THRESH} marked and the suppressed/
+escape regimes shaded; the bottom panel is a histogram of the 1000 sampled
+$EC_{50,L}$ values, split and colored by each patient's actual simulated
+outcome (suppressed vs.\ escape) rather than by the deterministic threshold
+alone.
+\end{enumerate}
+
+\end{document}

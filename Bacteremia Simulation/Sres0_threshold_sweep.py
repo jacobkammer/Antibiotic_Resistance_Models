@@ -2,7 +2,7 @@
 # Deterministic S_res_0 sensitivity sweep (1 - 2000 CFU/mL)
 #
 # baseline_reservoir_clearance.py showed that with model_Bacteremia.py's own
-# defaults (S_res_0 = 100, rho_S = 0.60, rho_R = 0.55, rho_res_S = 0.175,
+# defaults (S_res_0 = 100, rho_S = 0.61, rho_R = 0.55, rho_res_S = 0.175,
 # EC50_L = 1.0, eff_blood = 1.0, B_max_reservoir = 1e4, Emax_l = 0.8 --
 # UNCOUPLED from rho_S, which previously made it auto-follow rho_S down to
 # 0.6), ALL FOUR compartments briefly cleared at one point in this project's
@@ -35,6 +35,39 @@
 # is run, the final R_b / R_res are recorded, and the exact S_res_0 at which
 # each compartment's outcome flips from "escapes" to "clears" is located via
 # root-finding.
+#
+# Role in the project / relationship to other scripts
+# -----------------------------------------------------------------------
+# This is a standalone diagnostic: nothing else in the project imports or
+# calls it. That's unlike EC50_lzd_threshold_sweep.py, which exists
+# specifically to re-derive MC_ec50_lzd.py's ESCAPE_THRESH and so feeds back
+# into another script. This one is purely a one-parameter sensitivity
+# analysis -- and the odd one out among the project's threshold-sweep
+# scripts, since every other sweep (EC50_L, Emax_l, immune response) varies
+# a pharmacodynamic parameter, while this one varies an INITIAL CONDITION,
+# S_res_0, to see how the outcome depends on the initial reservoir
+# sensitive-strain load rather than on drug effect or host response.
+#
+# Key finding: it empirically demonstrates an asymmetry already asserted in
+# MC_initial_conditions.py's comments (around R_RES_0_BASE) -- S_res_0 and
+# R_res_0 don't compete for reservoir carrying capacity, so S_res_0 has NO
+# effect on whether R_res itself persists there; that's governed purely by
+# rho_res_R vs. the reservoir's own persistence threshold (~0.17594055,
+# independent of S_res_0). But S_res DOES translocate into blood and compete
+# with R_b there for blood's shared carrying capacity (B_max_blood), so
+# raising S_res_0 can crowd out R_b even though it never touches R_res's
+# fate. That's exactly what the sweep below shows: final R_res is flat
+# across S_res_0 (no threshold, or one driven by something other than
+# reservoir competition), while final R_b has a real S_res_0-dependent
+# escape/clear threshold.
+#
+# In other words, this script is the evidence that justifies treating
+# S_res_0 and R_res_0 as having decoupled effects in
+# MC_initial_conditions.py: S_res_0 matters for blood-compartment
+# competitive dynamics (R_b), but is irrelevant to reservoir-compartment
+# persistence (R_res). That distinction isn't obvious from the ODEs alone --
+# it hinges on which compartments actually compete for capacity in
+# model_Bacteremia.py -- hence running this sweep to check it empirically.
 # =============================================================================
 import importlib.util
 import os
@@ -82,7 +115,7 @@ immune_model = model_mod.ImmuneResponse(k_immune=0.12)
 van_func = pk.concentration_function("vancomycin", total_h, vanco_start)
 lzd_func = pk.concentration_function("linezolid",  total_h, vanco_start + pk.van_duration)
 
-rho_S        = 0.60    # lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
+rho_S        = 0.61    # lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
 rho_R        = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
 SRES0_BASE = 100   # model_Bacteremia.py's own default

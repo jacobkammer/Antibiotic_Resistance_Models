@@ -1,6 +1,6 @@
 """
 Monte Carlo simulation varying k_immune with a log-normal distribution.
-k_immune ~ LogNormal(mean=0.14719, CV=0.25)
+k_immune ~ LogNormal(mean=0.172, CV=0.25)
 4-panel figure: S_b, R_b, S_res, R_res — each with individual MC trajectories,
 5th–95th percentile band, and median.
 
@@ -48,15 +48,10 @@ pk       = model_mod.PharmacokineticModel()
 van_func = pk.concentration_function("vancomycin", TOTAL_H, VANCO_START)
 lzd_func = pk.concentration_function("linezolid",  TOTAL_H, VANCO_START + pk.van_duration)
 
-rho_S = 0.61    # raised from 0.60 -- see rho_S sensitivity analysis: via a vancomycin-driven
-                # competitive-release effect (S_b grows larger pre-vancomycin, then gets
-                # cleared, leaving more of blood's shared carrying capacity open for R_b to
-                # claim), this shifts the k_immune escape threshold from 0.1255 up to
-                # 0.1521 h^-1 -- MUCH more sensitive than EC50_L/Emax_l's thresholds are to
-                # the same change. The K_IMMUNE_MEAN/CV calibration below (originally tuned
-                # for ~70% resolution at rho_S=0.60) was NOT re-tuned for this shift; at
-                # rho_S=0.61 it now yields roughly 60% escape (~40% resolution) instead.
-rho_R = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
+rho_S = 0.61    # baseline sensitive blood growth rate; raising rho_S from 0.60 to
+                # 0.61 shifts the k_immune escape threshold up to 0.1521 h^-1
+                # (see K_IMMUNE_MEAN below for the re-tuned distribution)
+rho_R = 0.55    # resistant blood growth rate (~9.8% fitness cost relative to rho_S)
 
 params = {
     "rho_S":           rho_S,
