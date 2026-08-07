@@ -1,6 +1,6 @@
 # =============================================================================
 # Monte Carlo Simulation: Linezolid EC50 (EC50_L)
-# Samples EC50_L ~ LogNormal(mean=1.0 mg/L, CV=1.117), mean-corrected so
+# Samples EC50_L ~ LogNormal(mean=0.695 mg/L, CV=1.117), mean-corrected so
 # E[EC50_L] lands exactly on baseline (same convention as MC_immune_response.py
 # and MC_emax_lzd.py), while every other parameter stays fixed, isolating the
 # effect of linezolid potency/susceptibility on bacterial kinetics.
@@ -34,10 +34,18 @@
 # scales with rho_res_S, so the higher rho_res_S alone would otherwise wipe
 # out the reservoir entirely). Net effect: the EC50_L escape threshold moved
 # DOWN to 0.868 mg/L (confirmed by this script's own bisection, matching
-# EC50_lzd_threshold_sweep.py). Against the sampled EC50_L distribution
-# (median=0.70, [5th=0.17, 95th=2.81]), that puts ~60% of samples at or
-# below threshold (suppressed) and ~40% above it (escape/relapse) --
-# verified directly against the 1000-sample draw.
+# EC50_lzd_threshold_sweep.py). At baseline EC50_L_BASE=1.0, that put ~60%
+# of samples at or below threshold (suppressed) and ~40% above it
+# (escape/relapse).
+#
+# EC50_L_BASE was then lowered 1.0 -> 0.695 (CV=1.117 unchanged) to bring
+# this sweep's escape rate in line with MC_immune_response.py's relapse
+# rate (24.3%, 243/1000) and MC_emax_lzd.py's escape rate (23.6%, after its
+# own EMAX_L_BASE retune), rather than leaving EC50_L as an outlier at
+# ~40%. Solved analytically (mean such that the lognormal's CDF at the
+# 0.868 mg/L threshold equals 1 - 0.243) and confirmed by a direct
+# 1000-sample MC run: 27.1% escape, sampled median=0.489 [5th=0.115,
+# 95th=1.954] -- within the +/-5-point tolerance of both other sweeps.
 # this file generates 3 figures:
 # 1. mc_ec50_lzd_sweep_kinetics.png
 # 2. mc_ec50_lzd_sweep_outcomes.png
@@ -106,7 +114,8 @@ lzd_end_days     = (vanco_start + pk.van_duration + pk.lzd_duration) / 24.0
 rho_S        = 0.61    
 rho_R        = 0.55    #10% fitness cost
 
-EC50_L_BASE = 1.0
+EC50_L_BASE = 0.695  # lowered from 1.0 -- see header narrative above (targets ~24-27% escape,
+                      # matching MC_immune_response.py / MC_emax_lzd.py)
 
 BASE_PARAMS = {
     "rho_S":            rho_S,
@@ -159,8 +168,11 @@ def _final_counts(ec50_l):
     return sol[-1, 1], sol[-1, 3]
 
 
-SWEEP_MIN, SWEEP_MAX = 0.3, 2.0
-N_SWEEP = 121   # step ~0.014
+SWEEP_MIN, SWEEP_MAX = 0.05, 3.3   # widened from [0.3, 2.0] -- EC50_L_BASE=0.695 with CV=1.117
+                                    # puts the 1st-99th percentile of sampled EC50_L at
+                                    # roughly [0.06, 3.29], and the old range clipped ~31%
+                                    # of samples below 0.3
+N_SWEEP = 131   # step ~0.025
 
 print(f"\nRunning deterministic switch-curve sweep across [{SWEEP_MIN}, {SWEEP_MAX}] "
       f"({N_SWEEP} points)...", flush=True)

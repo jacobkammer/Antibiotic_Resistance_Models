@@ -1,6 +1,6 @@
 # =============================================================================
 # Monte Carlo Simulation: Linezolid Emax (Emax_l)
-# Samples Emax_l ~ LogNormal(mean=0.8 h^-1, CV=0.307), mean-corrected so
+# Samples Emax_l ~ LogNormal(mean=1.085 h^-1, CV=0.307), mean-corrected so
 # E[Emax_l] lands exactly on baseline (same convention as MC_immune_response.py
 # and MC_ec50_lzd.py), while every other parameter stays fixed, isolating the
 # effect of linezolid's maximum killing capacity on bacterial kinetics. Mirrors
@@ -51,11 +51,19 @@
 # out the reservoir entirely). Net effect: this sweep's escape threshold
 # moved UP to 0.8414 h^-1 (confirmed by this script's own bisection,
 # matching Emax_lzd_threshold_sweep.py) -- now above baseline (0.8) rather
-# than straddling it, so baseline itself sits in the escape/persist zone.
+# than straddling it, so baseline itself sat in the escape/persist zone.
 # Against the sampled Emax_l distribution (median=0.778, [5th=0.481,
-# 95th=1.235]), that puts 608/1000 = ~61% of samples below threshold
-# (escape/relapse) and ~39% above it (suppressed) -- verified directly
-# against the 1000-sample draw.
+# 95th=1.235]), that put 608/1000 = ~61% of samples below threshold
+# (escape/relapse) and ~39% above it (suppressed).
+#
+# EMAX_L_BASE was then raised 0.8 -> 1.085 (CV=0.307 unchanged) to bring
+# this sweep's escape rate in line with MC_immune_response.py's relapse
+# rate (24.3%, 243/1000) rather than leaving Emax_l as the one sweep whose
+# baseline sat almost on top of its own escape threshold. Solved
+# analytically (mean such that the lognormal's CDF at the 0.8414 h^-1
+# threshold equals 0.243) and confirmed by a direct 1000-sample MC run:
+# 23.6% escape, sampled median=1.056 [5th=0.652, 95th=1.676] -- close to
+# the immune-response escape rate as intended.
 # =============================================================================
 import importlib.util
 import os
@@ -120,7 +128,8 @@ rho_S        = 0.61    # raised from 0.60 -- see rho_S sensitivity analysis. At 
                        # threshold is 0.8414 h^-1 (bisected above)
 rho_R        = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
-EMAX_L_BASE = 0.8   # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
+EMAX_L_BASE = 1.085 # raised from 0.8 -- see header narrative above (targets ~24% escape,
+                     # matching MC_immune_response.py's relapse rate)
 
 BASE_PARAMS = {
     "rho_S":            rho_S,
@@ -174,8 +183,9 @@ def _final_counts(emax_l):
     return sol[-1, 1], sol[-1, 3]
 
 
-SWEEP_MIN, SWEEP_MAX = 0.0, 1.0
-N_SWEEP = 101   # step = 0.01
+SWEEP_MIN, SWEEP_MAX = 0.0, 2.2   # widened from 1.0 -- EMAX_L_BASE=1.085 with CV=0.307 puts the
+                                   # 99th percentile of sampled Emax_l near 2.08
+N_SWEEP = 111   # step = 0.02
 
 print(f"\nRunning deterministic switch-curve sweep across [{SWEEP_MIN}, {SWEEP_MAX}] "
       f"({N_SWEEP} points)...", flush=True)
