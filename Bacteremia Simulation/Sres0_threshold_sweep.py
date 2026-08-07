@@ -68,6 +68,19 @@
 # persistence (R_res). That distinction isn't obvious from the ODEs alone --
 # it hinges on which compartments actually compete for capacity in
 # model_Bacteremia.py -- hence running this sweep to check it empirically.
+#
+# Re-run after giving rho_res_S a 10% growth-rate advantage over rho_res_R
+# (0.19415 vs 0.1765, a fitness cost for R mirroring the blood compartment)
+# and lowering lzd_res_fraction 0.45 -> 0.30 to compensate: BOTH final R_b
+# and final R_res now stay above the LOD across the *entire* swept range
+# [1, 2000] CFU/mL -- no clean crossing for either compartment. R_res's
+# independence from S_res_0 still holds (as expected -- unchanged
+# mechanism), but R_b's own S_res_0-dependent crowding-out threshold, which
+# used to sit inside [1, 2000], has evidently moved above 2000 CFU/mL under
+# the new baseline (R is more robust overall now -- see EC50_lzd_threshold_
+# sweep.py / Emax_lzd_threshold_sweep.py, whose escape thresholds also moved
+# further from baseline in R's favor). Re-sweeping a wider S_res_0 range
+# would be needed to relocate that threshold precisely; not done here.
 # =============================================================================
 import importlib.util
 import os
@@ -123,8 +136,8 @@ SRES0_BASE = 100   # model_Bacteremia.py's own default
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
-    "rho_res_S":        0.175,  # scaled 5x (from 0.035) alongside rho_S
     "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
+    "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
     "Emax_v":           0.40,
     "EC50_V":           0.245,
     "Emax_l":           0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
@@ -132,7 +145,7 @@ BASE_PARAMS = {
     "B_max_blood":      6000,
     "B_max_reservoir":  1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
     "van_res_fraction": 0.15,
-    "lzd_res_fraction": 0.45,
+    "lzd_res_fraction": 0.30,    # lowered from 0.45 -- Emax_l_res scales with rho_res_S; keeps R_res persistent despite S's reservoir growth advantage
     "f_r_b":            5e-5,  # restored to original
     "f_b_r":            1e-5,
 }

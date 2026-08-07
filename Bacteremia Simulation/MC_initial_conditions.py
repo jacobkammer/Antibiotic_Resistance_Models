@@ -42,8 +42,8 @@ rho_R = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down fro
 params = {
     "rho_S":           rho_S,
     "rho_R":           rho_R,
-    "rho_res_S":       0.175,  # scaled 5x (from 0.035) alongside rho_S
     "rho_res_R":       0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
+    "rho_res_S":       0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
     "Emax_v":          0.40,
     "EC50_V":          0.245,
     "Emax_l":          0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
@@ -51,7 +51,7 @@ params = {
     "B_max_blood":     6000,
     "B_max_reservoir": 1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
     "van_res_fraction":0.15,
-    "lzd_res_fraction":0.45,
+    "lzd_res_fraction":0.30,    # lowered from 0.45 -- Emax_l_res scales with rho_res_S; keeps R_res persistent despite S's reservoir growth advantage
     "f_r_b":           5e-5,  # restored to original
     "f_b_r":           1e-5,
 }
@@ -66,17 +66,22 @@ np.random.seed(42)
 # μ  = ln(mean) - σ²/2   ensures E[S_res_0] = S_RES_0_BASE, E[R_res_0] = R_RES_0_BASE
 # (same mean-corrected, CV-based convention as MC_ec50_lzd.py / MC_emax_lzd.py / MC_immune_response.py)
 CV = 60.0    # deliberately extreme: with both means fixed at 100 CFU/mL (matching the
-             # other MC scripts), reaching ~70% resolution against the ~7.57 CFU/mL
-             # reservoir persistence threshold requires this much right-skew -- illustrates
-             # just how uncertain/heterogeneous the true founding reservoir population is
+             # other MC scripts), this much right-skew illustrates just how uncertain/
+             # heterogeneous the true founding reservoir population is. Originally tuned
+             # for ~70% resolution against a ~7.57 CFU/mL R_res_0 threshold; after giving
+             # rho_res_S a 10% growth advantage over rho_res_R (0.19415 vs 0.1765) and
+             # lowering lzd_res_fraction 0.45 -> 0.30 to compensate, the R_res_0 threshold
+             # moved to ~5.25 CFU/mL (re-bisected) and actual resolution across the same
+             # 1000-sample draw dropped to 56.1% (439/1000 escape/relapse) -- not re-tuned
+             # back to ~70%, since CV wasn't the point of that change
 
 S_RES_0_BASE = 100    # matches the fixed reservoir initial condition used in the other
                        # MC scripts (MC_ec50_lzd.py, MC_emax_lzd.py, MC_immune_response.py)
-R_RES_0_BASE = 100    # reservoir persistence threshold (R_res_0 ~= 7.57 CFU/mL, found by
-                       # bisection at rho_res_R=0.1765) determines clinical resolution --
-                       # S_res_0 has no effect on this threshold (S_res and R_res don't
-                       # compete for the shared reservoir carrying capacity the way
-                       # S_b/R_b do in blood)
+R_RES_0_BASE = 100    # reservoir persistence threshold (R_res_0 ~= 5.25 CFU/mL at the
+                       # current baseline, found by bisection with S_res_0=100 fixed) --
+                       # S_res_0 still has no effect on this threshold (S_res and R_res
+                       # don't compete for the shared reservoir carrying capacity the way
+                       # S_b/R_b do in blood; re-confirmed by Sres0_threshold_sweep.py)
 
 sigma_ln = np.sqrt(np.log(1.0 + CV**2))
 s_res_mu = np.log(S_RES_0_BASE) - sigma_ln**2 / 2.0

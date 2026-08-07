@@ -64,16 +64,16 @@ rho_R        = 0.55
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
-    "rho_res_S":        0.175,  
     "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
+    "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
     "Emax_v":           0.40,
     "EC50_V":           0.245,
-    "Emax_l":           0.8,    # fixed, decoupled from rho_S 
+    "Emax_l":           0.8,    # fixed, decoupled from rho_S
     "EC50_L":           1.0,
     "B_max_blood":      6000,
-    "B_max_reservoir":  1e4,    
+    "B_max_reservoir":  1e4,
     "van_res_fraction": 0.15,
-    "lzd_res_fraction": 0.45,
+    "lzd_res_fraction": 0.30,    # lowered from 0.45 -- Emax_l_res scales with rho_res_S; keeps R_res persistent despite S's reservoir growth advantage
     "f_r_b":            5e-5,  
     "f_b_r":            1e-5,
 }

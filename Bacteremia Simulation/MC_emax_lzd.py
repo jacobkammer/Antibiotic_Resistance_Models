@@ -43,6 +43,19 @@
 # it entirely. Both outcomes are accepted here -- the point of this
 # rho_res_R is to let S_b establish, not to guarantee reservoir persistence
 # in every sample.
+#
+# rho_res_S was then given a 10% growth-rate advantage over rho_res_R
+# (0.19415 vs 0.1765, a fitness cost for R mirroring the blood compartment),
+# and lzd_res_fraction was lowered 0.45 -> 0.30 to compensate (Emax_l_res
+# scales with rho_res_S, so the higher rho_res_S alone would otherwise wipe
+# out the reservoir entirely). Net effect: this sweep's escape threshold
+# moved UP to 0.8414 h^-1 (confirmed by this script's own bisection,
+# matching Emax_lzd_threshold_sweep.py) -- now above baseline (0.8) rather
+# than straddling it, so baseline itself sits in the escape/persist zone.
+# Against the sampled Emax_l distribution (median=0.778, [5th=0.481,
+# 95th=1.235]), that puts 608/1000 = ~61% of samples below threshold
+# (escape/relapse) and ~39% above it (suppressed) -- verified directly
+# against the 1000-sample draw.
 # =============================================================================
 import importlib.util
 import os
@@ -102,11 +115,9 @@ lzd_end_days     = (vanco_start + pk.van_duration + pk.lzd_duration) / 24.0
 # ---------------------------------------------------------------------------
 # Fixed parameters (all except Emax_l held at baseline)
 # ---------------------------------------------------------------------------
-rho_S        = 0.61    # raised from 0.60 -- see rho_S sensitivity analysis: this shifts the
-                       # Emax_l escape threshold from 0.8027 up to 0.8161 h^-1 via a
-                       # vancomycin-driven competitive-release effect (S_b grows larger
-                       # pre-vancomycin, then gets cleared, leaving more of blood's shared
-                       # carrying capacity open for R_b to claim)
+rho_S        = 0.61    # raised from 0.60 -- see rho_S sensitivity analysis. At the current
+                       # rho_res_S/rho_res_R/lzd_res_fraction baseline the Emax_l escape
+                       # threshold is 0.8414 h^-1 (bisected above)
 rho_R        = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
 EMAX_L_BASE = 0.8   # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
@@ -114,15 +125,15 @@ EMAX_L_BASE = 0.8   # fixed, decoupled from rho_S (was tied for "perfect bacteri
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
-    "rho_res_S":        0.175,  # scaled 5x (from 0.035) alongside rho_S
     "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
+    "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
     "Emax_v":           0.40,
     "EC50_V":           0.245,
     "EC50_L":           1.0,
     "B_max_blood":      6000,
     "B_max_reservoir":  1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
     "van_res_fraction": 0.15,
-    "lzd_res_fraction": 0.45,
+    "lzd_res_fraction": 0.30,    # lowered from 0.45 -- Emax_l_res scales with rho_res_S; keeps R_res persistent despite S's reservoir growth advantage
     "f_r_b":            5e-5,  # restored to original
     "f_b_r":            1e-5,
 }

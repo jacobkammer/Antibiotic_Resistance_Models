@@ -82,14 +82,19 @@ lzd_end_days     = (vanco_start + pk.van_duration + pk.lzd_duration) / 24.0
 rho_S        = 0.61    # raised from 0.60 -- see rho_S sensitivity analysis. At the actual
                        # baseline transfer rates used below (f_r_b=5e-5, f_b_r=1e-5), this
                        # produces no change (both sit far below the 1e-3-1e-2 transition
-                       # band), but it does shift behavior inside that band itself
+                       # band), but it does shift behavior inside that band itself.
+                       # Re-verified after giving rho_res_S a 10% growth advantage over
+                       # rho_res_R and lowering lzd_res_fraction 0.45 -> 0.30 to compensate:
+                       # re-running this sweep (mc_frb_sweep_outcomes.png / mc_fbr_sweep_
+                       # outcomes.png) shows the visible curvature still concentrated in the
+                       # same 1e-3-1e-2 region, so the zoom band below is unchanged
 rho_R        = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
-    "rho_res_S":        0.175,  # scaled 5x (from 0.035) alongside rho_S
     "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
+    "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
     "Emax_v":           0.40,
     "EC50_V":           0.245,
     "Emax_l":           0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
@@ -97,7 +102,7 @@ BASE_PARAMS = {
     "B_max_blood":      6000,
     "B_max_reservoir":  1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
     "van_res_fraction": 0.15,
-    "lzd_res_fraction": 0.45,
+    "lzd_res_fraction": 0.30,    # lowered from 0.45 -- Emax_l_res scales with rho_res_S; keeps R_res persistent despite S's reservoir growth advantage
 }
 
 F_R_B_BASE = 5e-5   # reservoir -> blood baseline (restored to original)

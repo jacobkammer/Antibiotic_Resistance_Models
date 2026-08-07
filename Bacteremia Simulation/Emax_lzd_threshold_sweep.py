@@ -34,6 +34,17 @@
 # clearing rather than persisting. This is accepted -- the point is to show
 # S_b establishing, not to guarantee persistence in every sample.
 #
+# rho_res_S was then given a 10% growth-rate advantage over rho_res_R
+# (0.19415 vs 0.1765, a fitness cost for R mirroring the blood compartment),
+# and lzd_res_fraction was lowered 0.45 -> 0.30 to compensate (Emax_l_res
+# scales with rho_res_S, so the higher rho_res_S alone would otherwise wipe
+# out the reservoir entirely). Net effect: this sweep's escape threshold
+# moved UP to 0.8414 h^-1 (confirmed by this script's own bisection below),
+# now comfortably above baseline (0.8) rather than straddling it -- so
+# baseline Emax_l sits inside the escape/persist zone with margin, and a
+# larger majority (~84%, 85/101 grid points, spanning [0.0, 0.84]) of the
+# swept range now shows the reservoir persisting rather than clearing.
+#
 # This script runs a fine, deterministic (non-Monte-Carlo) sweep of Emax_l
 # across [0.0, 1.0], records the FINAL R_b / R_res at the end of each run,
 # selects the Emax_l values that finish above the LOD, and locates the exact
@@ -91,8 +102,8 @@ lzd_start_days   = (vanco_start + pk.van_duration) / 24.0
 lzd_end_days     = (vanco_start + pk.van_duration + pk.lzd_duration) / 24.0
 
 rho_S        = 0.61    # raised from 0.60 to match MC_emax_lzd.py / the EC50_L and immune-response
-                        # threshold sweeps -- shifts the Emax_l escape threshold from 0.8027 up
-                        # to 0.8161 h^-1 (see MC_emax_lzd.py's own rho_S sensitivity analysis)
+                        # threshold sweeps. At the current rho_res_S/rho_res_R/lzd_res_fraction
+                        # baseline the Emax_l escape threshold is 0.8414 h^-1 (bisected below)
 rho_R        = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
 EMAX_L_BASE = 0.8   # fixed, decoupled from rho_S = 0.6 (was tied for "perfect bacteriostasis")
@@ -100,15 +111,15 @@ EMAX_L_BASE = 0.8   # fixed, decoupled from rho_S = 0.6 (was tied for "perfect b
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
-    "rho_res_S":        0.175,  # scaled 5x (from 0.035) alongside rho_S
     "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
+    "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
     "Emax_v":           0.40,
     "EC50_V":           0.245,
     "EC50_L":           1.0,
     "B_max_blood":      6000,
     "B_max_reservoir":  1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
     "van_res_fraction": 0.15,
-    "lzd_res_fraction": 0.45,
+    "lzd_res_fraction": 0.30,    # lowered from 0.45 -- Emax_l_res scales with rho_res_S; keeps R_res persistent despite S's reservoir growth advantage
     "f_r_b":            5e-5,  # restored to original
     "f_b_r":            1e-5,
 }

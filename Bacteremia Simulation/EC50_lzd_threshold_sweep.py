@@ -19,6 +19,16 @@
 # threshold down further to 0.932 mg/L -- confirmed by this script's own
 # bisection below.
 #
+# rho_res_S was then given a 10% growth-rate advantage over rho_res_R
+# (0.19415 vs 0.1765, a fitness cost for R mirroring the blood compartment),
+# and lzd_res_fraction was lowered 0.45 -> 0.30 to compensate (Emax_l_res
+# scales with rho_res_S, so the higher rho_res_S alone would otherwise wipe
+# out the reservoir entirely). Net effect: the EC50_L escape threshold moved
+# DOWN to 0.868 mg/L (confirmed by this script's own bisection below) --
+# further from baseline (1.0) than before, so a larger majority (~67%,
+# 114/171 grid points, spanning [0.87, 2.0]) of the swept range now shows
+# the reservoir persisting rather than clearing.
+#
 # This script runs a fine, deterministic (non-Monte-Carlo) sweep of EC50_L
 # across [0.3, 2.0], records the FINAL R_b / R_res at the end of each run,
 # selects the EC50_L values that finish above the LOD, and locates the exact
@@ -80,8 +90,9 @@ sys.modules["model_mod"] = model_mod#add module to sys.modules
 spec.loader.exec_module(model_mod)#execute module
 
 # ---------------------------------------------------------------------------
-# Simulation settings (matches MC_ec50_lzd.py: rho_S=0.61, shifting the escape
-# threshold to 0.932 mg/L -- down from 0.988 mg/L at rho_S=0.60)
+# Simulation settings (matches MC_ec50_lzd.py: rho_S=0.61, EC50_L escape
+# threshold at 0.868 mg/L with the current rho_res_S/rho_res_R/lzd_res_fraction
+# baseline -- see header narrative above)
 # ---------------------------------------------------------------------------
 LOD = 10.0   # limit of detection (CFU/mL)
 
@@ -106,15 +117,15 @@ rho_R        = 0.55    # directly tuned (~10% fitness cost relative to rho_S, do
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
-    "rho_res_S":        0.175,  
-    "rho_res_R":        0.1765,  
+    "rho_res_R":        0.1765,
+    "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
     "Emax_v":           0.40,
     "EC50_V":           0.245,
-    "Emax_l":           0.8,  
+    "Emax_l":           0.8,
     "B_max_blood":      6000,
-    "B_max_reservoir":  1e4,    
+    "B_max_reservoir":  1e4,
     "van_res_fraction": 0.15,
-    "lzd_res_fraction": 0.45,
+    "lzd_res_fraction": 0.30,    # lowered from 0.45 -- Emax_l_res scales with rho_res_S; keeps R_res persistent despite S's reservoir growth advantage
     "f_r_b":            5e-5,  
     "f_b_r":            1e-5,
 }
@@ -175,7 +186,7 @@ print(f"EC50_L values in [{EC50_MIN}, {EC50_MAX}] with final R_res > LOD: "
 #(imported at the top, from scipy.optimize import brentq) then does bisection-based root-finding on that function, 
 #homing in on the exact EC50_L where f crosses zero — i.e., where the final count exactly equals the LOD — to a tolerance of 0.001 mg/L.
 # It's called once for compartment_idx=1 (R_b) and once for compartment_idx=3 (R_res), which is why the earlier rerun printed two threshold values
-#(both landing at 0.932 mg/L, since R_b and R_res share the same eff_blood and cross together).
+#(landing at 0.869 mg/L and 0.868 mg/L respectively, since R_b and R_res share the same eff_blood and cross together).
 ##The f(EC50_MIN) > 0 or f(EC50_MAX) < 0 guard is brentq's precondition — it requires the function to have opposite signs at the two endpoints
 #(i.e., a genuine crossing exists in range) before bisecting, otherwise it returns None rather than raising.
 # ---------------------------------------------------------------------------

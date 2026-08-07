@@ -1,6 +1,6 @@
 """
 Monte Carlo simulation varying k_immune with a log-normal distribution.
-k_immune ~ LogNormal(mean=0.172, CV=0.25)
+k_immune ~ LogNormal(mean=0.243, CV=0.25)
 4-panel figure: S_b, R_b, S_res, R_res — each with individual MC trajectories,
 5th–95th percentile band, and median.
 
@@ -10,7 +10,11 @@ see ImmuneResponse_threshold_sweep.py) and resolve the infection -- at the
 model default, only ~31-37% of samples resolved. CV was then widened from
 0.20 to 0.25 (dropping resolution to ~64%), so the mean was re-solved to
 0.14719 -- the 30th percentile of LogNormal(mean, CV=0.25) sits exactly at
-the 0.1255 threshold -- restoring resolution to ~70%.
+the 0.1255 threshold -- restoring resolution to ~70%. Later raised to 0.172
+(see K_IMMUNE_MEAN below). Then rho_res_S was given a 10% growth advantage
+over rho_res_R (fitness cost for R in the reservoir, mirroring blood), which
+pushed the escape threshold up to ~0.2000 h^-1 -- the mean was re-solved
+again to 0.243 to restore a 20-30% relapse rate (see K_IMMUNE_MEAN below).
 """
 
 import importlib.util
@@ -56,8 +60,8 @@ rho_R = 0.55    # resistant blood growth rate (~9.8% fitness cost relative to rh
 params = {
     "rho_S":           rho_S,
     "rho_R":           rho_R,
-    "rho_res_S":       0.175,  # scaled 5x (from 0.035) alongside rho_S
     "rho_res_R":       0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
+    "rho_res_S":       0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir (fitness cost for R, mirroring the blood compartment)
     "Emax_v":          0.40,
     "EC50_V":          0.245,
     "Emax_l":          0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
@@ -65,7 +69,7 @@ params = {
     "B_max_blood":     6000,
     "B_max_reservoir": 1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
     "van_res_fraction":0.15,
-    "lzd_res_fraction":0.45,
+    "lzd_res_fraction":0.30,    # lowered from 0.45 -- Emax_l_res scales with rho_res_S, so raising rho_res_S 10% above rho_res_R also raises the reservoir linezolid kill rate; without this reduction R_res is wiped out entirely rather than persisting
     "f_r_b":           5e-5,  # restored to original
     "f_b_r":           1e-5,
 }
@@ -76,11 +80,13 @@ Y0 = [0.0, 0.0, 100.0, 100.0]
 # ── Log-normal sampling of k_immune ──────────────────────────────────────────
 # CV = sqrt(exp(σ²) - 1)  →  σ = sqrt(ln(1 + CV²))
 # μ  = ln(mean) - σ²/2   ensures E[k_immune] = 0.12
-K_IMMUNE_MEAN = 0.172     # re-tuned from 0.14719 -- at rho_S=0.61 the R_b/R_res escape
-                          # threshold bisects to 0.1521 h^-1 (verified directly, not just
-                          # estimated), and 0.14719 left only ~40% of samples above it
-                          # (60% relapse). 0.172 puts ~65% of samples above threshold,
-                          # targeting ~35% relapse (30-40% target band).
+K_IMMUNE_MEAN = 0.243     # re-tuned from 0.172 -- giving rho_res_S a 10% growth advantage
+                          # over rho_res_R (see rho_res_S above) makes the reservoir far more
+                          # robust to host immunity: the R_b/R_res escape threshold shifted
+                          # from 0.1521 h^-1 to ~0.2000 h^-1 (bisected directly). 0.172 now
+                          # puts only ~22% of samples above threshold (78% relapse, verified
+                          # via 1000-iteration MC). 0.243 puts ~76% of samples above
+                          # threshold, targeting ~24% relapse (20-30% target band).
 CV            = 0.25
 
 sigma_ln = np.sqrt(np.log(1.0 + CV**2))
@@ -114,7 +120,9 @@ def _final_counts(k_immune):
     return sol[-1, 1], sol[-1, 3]
 
 
-SWEEP_MIN, SWEEP_MAX = 0.02, 0.22   # matches ImmuneResponse_threshold_sweep.py's swept range
+SWEEP_MIN, SWEEP_MAX = 0.02, 0.65   # widened from 0.22 -- at the new rho_res_S/rho_res_R ratio the
+                                     # escape threshold moved to ~0.20 and K_IMMUNE_MEAN=0.243 puts
+                                     # the 99th percentile of sampled k_immune near 0.42
 N_SWEEP = 101
 
 print(f"\nRunning deterministic switch-curve sweep across [{SWEEP_MIN}, {SWEEP_MAX}] "

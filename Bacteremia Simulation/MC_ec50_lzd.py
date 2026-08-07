@@ -27,6 +27,17 @@
 # relapse. Both outcomes are accepted here -- the point of this rho_res_R is
 # to let S_b establish, not to guarantee reservoir persistence in every
 # sample.
+#
+# rho_res_S was then given a 10% growth-rate advantage over rho_res_R
+# (0.19415 vs 0.1765, a fitness cost for R mirroring the blood compartment),
+# and lzd_res_fraction was lowered 0.45 -> 0.30 to compensate (Emax_l_res
+# scales with rho_res_S, so the higher rho_res_S alone would otherwise wipe
+# out the reservoir entirely). Net effect: the EC50_L escape threshold moved
+# DOWN to 0.868 mg/L (confirmed by this script's own bisection, matching
+# EC50_lzd_threshold_sweep.py). Against the sampled EC50_L distribution
+# (median=0.70, [5th=0.17, 95th=2.81]), that puts ~60% of samples at or
+# below threshold (suppressed) and ~40% above it (escape/relapse) --
+# verified directly against the 1000-sample draw.
 # this file generates 3 figures:
 # 1. mc_ec50_lzd_sweep_kinetics.png
 # 2. mc_ec50_lzd_sweep_outcomes.png
@@ -100,15 +111,15 @@ EC50_L_BASE = 1.0
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
-    "rho_res_S":        0.175,  # 
     "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
+    "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
     "Emax_v":           0.40,
     "EC50_V":           0.245,
-    "Emax_l":           0.8,  # fixed, decoupled from rho_S 
+    "Emax_l":           0.8,  # fixed, decoupled from rho_S
     "B_max_blood":      6000,
-    "B_max_reservoir":  1e4,    
+    "B_max_reservoir":  1e4,
     "van_res_fraction": 0.15,
-    "lzd_res_fraction": 0.45,
+    "lzd_res_fraction": 0.30,    # lowered from 0.45 -- Emax_l_res scales with rho_res_S; keeps R_res persistent despite S's reservoir growth advantage
     "f_r_b":            5e-5,  
     "f_b_r":            1e-5,
 }

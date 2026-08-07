@@ -208,8 +208,8 @@ if __name__ == "__main__":
     params = {
         'rho_S':           rho_S,
         'rho_R':           rho_R,
-        'rho_res_S':       0.175,   # Scaled 5x (from 0.035) alongside rho_S
         'rho_res_R':       0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
+        'rho_res_S':       0.19415, # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir (fitness cost for R, mirroring the blood compartment)
         'Emax_v':          0.40,
         'EC50_V':          0.245,
         'Emax_l':          0.8,    # Fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
@@ -217,7 +217,7 @@ if __name__ == "__main__":
         'B_max_blood':     6000,
         'B_max_reservoir': 1e4,     # Lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
         'van_res_fraction':0.15,
-        'lzd_res_fraction':0.45,
+        'lzd_res_fraction':0.30,    # Lowered from 0.45 -- Emax_l_res scales with rho_res_S, so raising rho_res_S 10% above rho_res_R also raises the reservoir linezolid kill rate; without this reduction R_res is wiped out entirely rather than persisting
         'f_r_b':           5e-5,   # Original value
         'f_b_r':           1e-5,
     }
