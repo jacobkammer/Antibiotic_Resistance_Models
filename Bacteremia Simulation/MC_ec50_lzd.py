@@ -1,6 +1,6 @@
 # =============================================================================
 # Monte Carlo Simulation: Linezolid EC50 (EC50_L)
-# Samples EC50_L ~ LogNormal(mean=0.695 mg/L, CV=1.117), mean-corrected so
+# Samples EC50_L ~ LogNormal(mean=0.6 mg/L, CV=1.1), mean-corrected so
 # E[EC50_L] lands exactly on baseline (same convention as MC_immune_response.py
 # and MC_emax_lzd.py), while every other parameter stays fixed, isolating the
 # effect of linezolid potency/susceptibility on bacterial kinetics.
@@ -46,6 +46,31 @@
 # 0.868 mg/L threshold equals 1 - 0.243) and confirmed by a direct
 # 1000-sample MC run: 27.1% escape, sampled median=0.489 [5th=0.115,
 # 95th=1.954] -- within the +/-5-point tolerance of both other sweeps.
+#
+# Emax_v/EC50_V (vancomycin) were later raised 0.40/0.245 -> 1.7/0.25 to
+# match literature values; confirmed (via direct bisection/MC checks) to
+# leave the 0.868 mg/L EC50_L escape threshold and all downstream
+# calibrations in this file completely unchanged -- vancomycin never acts
+# on R_b/R_res directly, and its effect on S_b/S_res fully reconverges
+# before the vancomycin course even ends.
+#
+# EC50_L_BASE was then lowered again 0.695 -> 0.6 (CV=1.117 unchanged) --
+# a deliberate departure from the ~24-27% cross-script calibration target,
+# not a re-tune toward it: this makes linezolid more potent at realistic
+# (sub-saturating) concentrations, shifting more of the sampled
+# distribution below the (unchanged) 0.868 mg/L escape threshold. Confirmed
+# by a direct 1000-sample MC run (same SEED=44): 21.8% escape (218/1000),
+# sampled median=0.422 [5th=0.099, 95th=1.686] -- below the other two
+# sweeps' 24-27% band by design.
+#
+# CV was then narrowed 1.117 -> 1.1 (EC50_L_BASE=0.6 unchanged) -- a small
+# tightening of inter-patient variability that leaves the escape rate
+# essentially untouched: analytically, the lognormal's CDF at the 0.868
+# mg/L threshold barely moves (19.46% -> 19.47%), and a direct 1000-sample
+# MC run (same SEED=44) landed on the identical 21.8% escape (218/1000),
+# sampled median=0.425 [5th=0.102, 95th=1.675] -- indistinguishable from
+# the CV=1.117 run above at this sample size.
+#
 # this file generates 3 figures:
 # 1. mc_ec50_lzd_sweep_kinetics.png
 # 2. mc_ec50_lzd_sweep_outcomes.png
@@ -70,6 +95,10 @@ plt.rcParams.update({
     "figure.titlesize": 20,
 })
 
+# all figures are written into figures/ alongside the scripts
+FIGURES_DIR = "figures"
+os.makedirs(FIGURES_DIR, exist_ok=True)
+
 # ---------------------------------------------------------------------------
 # Load model
 # import model_Bacteremia would also load the model, however the code below
@@ -90,7 +119,9 @@ spec.loader.exec_module(model_mod)#execute module
 # ---------------------------------------------------------------------------
 NUM_ITERATIONS = 1000#number of iterations
 LOD            = 10.0       # limit of detection (CFU/mL)#limit of detection
-CV             = 1.117      # log-normal spread applied to EC50_L #coefficient of variation
+CV             = 1.1        # lowered from 1.117 -- log-normal spread applied to EC50_L
+                             # (coefficient of variation); negligible effect on escape rate,
+                             # see header narrative above
 SEED           = 44#seed for random number generator
 
 total_h      = 1944  # 21d pre-tx + 4d vancomycin + 42d linezolid + 14d post-tx follow-up
@@ -114,16 +145,19 @@ lzd_end_days     = (vanco_start + pk.van_duration + pk.lzd_duration) / 24.0
 rho_S        = 0.61    
 rho_R        = 0.55    #10% fitness cost
 
-EC50_L_BASE = 0.695  # lowered from 1.0 -- see header narrative above (targets ~24-27% escape,
-                      # matching MC_immune_response.py / MC_emax_lzd.py)
+EC50_L_BASE = 0.6     # lowered again from 0.695 -- see header narrative above. This is a
+                      # deliberate departure from the ~24-27% cross-script calibration target
+                      # (MC_immune_response.py / MC_emax_lzd.py); it now targets ~19-23%
+                      # escape instead, making linezolid more potent at realistic
+                      # (sub-saturating) concentrations.
 
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
     "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
     "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
-    "Emax_v":           0.40,
-    "EC50_V":           0.245,
+    "Emax_v":             1.7,
+    "EC50_V":            0.25,
     "Emax_l":           0.8,  # fixed, decoupled from rho_S
     "B_max_blood":      6000,
     "B_max_reservoir":  1e4,
@@ -168,10 +202,10 @@ def _final_counts(ec50_l):
     return sol[-1, 1], sol[-1, 3]
 
 
-SWEEP_MIN, SWEEP_MAX = 0.05, 3.3   # widened from [0.3, 2.0] -- EC50_L_BASE=0.695 with CV=1.117
-                                    # puts the 1st-99th percentile of sampled EC50_L at
-                                    # roughly [0.06, 3.29], and the old range clipped ~31%
-                                    # of samples below 0.3
+SWEEP_MIN, SWEEP_MAX = 0.05, 3.3   # widened from [0.3, 2.0] -- at EC50_L_BASE=0.6, CV=1.1
+                                    # (lowered from 1.117), the 1st-99th percentile of sampled
+                                    # EC50_L is roughly [0.05, 3.20], still comfortably covered
+                                    # by this range
 N_SWEEP = 131   # step ~0.025
 
 print(f"\nRunning deterministic switch-curve sweep across [{SWEEP_MIN}, {SWEEP_MAX}] "
@@ -287,8 +321,9 @@ for ax, hist, lc, mc, title, ylim in panels:
     style_kinetic(ax, title, "CFU/mL", ylim)
 
 plt.tight_layout()
-plt.savefig("mc_ec50_lzd_sweep_kinetics.png", dpi=300, bbox_inches="tight")
-print("Saved: mc_ec50_lzd_sweep_kinetics.png")
+out_file = os.path.join(FIGURES_DIR, "mc_ec50_lzd_sweep_kinetics.png")
+plt.savefig(out_file, dpi=300, bbox_inches="tight")
+print(f"Saved: {out_file}")
 
 
 # ---------------------------------------------------------------------------
@@ -336,8 +371,9 @@ for ax, (y_vals, ylabel) in zip(axes2.flat, outcomes):
     ax.legend(fontsize=13)
 
 plt.tight_layout()
-plt.savefig("mc_ec50_lzd_sweep_outcomes.png", dpi=300, bbox_inches="tight")
-print("Saved: mc_ec50_lzd_sweep_outcomes.png")
+out_file = os.path.join(FIGURES_DIR, "mc_ec50_lzd_sweep_outcomes.png")
+plt.savefig(out_file, dpi=300, bbox_inches="tight")
+print(f"Saved: {out_file}")
 
 
 # ---------------------------------------------------------------------------
@@ -406,8 +442,9 @@ ax_hist.set_ylabel("Patients\n(n)")
 ax_hist.grid(True, axis="y", ls=":", alpha=0.35)
 ax_hist.legend(loc="upper right", fontsize=12, framealpha=0.9)
 
-fig3.savefig("mc_ec50_lzd_switch.png", dpi=300, bbox_inches="tight")
-print("Saved: mc_ec50_lzd_switch.png")
+out_file = os.path.join(FIGURES_DIR, "mc_ec50_lzd_switch.png")
+fig3.savefig(out_file, dpi=300, bbox_inches="tight")
+print(f"Saved: {out_file}")
 
 
 # ---------------------------------------------------------------------------
@@ -418,6 +455,14 @@ print(f"\n--- Sweep: EC50_L varied (baseline={EC50_L_BASE:.2f}) ---")
 print(f"  EC50_L sampled  median={np.median(ec50_l_samples):.2f}  "
       f"[5th={np.percentile(ec50_l_samples, 5):.2f}, "
       f"95th={np.percentile(ec50_l_samples, 95):.2f}]")
+# Escape/suppressed split -- quoted in supplement.tex (tab:zscore_summary) and
+# in threshold_changes_summary.txt, so print it rather than leaving it readable
+# only off the histogram legend in mc_ec50_lzd_switch.png.
+n_escape = int(escaped_mask.sum())
+n_total  = int(escaped_mask.size)
+print(f"  Escape threshold  EC50_L = {ESCAPE_THRESH:.3f} mg/L")
+print(f"  Escape      {frac_escape * 100:5.1f}%  ({n_escape}/{n_total})")
+print(f"  Suppressed  {(1 - frac_escape) * 100:5.1f}%  ({n_total - n_escape}/{n_total})")
 if np.any(peak_S_b > LOD):
     print(f"  Peak S_b  median={np.median(peak_S_b[peak_S_b > LOD]):.1e}  "
           f"[5th={np.percentile(peak_S_b[peak_S_b > LOD], 5):.1e}, "

@@ -14,6 +14,10 @@ plt.rcParams.update({
     "figure.titlesize": 20,
 })
 
+# all figures are written into figures/ alongside the scripts
+FIGURES_DIR = "figures"
+os.makedirs(FIGURES_DIR, exist_ok=True)
+
 # Load model
 MODULE_NAME = "model_Bacteremia.py"
 spec = importlib.util.spec_from_file_location("model_mod", MODULE_NAME)
@@ -44,8 +48,8 @@ params = {
     "rho_R":           rho_R,
     "rho_res_R":       0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
     "rho_res_S":       0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
-    "Emax_v":          0.40,
-    "EC50_V":          0.245,
+    "Emax_v":            1.7,
+    "EC50_V":           0.25,
     "Emax_l":          0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
     "EC50_L":          1.0,
     "B_max_blood":     6000,
@@ -176,8 +180,9 @@ ax4.plot(t_days, np.where(med == 0, np.nan, med), "r-", lw=2, label="Resistant R
 format_kinetic_panel(ax4, "Panel D: Resistant Strain in Reservoir ($R_{res}$)", 2e7, "Reservoir Burden")
 
 plt.tight_layout()
-plt.savefig("mc_initial_conditions_kinetics.png", dpi=300, bbox_inches="tight")
-print("Saved: mc_initial_conditions_kinetics.png")
+out_file = os.path.join(FIGURES_DIR, "mc_initial_conditions_kinetics.png")
+plt.savefig(out_file, dpi=300, bbox_inches="tight")
+print(f"Saved: {out_file}")
 
 # -----------------------------------------------------------------------------
 # FIGURE 2: Sampling distributions
@@ -205,5 +210,6 @@ plt.legend(loc="upper right")
 plt.grid(True, ls=":", alpha=0.4)
 
 plt.tight_layout()
-plt.savefig("mc_initial_conditions_distributions.png", dpi=300, bbox_inches="tight")
-print("Saved: mc_initial_conditions_distributions.png")
+out_file = os.path.join(FIGURES_DIR, "mc_initial_conditions_distributions.png")
+plt.savefig(out_file, dpi=300, bbox_inches="tight")
+print(f"Saved: {out_file}")

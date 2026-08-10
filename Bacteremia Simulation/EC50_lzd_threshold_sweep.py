@@ -74,6 +74,10 @@ plt.rcParams.update({
     "figure.titlesize": 20,
 })
 
+# all figures are written into figures/ alongside the scripts
+FIGURES_DIR = "figures"
+os.makedirs(FIGURES_DIR, exist_ok=True)
+
 # ---------------------------------------------------------------------------
 # Load model
 # import model_Bacteremia.py will also work, however the code below is more explicit
@@ -119,8 +123,8 @@ BASE_PARAMS = {
     "rho_R":            rho_R,
     "rho_res_R":        0.1765,
     "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
-    "Emax_v":           0.40,
-    "EC50_V":           0.245,
+    "Emax_v":             1.7,
+    "EC50_V":            0.25,
     "Emax_l":           0.8,
     "B_max_blood":      6000,
     "B_max_reservoir":  1e4,
@@ -255,8 +259,9 @@ ax.grid(True, which="both", ls=":", alpha=0.35)
 ax.legend(loc="upper left", fontsize=15, framealpha=0.85)
 
 fig.tight_layout()
-fig.savefig("ec50_lzd_threshold_sweep.png", dpi=300, bbox_inches="tight")
-print("\nSaved: ec50_lzd_threshold_sweep.png")
+out_file = os.path.join(FIGURES_DIR, "ec50_lzd_threshold_sweep.png")
+fig.savefig(out_file, dpi=300, bbox_inches="tight")
+print(f"\nSaved: {out_file}")
 
 # ---------------------------------------------------------------------------
 # FIGURE: "Terminal burden vs EC50_L" -- recreates, with real simulated data,
@@ -303,5 +308,6 @@ ax2.grid(True, which="both", ls=":", alpha=0.3)
 ax2.legend(loc="center left", fontsize=12, framealpha=0.9)
 
 fig2.tight_layout()
-fig2.savefig("ec50_terminal_burden_vs_ec50.png", dpi=300, bbox_inches="tight")
-print("Saved: ec50_terminal_burden_vs_ec50.png")
+out_file = os.path.join(FIGURES_DIR, "ec50_terminal_burden_vs_ec50.png")
+fig2.savefig(out_file, dpi=300, bbox_inches="tight")
+print(f"Saved: {out_file}")

@@ -1,0 +1,14 @@
+Threshold re-derivation summary
+Baseline change: rho_res_S = 1.1 x rho_res_R (0.19415 vs 0.1765), lzd_res_fraction 0.45 -> 0.30
+
+File                              | Old threshold                                              | New threshold
+-----------------------------------------------------------------------------------------------------------------------------------------------
+EC50_lzd_threshold_sweep.py       | 0.932 mg/L                                                 | 0.868 mg/L
+MC_ec50_lzd.py                    | 0.988 mg/L (~53% escape)                                   | 0.868 mg/L (21.8% escape / 78.2% suppressed, 218/1000)
+Emax_lzd_threshold_sweep.py       | 0.8027 h^-1                                                | 0.8414 h^-1
+MC_emax_lzd.py                    | 0.8027 h^-1 (~48% escape)                                  | 0.8414 h^-1 (23.6% escape / 76.4% suppressed, 236/1000)
+transfer_rates_evaluation.py      | 1e-3-1e-2 transition band                                  | unchanged, re-verified
+  (was MC_transfer_rates_equilibrium.py)
+MC_initial_conditions.py          | R_res_0 ~= 7.57 CFU/mL, ~70% resolution                    | R_res_0 ~= 5.25 CFU/mL, 56.1% resolution (439/1000 escape)
+Sres0_threshold_sweep.py          | R_b had an S_res_0-dependent crowding-out threshold within | Both R_b and R_res now persist across the entire [1,2000]
+                                   | [1,2000]                                                   | range -- no threshold found

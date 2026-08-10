@@ -69,6 +69,10 @@ plt.rcParams.update({
     "figure.titlesize": 20,
 })
 
+# all figures are written into figures/ alongside the scripts
+FIGURES_DIR = "figures"
+os.makedirs(FIGURES_DIR, exist_ok=True)
+
 # ---------------------------------------------------------------------------
 # Load model
 # ---------------------------------------------------------------------------
@@ -113,8 +117,8 @@ BASE_PARAMS = {
     "rho_R":            rho_R,
     "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
     "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
-    "Emax_v":           0.40,
-    "EC50_V":           0.245,
+    "Emax_v":             1.7,
+    "EC50_V":            0.25,
     "EC50_L":           1.0,
     "B_max_blood":      6000,
     "B_max_reservoir":  1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
@@ -239,8 +243,9 @@ ax.grid(True, which="both", ls=":", alpha=0.35)
 ax.legend(loc="upper right", fontsize=15, framealpha=0.85)
 
 fig.tight_layout()
-fig.savefig("emax_lzd_threshold_sweep.png", dpi=300, bbox_inches="tight")
-print("\nSaved: emax_lzd_threshold_sweep.png")
+out_file = os.path.join(FIGURES_DIR, "emax_lzd_threshold_sweep.png")
+fig.savefig(out_file, dpi=300, bbox_inches="tight")
+print(f"\nSaved: {out_file}")
 
 # ---------------------------------------------------------------------------
 # FIGURE: "Terminal burden vs Emax_L" -- same design as
@@ -289,5 +294,6 @@ ax2.grid(True, which="both", ls=":", alpha=0.3)
 ax2.legend(loc="center right", fontsize=12, framealpha=0.9)
 
 fig2.tight_layout()
-fig2.savefig("emax_terminal_burden_vs_emax.png", dpi=300, bbox_inches="tight")
-print("Saved: emax_terminal_burden_vs_emax.png")
+out_file = os.path.join(FIGURES_DIR, "emax_terminal_burden_vs_emax.png")
+fig2.savefig(out_file, dpi=300, bbox_inches="tight")
+print(f"Saved: {out_file}")

@@ -18,6 +18,7 @@ again to 0.243 to restore a 20-30% relapse rate (see K_IMMUNE_MEAN below).
 """
 
 import importlib.util
+import os
 import warnings
 
 import matplotlib.pyplot as plt
@@ -34,6 +35,10 @@ plt.rcParams.update({
     "legend.fontsize": 14,
     "figure.titlesize": 20,
 })
+
+# all figures are written into figures/ alongside the scripts
+FIGURES_DIR = "figures"
+os.makedirs(FIGURES_DIR, exist_ok=True)
 
 # ── Load model module ─────────────────────────────────────────────────────────
 spec = importlib.util.spec_from_file_location("model_mod", "model_Bacteremia.py")
@@ -62,8 +67,8 @@ params = {
     "rho_R":           rho_R,
     "rho_res_R":       0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
     "rho_res_S":       0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir (fitness cost for R, mirroring the blood compartment)
-    "Emax_v":          0.40,
-    "EC50_V":          0.245,
+    "Emax_v":            1.7,
+    "EC50_V":           0.25,
     "Emax_l":          0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
     "EC50_L":          1.0,
     "B_max_blood":     6000,
@@ -254,7 +259,7 @@ for label, ax in zip(["A", "B", "C", "D"], axes.flat):
     ax.text(0.02, 0.97, label, transform=ax.transAxes,
             fontsize=22, fontweight="bold", va="top")
 
-out_file = "mc_immune_response.png"
+out_file = os.path.join(FIGURES_DIR, "mc_immune_response.png")
 fig.savefig(out_file, dpi=300, bbox_inches="tight")
 print(f"\nSaved: {out_file}")
 
@@ -286,6 +291,21 @@ escaped_mask       = final_R_res > LOD
 frac_escape        = escaped_mask.mean()
 escaped_k_immune   = k_immune_samples[escaped_mask]
 suppressed_k_immune = k_immune_samples[~escaped_mask]
+
+# Escape/suppressed split -- quoted in supplement.tex (tab:zscore_summary), so
+# print it rather than leaving it readable only off the histogram legend below,
+# which rounds to whole percent. NOTE this is NOT the relapse rate printed
+# above: escape is the reservoir alone (final_R_res > LOD), relapse is either
+# compartment, so escaped is a subset of relapsed and the two can differ. The
+# other two rows of tab:zscore_summary are escape fractions, so this is the
+# figure that belongs alongside them.
+n_escape = int(escaped_mask.sum())
+n_total  = int(escaped_mask.size)
+print(f"  Escape threshold  k_immune = {ESCAPE_THRESH:.4f} h^-1 (escape below)")
+print(f"  Escape      {frac_escape * 100:5.1f}%  ({n_escape}/{n_total})")
+print(f"  Suppressed  {(1 - frac_escape) * 100:5.1f}%  ({n_total - n_escape}/{n_total})")
+print(f"  (relapse rate above counts either compartment: "
+      f"{relapsed.sum()}/{n_total}; escape is a subset)")
 
 fig2, (ax_top, ax_hist) = plt.subplots(
     2, 1, figsize=(11, 8.5), sharex=True,
@@ -328,5 +348,6 @@ ax_hist.set_ylabel("Patients\n(n)")
 ax_hist.grid(True, axis="y", ls=":", alpha=0.35)
 ax_hist.legend(loc="upper right", fontsize=12, framealpha=0.9)
 
-fig2.savefig("mc_immune_response_switch.png", dpi=300, bbox_inches="tight")
-print("Saved: mc_immune_response_switch.png")
+out_file = os.path.join(FIGURES_DIR, "mc_immune_response_switch.png")
+fig2.savefig(out_file, dpi=300, bbox_inches="tight")
+print(f"Saved: {out_file}")

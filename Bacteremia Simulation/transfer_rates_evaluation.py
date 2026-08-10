@@ -7,6 +7,14 @@
 # absolute range for both rates) while every other parameter (including the
 # other transfer rate) stays fixed at baseline, isolating the effect of each
 # rate on bacterial kinetics across a wide dynamic range.
+#
+# A third section then re-integrates a handful of rates inside f_r_b's relapse
+# plateau on a finer time grid, to resolve the within-course dynamics the grid
+# sweeps are too coarse to show: how far R_res is suppressed during linezolid,
+# and how long after withdrawal R_b takes to cross back above the LOD.
+#
+# Nothing here is Monte Carlo -- every rate is a fixed, deterministic grid
+# point (renamed from MC_transfer_rates_equilibrium.py for that reason).
 # =============================================================================
 import importlib.util
 import os
@@ -15,6 +23,7 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import odeint
+from scipy.optimize import brentq
 
 plt.rcParams.update({
     "font.size": 16,
@@ -25,6 +34,10 @@ plt.rcParams.update({
     "legend.fontsize": 14,
     "figure.titlesize": 20,
 })
+
+# all figures are written into figures/ alongside the scripts
+FIGURES_DIR = "figures"
+os.makedirs(FIGURES_DIR, exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # Load model
@@ -85,18 +98,19 @@ rho_S        = 0.61    # raised from 0.60 -- see rho_S sensitivity analysis. At 
                        # band), but it does shift behavior inside that band itself.
                        # Re-verified after giving rho_res_S a 10% growth advantage over
                        # rho_res_R and lowering lzd_res_fraction 0.45 -> 0.30 to compensate:
-                       # re-running this sweep (mc_frb_sweep_outcomes.png / mc_fbr_sweep_
-                       # outcomes.png) shows the visible curvature still concentrated in the
+                       # re-running this sweep (frb_sweep_regimes.png / fbr_sweep_
+                       # regimes.png) shows the visible curvature still concentrated in the
                        # same 1e-3-1e-2 region, so the zoom band below is unchanged
-rho_R        = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
+rho_R        = 0.55    # directly tuned (~9.8% fitness cost relative to rho_S = 0.61,
+                       # down from 20%). Was quoted as 8.3% while rho_S was 0.60.
 
 BASE_PARAMS = {
     "rho_S":            rho_S,
     "rho_R":            rho_R,
     "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
     "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
-    "Emax_v":           0.40,
-    "EC50_V":           0.245,
+    "Emax_v":             1.7,
+    "EC50_V":            0.25,
     "Emax_l":           0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
     "EC50_L":           1.0,
     "B_max_blood":      6000,
@@ -244,68 +258,103 @@ def plot_sweep_kinetics(sweep, filename):
         style_kinetic(ax, title, "CFU/mL", ylim)
 
     plt.tight_layout()
-    plt.savefig(filename, dpi=300, bbox_inches="tight")
-    print(f"Saved: {filename}")
+    out_file = os.path.join(FIGURES_DIR, filename)
+    plt.savefig(out_file, dpi=300, bbox_inches="tight")
+    print(f"Saved: {out_file}")
     plt.close(fig)
 
 
-plot_sweep_kinetics(sweep_f_r_b, "mc_frb_sweep_kinetics.png")
-plot_sweep_kinetics(sweep_f_b_r, "mc_fbr_sweep_kinetics.png")
+plot_sweep_kinetics(sweep_f_r_b, "frb_sweep_kinetics.png")
+plot_sweep_kinetics(sweep_f_b_r, "fbr_sweep_kinetics.png")
 
 
 # ---------------------------------------------------------------------------
-# FIGURE: outcome scatter plots vs the swept rate (log scale)
-# 4 panels: peak S_b, peak R_b, peak S_res, final R_b
+# Precise regime thresholds for the f_r_b sweep (bisection, same convention
+# as the other threshold-sweep scripts in this project): a low threshold
+# where bacteremia first establishes, and a high threshold where established
+# resistant bacteremia stops relapsing and clears instead. f_b_r has no such
+# thresholds anywhere in the swept range (confirmed by Sweep 2 above).
 # ---------------------------------------------------------------------------
-def plot_sweep_outcomes(sweep, filename, rate_range=None, title_suffix=""):
-    rates = sweep["rates"]
-    in_range = np.ones_like(rates, dtype=bool)
-    if rate_range is not None:
-        lo, hi = rate_range
-        in_range = (rates >= lo) & (rates <= hi)
+def _final_R_b_at(f_r_b_value):
+    params_i = {**BASE_PARAMS, "f_r_b": f_r_b_value, "f_b_r": F_B_R_BASE}
+    sol = odeint(
+        model_mod.dual_reservoir_model,
+        Y0, t_eval,
+        args=(params_i, van_func, lzd_func, immune_model),
+        rtol=1e-8, atol=1e-10, mxstep=5000,
+    )
+    return sol[-1, 1]
+
+
+threshold_establish = brentq(lambda r: _final_R_b_at(r) - LOD, 1e-6, 1e-4)
+threshold_clear      = brentq(lambda r: _final_R_b_at(r) - LOD, 5e-3, 1e-2)
+print(f"f_r_b establishment threshold (final R_b crosses LOD, low side): "
+      f"{threshold_establish:.3e} h^-1", flush=True)
+print(f"f_r_b clearance threshold (final R_b crosses LOD, high side):    "
+      f"{threshold_clear:.3e} h^-1", flush=True)
+
+
+# ---------------------------------------------------------------------------
+# FIGURE: single-panel regime summary per sweep -- peak S_b, peak R_b, and
+# final R_b overlaid on one log-scale axis (plus peak S_res as a light
+# reference line), with the swept rate's regime shaded when the sweep has
+# genuine thresholds to show.
+# ---------------------------------------------------------------------------
+def plot_regime_switch(sweep, filename, thresholds=None, title_suffix=""):
+    rates      = sweep["rates"]
     log10_rate = np.log10(rates)
+    FLOOR = LOD * 0.5   # display floor for sub-LOD values, so cleared/
+                         # unestablished regions show as a flat line at the
+                         # floor rather than a gap
 
-    outcomes = [
-        (sweep["peak_S_b"],   "Peak $S_b$ (CFU/mL)"),
-        (sweep["peak_R_b"],   "Peak $R_b$ (CFU/mL)"),
-        (sweep["peak_S_res"], "Peak $S_{res}$ (CFU/mL)"),
-        (sweep["final_R_b"],  "Final $R_b$ (CFU/mL)"),
-    ]
+    peak_S_b   = np.where(sweep["peak_S_b"]   <= LOD, FLOOR, sweep["peak_S_b"])
+    peak_R_b   = np.where(sweep["peak_R_b"]   <= LOD, FLOOR, sweep["peak_R_b"])
+    final_R_b  = np.where(sweep["final_R_b"]  <= LOD, FLOOR, sweep["final_R_b"])
+    peak_S_res = sweep["peak_S_res"]
 
-    fig, axes = plt.subplots(2, 2, figsize=(12, 9))
-    fig.suptitle(f"Outcomes vs {RATE_LABELS[sweep['vary_name']]}{title_suffix} "
-                 f"(log-spaced grid, n={in_range.sum()})",
-                 fontsize=19, fontweight="bold")
+    fig, ax = plt.subplots(figsize=(11, 6.5))
 
-    for ax, (y_vals, ylabel) in zip(axes.flat, outcomes):
-        nonzero = (y_vals > LOD) & in_range
-        ax.plot(log10_rate[nonzero], y_vals[nonzero],
-                marker="o", ms=3, lw=1, alpha=0.8, color="steelblue")
-        ax.set_yscale("log")
-        if not nonzero.any():
-            # e.g. Peak/Final R_b now clears throughout -- give the empty
-            # log-scale axis an explicit range so tight_layout doesn't crash
-            ax.set_ylim(LOD * 0.1, LOD * 10)
-            ax.set_xlim(log10_rate[in_range].min(), log10_rate[in_range].max())
-            ax.text(0.5, 0.5, "All values below LOD", transform=ax.transAxes,
-                    ha="center", va="center", fontsize=16, color="gray")
-        ax.set_xlabel(f"$\\log_{{10}}$({RATE_LABELS[sweep['vary_name']]})")
-        ax.set_ylabel(ylabel)
-        ax.grid(True, which="both", ls=":", alpha=0.35)
+    if thresholds is not None:
+        lo, hi = thresholds
+        log_lo, log_hi = np.log10(lo), np.log10(hi)
+        ax.axvspan(log10_rate.min(), log_lo, color="gray",           alpha=0.12, label="Unestablished")
+        ax.axvspan(log_lo, log_hi,           color="salmon",         alpha=0.15, label="Relapses (plateau)")
+        ax.axvspan(log_hi, log10_rate.max(), color="mediumseagreen", alpha=0.12, label="Cleared")
+        ax.axvline(log_lo, color="black",      ls="--", lw=1.6, alpha=0.9,
+                   label=f"Establishment threshold ({lo:.2e})")
+        ax.axvline(log_hi, color="darkorange", ls="--", lw=1.6, alpha=0.9,
+                   label=f"Clearance threshold ({hi:.2e})")
+
+    ax.axhline(LOD, color="black", ls=":", lw=1.0, alpha=0.6, label=f"LOD ({int(LOD)} CFU/mL)")
+
+    ax.plot(log10_rate, peak_S_res, color="mediumpurple", lw=1.3, ls=":",
+            alpha=0.8, label="Peak $S_{res}$ (reservoir, for reference)")
+    ax.plot(log10_rate, peak_S_b,  color="royalblue", lw=2.2, label="Peak $S_b$")
+    ax.plot(log10_rate, peak_R_b,  color="firebrick",  lw=2.2, label="Peak $R_b$")
+    ax.plot(log10_rate, final_R_b, color="firebrick",  lw=2.2, ls="--", label="Final $R_b$")
+
+    ax.set_yscale("log")
+    ax.set_ylim(FLOOR * 0.8, 1.2e4)
+    ax.set_xlim(log10_rate.min(), log10_rate.max())
+    ax.set_xlabel(f"$\\log_{{10}}$({RATE_LABELS[sweep['vary_name']]})")
+    ax.set_ylabel("CFU/mL")
+    ax.set_title(f"Regime summary vs {RATE_LABELS[sweep['vary_name']]}{title_suffix} "
+                 f"(log-spaced grid, n={NUM_POINTS})",
+                 fontsize=18, fontweight="bold")
+    ax.grid(True, which="both", ls=":", alpha=0.35)
+    ax.legend(loc="best", fontsize=11, framealpha=0.9, ncol=1)
 
     plt.tight_layout()
-    plt.savefig(filename, dpi=300, bbox_inches="tight")
-    print(f"Saved: {filename}")
+    out_file = os.path.join(FIGURES_DIR, filename)
+    plt.savefig(out_file, dpi=300, bbox_inches="tight")
+    print(f"Saved: {out_file}")
     plt.close(fig)
 
 
-plot_sweep_outcomes(sweep_f_r_b, "mc_frb_sweep_outcomes.png")
-plot_sweep_outcomes(sweep_f_b_r, "mc_fbr_sweep_outcomes.png")
-
-plot_sweep_outcomes(sweep_f_r_b, "mc_frb_sweep_outcomes_zoom.png",
-                     rate_range=(ZOOM_MIN, ZOOM_MAX), title_suffix=" — zoom [1e-3, 1e-2]")
-plot_sweep_outcomes(sweep_f_b_r, "mc_fbr_sweep_outcomes_zoom.png",
-                     rate_range=(ZOOM_MIN, ZOOM_MAX), title_suffix=" — zoom [1e-3, 1e-2]")
+plot_regime_switch(sweep_f_r_b, "frb_sweep_regimes.png",
+                    thresholds=(threshold_establish, threshold_clear))
+plot_regime_switch(sweep_f_b_r, "fbr_sweep_regimes.png",
+                    title_suffix=" (no threshold in swept range)")
 
 
 # ---------------------------------------------------------------------------
@@ -335,8 +384,9 @@ ax.legend(fontsize=14)
 ax.grid(True, which="both", ls=":", alpha=0.35)
 
 plt.tight_layout()
-plt.savefig("mc_transfer_rate_sweep_grid.png", dpi=300, bbox_inches="tight")
-print("Saved: mc_transfer_rate_sweep_grid.png")
+out_file = os.path.join(FIGURES_DIR, "transfer_rate_sweep_grid.png")
+plt.savefig(out_file, dpi=300, bbox_inches="tight")
+print(f"Saved: {out_file}")
 
 
 # ---------------------------------------------------------------------------
@@ -362,5 +412,123 @@ def print_summary(sweep, fixed_name, fixed_value):
 
 print_summary(sweep_f_r_b, "f_b_r", F_B_R_BASE)
 print_summary(sweep_f_b_r, "f_r_b", F_R_B_BASE)
+
+
+# ---------------------------------------------------------------------------
+# Within-course relapse analysis across the f_r_b relapse plateau
+#
+# The grid sweeps above resolve outcomes (peak and final burden per rate) but
+# not the timing of the post-treatment rebound: at 1150 points over 1944 h the
+# step is ~1.7 h, too coarse to place the LOD crossing to better than a
+# fraction of a day, and the sweeps clip sub-LOD values to zero, which discards
+# exactly the suppressed R_b levels this section reports. Both sweeps are
+# therefore left untouched and a small number of rates inside the plateau are
+# re-integrated here on a finer grid, unclipped.
+#
+# Supplies the numbers cited in supplement.tex: the suppressed R_res level
+# during linezolid, and the relapse timing once it is withdrawn.
+# ---------------------------------------------------------------------------
+FINE_POINTS   = 4000     # vs 1150 for the sweeps -- resolves the LOD crossing
+FINE_RTOL     = 1e-9
+FINE_ATOL     = 1e-11
+PROBE_POINTS  = 6        # illustrative rates spanning the plateau (+ baseline)
+RANGE_POINTS  = 40       # dense pass, for the reported R_res range
+
+t_fine      = np.linspace(0, total_h, FINE_POINTS)
+t_fine_days = t_fine / 24.0
+
+lzd_start_h = vanco_start + pk.van_duration
+lzd_end_h   = lzd_start_h + pk.lzd_duration
+on_lzd      = (t_fine >= lzd_start_h) & (t_fine <= lzd_end_h)
+post_lzd    = t_fine > lzd_end_h
+i_lzd_end   = np.argmin(np.abs(t_fine - lzd_end_h))
+
+
+def run_fine(f_r_b_value):
+    """One course at a single f_r_b on the fine grid. Deliberately unclipped:
+    sub-LOD R_b is the quantity of interest during the linezolid course."""
+    params_i = {**BASE_PARAMS, "f_r_b": f_r_b_value, "f_b_r": F_B_R_BASE}
+    return odeint(
+        model_mod.dual_reservoir_model,
+        Y0, t_fine,
+        args=(params_i, van_func, lzd_func, immune_model),
+        rtol=FINE_RTOL, atol=FINE_ATOL, mxstep=10000,
+    )
+
+
+def relapse_metrics(sol):
+    R_b, R_res = sol[:, 1], sol[:, 3]
+    # first post-withdrawal crossing back above the LOD
+    above = np.where(post_lzd & (R_b > LOD))[0]
+    lag = (t_fine_days[above[0]] - lzd_end_h / 24.0) if above.size else np.nan
+    return {
+        "peak_R_b":      np.max(R_b),
+        "min_R_b_lzd":   np.min(R_b[on_lzd]),
+        "R_res_lzd_end": R_res[i_lzd_end],
+        "R_res_min_lzd": np.min(R_res[on_lzd]),
+        "final_R_b":     R_b[-1],
+        "rebound_lag_d": lag,
+    }
+
+
+print(f"\n\n=== Within-course relapse across the f_r_b plateau "
+      f"({threshold_establish:.3e} .. {threshold_clear:.3e} h^-1) ===")
+print(f"Linezolid course: day {lzd_start_h / 24.0:.1f} -> {lzd_end_h / 24.0:.1f}; "
+      f"follow-up ends day {total_h / 24.0:.1f}")
+print(f"Fine grid: {FINE_POINTS} points over {total_h} h, "
+      f"rtol={FINE_RTOL:.0e}, atol={FINE_ATOL:.0e}, sub-LOD values unclipped\n")
+
+# baseline plus points spanning the plateau, held clear of both thresholds
+probe_rates = np.sort(np.concatenate((
+    [F_R_B_BASE],
+    np.logspace(np.log10(threshold_establish * 1.5),
+                np.log10(threshold_clear * 0.7), PROBE_POINTS),
+)))
+
+header = (f"{'f_r_b':>10} {'peak R_b':>10} {'min R_b LZD':>12} "
+          f"{'R_res LZD end':>14} {'final R_b':>10} {'rebound lag (d)':>16}")
+print(header)
+print("-" * len(header))
+
+for r in probe_rates:
+    m = relapse_metrics(run_fine(r))
+    tag = " *" if np.isclose(r, F_R_B_BASE) else ""
+    lag = f"{m['rebound_lag_d']:.1f}" if np.isfinite(m["rebound_lag_d"]) else "none"
+    print(f"{r:10.3e} {m['peak_R_b']:10.2e} {m['min_R_b_lzd']:12.2e} "
+          f"{m['R_res_lzd_end']:14.2e} {m['final_R_b']:10.2e} {lag:>16}{tag}")
+
+print("  * model baseline rate")
+
+# Dense pass: the R_res suppressed-plateau range quoted in the supplement.
+# Sampled strictly inside the thresholds -- at the boundaries themselves R_res
+# is still falling, so the lower figure would be pulled toward the LOD.
+range_rates = np.logspace(np.log10(threshold_establish * 1.02),
+                          np.log10(threshold_clear * 0.98), RANGE_POINTS)
+
+res_end, res_min, peak_R_b_fine, final_R_b_fine = [], [], [], []
+for r in range_rates:
+    m = relapse_metrics(run_fine(r))
+    res_end.append(m["R_res_lzd_end"])
+    res_min.append(m["R_res_min_lzd"])
+    peak_R_b_fine.append(m["peak_R_b"])
+    final_R_b_fine.append(m["final_R_b"])
+
+res_end = np.array(res_end)
+res_min = np.array(res_min)
+peak_R_b_fine  = np.array(peak_R_b_fine)
+final_R_b_fine = np.array(final_R_b_fine)
+
+print(f"\n--- R_res during linezolid, {RANGE_POINTS} rates strictly inside the plateau "
+      f"({range_rates[0]:.3e} .. {range_rates[-1]:.3e} h^-1) ---")
+print(f"  R_res at end of course : {res_end.min():.3e} .. {res_end.max():.3e} CFU/mL")
+print(f"  R_res min during course: {res_min.min():.3e} .. {res_min.max():.3e} CFU/mL")
+print(f"  monotonically decreasing in f_r_b: {bool(np.all(np.diff(res_end) < 0))}")
+print(f"    at plateau bottom ({range_rates[0]:.2e}): {res_end[0]:.1f} CFU/mL")
+print(f"    at plateau top    ({range_rates[-1]:.2e}): {res_end[-1]:.1f} CFU/mL")
+print(f"    fold change across plateau: {res_end[0] / res_end[-1]:.1f}x")
+print(f"  R_res stays above the LOD throughout: {bool(np.all(res_min > LOD))} "
+      f"(closest approach {res_min.min() / LOD:.1f}x LOD)")
+print(f"  final R_b / peak R_b: {(final_R_b_fine / peak_R_b_fine).min():.3f} .. "
+      f"{(final_R_b_fine / peak_R_b_fine).max():.3f}  (1.0 => relapse is complete)")
 
 print("\nDone.")

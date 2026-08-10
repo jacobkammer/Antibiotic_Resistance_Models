@@ -84,6 +84,10 @@ plt.rcParams.update({
     "figure.titlesize": 20,
 })
 
+# all figures are written into figures/ alongside the scripts
+FIGURES_DIR = "figures"
+os.makedirs(FIGURES_DIR, exist_ok=True)
+
 # ---------------------------------------------------------------------------
 # Load model
 # ---------------------------------------------------------------------------
@@ -136,8 +140,8 @@ BASE_PARAMS = {
     "rho_R":            rho_R,
     "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
     "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
-    "Emax_v":           0.40,
-    "EC50_V":           0.245,
+    "Emax_v":             1.7,
+    "EC50_V":            0.25,
     "EC50_L":           1.0,
     "B_max_blood":      6000,
     "B_max_reservoir":  1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
@@ -303,8 +307,9 @@ ax_hist.set_ylabel("Patients\n(n)")
 ax_hist.grid(True, axis="y", ls=":", alpha=0.35)
 ax_hist.legend(loc="upper right", fontsize=12, framealpha=0.9)
 
-fig1.savefig("mc_emax_lzd_switch.png", dpi=300, bbox_inches="tight")
-print("Saved: mc_emax_lzd_switch.png")
+out_file = os.path.join(FIGURES_DIR, "mc_emax_lzd_switch.png")
+fig1.savefig(out_file, dpi=300, bbox_inches="tight")
+print(f"Saved: {out_file}")
 
 
 # ---------------------------------------------------------------------------
@@ -314,6 +319,15 @@ print(f"\n--- Sweep: Emax_l varied (baseline={EMAX_L_BASE:.3f}) ---")
 print(f"  Emax_l sampled  median={np.median(emax_l_samples):.3f}  "
       f"[5th={np.percentile(emax_l_samples, 5):.3f}, "
       f"95th={np.percentile(emax_l_samples, 95):.3f}]")
+# Escape/suppressed split -- quoted in supplement.tex (tab:zscore_summary) and
+# in threshold_changes_summary.txt, so print it rather than leaving it readable
+# only off the histogram legend in mc_emax_lzd_switch.png. Note the sense is
+# inverted relative to EC50_L: here escape is Emax_l BELOW the threshold.
+n_escape = int(escaped_mask.sum())
+n_total  = int(escaped_mask.size)
+print(f"  Escape threshold  Emax_l = {ESCAPE_THRESH:.4f} h^-1 (escape below)")
+print(f"  Escape      {frac_escape * 100:5.1f}%  ({n_escape}/{n_total})")
+print(f"  Suppressed  {(1 - frac_escape) * 100:5.1f}%  ({n_total - n_escape}/{n_total})")
 if np.any(final_R_b > LOD):
     print(f"  Final R_b  median={np.median(final_R_b[final_R_b > LOD]):.1e}  "
           f"[5th={np.percentile(final_R_b[final_R_b > LOD], 5):.1e}, "

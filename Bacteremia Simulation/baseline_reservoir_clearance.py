@@ -27,6 +27,10 @@ plt.rcParams.update({
     "figure.titlesize": 20, # figure title font size
 })
 
+# all figures are written into figures/ alongside the scripts
+FIGURES_DIR = "figures"
+os.makedirs(FIGURES_DIR, exist_ok=True)
+
 MODULE_NAME = "model_Bacteremia.py"
 if not os.path.exists(MODULE_NAME):
     print(f"ERROR: Cannot find '{MODULE_NAME}' in the current directory.", file=sys.stderr)
@@ -66,8 +70,8 @@ BASE_PARAMS = {
     "rho_R":            rho_R,
     "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
     "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
-    "Emax_v":           0.40,
-    "EC50_V":           0.245,
+    "Emax_v":             1.7,
+    "EC50_V":            0.25,
     "Emax_l":           0.8,    # fixed, decoupled from rho_S
     "EC50_L":           1.0,
     "B_max_blood":      6000,
@@ -157,5 +161,6 @@ axes[1].annotate(
     arrowprops=dict(arrowstyle="->", color=R_COLOR, lw=1.2),
 )
 
-fig.savefig("baseline_reservoir_clearance.png", dpi=300, bbox_inches="tight")
-print("\nSaved: baseline_reservoir_clearance.png")
+out_file = os.path.join(FIGURES_DIR, "baseline_reservoir_clearance.png")
+fig.savefig(out_file, dpi=300, bbox_inches="tight")
+print(f"\nSaved: {out_file}")

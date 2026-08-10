@@ -64,6 +64,10 @@ plt.rcParams.update({
     "figure.titlesize": 20,
 })
 
+# all figures are written into figures/ alongside the scripts
+FIGURES_DIR = "figures"
+os.makedirs(FIGURES_DIR, exist_ok=True)
+
 # ---------------------------------------------------------------------------
 # Load model
 # ---------------------------------------------------------------------------
@@ -104,8 +108,8 @@ BASE_PARAMS = {
     "rho_R":            rho_R,
     "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
     "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
-    "Emax_v":           0.40,
-    "EC50_V":           0.245,
+    "Emax_v":             1.7,
+    "EC50_V":            0.25,
     "Emax_l":           0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
     "EC50_L":           1.0,
     "B_max_blood":      6000,
@@ -258,5 +262,6 @@ ax.grid(True, which="both", ls=":", alpha=0.35)
 ax.legend(loc="upper right", fontsize=15, framealpha=0.85)
 
 fig.tight_layout()
-fig.savefig("immune_response_threshold_sweep.png", dpi=300, bbox_inches="tight")
-print("\nSaved: immune_response_threshold_sweep.png")
+out_file = os.path.join(FIGURES_DIR, "immune_response_threshold_sweep.png")
+fig.savefig(out_file, dpi=300, bbox_inches="tight")
+print(f"\nSaved: {out_file}")
