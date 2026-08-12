@@ -65,10 +65,17 @@ ZOOM_POINTS    = 160        # dense coverage within the zoom band
 
 
 def build_grid():
+    """Build a log-spaced RATE_GRID used by run_transfer_rate_sweep.
+
+    1. Generate a coarse log-spaced grid across the full range.
+    2. Remove coarse points inside the ZOOM_MIN–ZOOM_MAX transition band.
+    3. Add a dense log-spaced set of points inside that zoom band.
+    4. Merge, sort, and deduplicate the points before returning.
+    """
     coarse = np.logspace(np.log10(RATE_MIN), np.log10(RATE_MAX), COARSE_POINTS)
     coarse = coarse[(coarse < ZOOM_MIN) | (coarse > ZOOM_MAX)]
     zoom   = np.logspace(np.log10(ZOOM_MIN), np.log10(ZOOM_MAX), ZOOM_POINTS)
-    return np.unique(np.concatenate([coarse, zoom]))
+    return np.unique(np.concatenate([coarse, zoom])) #remove duplicates and sorts the combined array
 
 
 RATE_GRID  = build_grid()
@@ -111,7 +118,7 @@ BASE_PARAMS = {
     "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
     "Emax_v":             1.7,
     "EC50_V":            0.25,
-    "Emax_l":           0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
+    "Emax_l":           0.8,  
     "EC50_L":           1.0,
     "B_max_blood":      6000,
     "B_max_reservoir":  1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
@@ -128,7 +135,9 @@ Y0 = [0.0, 0.0, 100.0, 100.0]
 
 # ---------------------------------------------------------------------------
 # Run one grid sweep: step a single transfer rate across a log-spaced grid,
-# hold the other transfer rate fixed at baseline
+# hold the other transfer rate fixed at baseline. It returns a dictionary
+# with the results for each parameter.  steps through the grid and runs the model
+# for each parameter value.
 # ---------------------------------------------------------------------------
 def run_transfer_rate_sweep(vary_name, vary_baseline, fixed_name, fixed_value):
     rates = RATE_GRID
@@ -187,7 +196,7 @@ def run_transfer_rate_sweep(vary_name, vary_baseline, fixed_name, fixed_value):
         "final_R_b":  final_R_b,
     }
 
-
+# Run the transfer rate sweeps twice: once with f_r_b as the swept parameter, once with f_b_r
 sweep_f_r_b = run_transfer_rate_sweep("f_r_b", F_R_B_BASE, "f_b_r", F_B_R_BASE)
 sweep_f_b_r = run_transfer_rate_sweep("f_b_r", F_B_R_BASE, "f_r_b", F_R_B_BASE)
 
@@ -429,8 +438,8 @@ print_summary(sweep_f_b_r, "f_r_b", F_R_B_BASE)
 # during linezolid, and the relapse timing once it is withdrawn.
 # ---------------------------------------------------------------------------
 FINE_POINTS   = 4000     # vs 1150 for the sweeps -- resolves the LOD crossing
-FINE_RTOL     = 1e-9
-FINE_ATOL     = 1e-11
+FINE_RTOL     = 1e-9     # tighter tolerances for fine grid
+FINE_ATOL     = 1e-11    # tighter tolerances for fine grid
 PROBE_POINTS  = 6        # illustrative rates spanning the plateau (+ baseline)
 RANGE_POINTS  = 40       # dense pass, for the reported R_res range
 
@@ -452,7 +461,7 @@ def run_fine(f_r_b_value):
         model_mod.dual_reservoir_model,
         Y0, t_fine,
         args=(params_i, van_func, lzd_func, immune_model),
-        rtol=FINE_RTOL, atol=FINE_ATOL, mxstep=10000,
+        rtol=FINE_RTOL, atol=FINE_ATOL, mxstep=10000, # increased max steps for fine grid
     )
 
 

@@ -210,8 +210,8 @@ if __name__ == "__main__":
         'rho_R':           rho_R,
         'rho_res_R':       0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
         'rho_res_S':       0.19415, # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir (fitness cost for R, mirroring the blood compartment)
-        'Emax_v':          0.40,
-        'EC50_V':          0.245,
+        'Emax_v':            1.7,
+        'EC50_V':           0.25,
         'Emax_l':          0.8,    # Fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
         'EC50_L':          1.0,
         'B_max_blood':     6000,
