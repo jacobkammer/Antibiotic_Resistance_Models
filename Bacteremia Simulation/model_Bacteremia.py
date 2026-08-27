@@ -202,8 +202,11 @@ if __name__ == "__main__":
     # =========================================================================
     # Adjusted Growth Parameters for Smooth Trajectories
     # =========================================================================
-    rho_S = 0.60         # h⁻¹ Lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
-    rho_R = 0.55         # h⁻¹ Directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
+    # rho_S raised 0.61 -> 0.72 (rho_R 0.55 -> 0.649, ~10% fitness cost preserved) to offset
+    # EC50_L 1.0 -> 0.6 while keeping lzd_res_fraction at 0.30: reservoir kill scales as
+    # Emax_l_res = Emax_l * (rho_res_S / rho_S), so a higher rho_S weakens it.
+    rho_S = 0.72         # h⁻¹ Lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
+    rho_R = 0.649         # h⁻¹ Directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
     params = {
         'rho_S':           rho_S,
@@ -213,11 +216,11 @@ if __name__ == "__main__":
         'Emax_v':            1.7,
         'EC50_V':           0.25,
         'Emax_l':          0.8,    # Fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
-        'EC50_L':          1.0,
+        'EC50_L':          0.6,   # lowered from 1.0 -- single project-wide EC50_L, matching MC_ec50_lzd.py's sampling mean (EC50_L_BASE)
         'B_max_blood':     6000,
         'B_max_reservoir': 1e4,     # Lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
         'van_res_fraction':0.15,
-        'lzd_res_fraction':0.30,    # Lowered from 0.45 -- Emax_l_res scales with rho_res_S, so raising rho_res_S 10% above rho_res_R also raises the reservoir linezolid kill rate; without this reduction R_res is wiped out entirely rather than persisting
+        'lzd_res_fraction':0.30,   # restored from 0.18 -- rho_S now carries the compensation
         'f_r_b':           5e-5,   # Original value
         'f_b_r':           1e-5,
     }

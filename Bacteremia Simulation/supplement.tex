@@ -30,13 +30,24 @@ model, treatment protocol, and baseline parameters as the main text
 42~days, 21~days of pre-treatment equilibration and 14~days of post-treatment
 follow-up; total simulated course 81~days). The limit of detection (LOD) is
 10~CFU/mL in both compartments. Unless otherwise noted, growth rates are held
-at their calibrated baseline values ($\rho_S = 0.61~\mathrm{h}^{-1}$,
-$\rho_R = 0.55~\mathrm{h}^{-1}$, $\rho_S^r = 0.19415~\mathrm{h}^{-1}$,
-$\rho_R^r = 0.1765~\mathrm{h}^{-1}$, a 10\% reservoir growth-rate advantage
+at their calibrated baseline values ($\rho_S = 0.72~\mathrm{h}^{-1}$,
+$\rho_R = 0.65~\mathrm{h}^{-1}$, $\rho_S^r = 0.19~\mathrm{h}^{-1}$,
+$\rho_R^r = 0.18~\mathrm{h}^{-1}$, a 10\% reservoir growth-rate advantage
 for the sensitive strain, mirroring the blood-compartment fitness cost), with
 linezolid's reservoir tissue-penetration fraction lowered to
 $0.30$ (from $0.45$) to compensate, since the reservoir linezolid-kill rate
 scales with $\rho_S^r$ and would otherwise clear the reservoir entirely.
+Linezolid's half-maximal concentration takes a single project-wide value,
+$EC_{50,L} = 0.6~\mathrm{mg/L}$, used both as the fixed baseline in the
+$E_{max,L}$ and $k_{immune}$ sweeps and as the sampling mean in the
+$EC_{50,L}$ sweep. $\rho_S$ was raised from $0.61$ to
+$0.72~\mathrm{h}^{-1}$ (with $\rho_R$ rescaled to preserve the $\sim$10\%
+fitness cost) when $EC_{50,L}$ was consolidated onto that single value:
+the reservoir kill rate scales as
+$E_{max,L}^{r} = E_{max,L}\,(\rho_S^r/\rho_S)$, so a higher $\rho_S$
+weakens reservoir killing and restores the resistant reservoir to the
+escape side of its switch, which the more potent $EC_{50,L}$ would
+otherwise have eliminated.
 Only the single parameter under study is varied in each sweep below. Escape
 thresholds are located by bisection
 (\texttt{scipy.optimize.brentq}) on the difference between the final
@@ -51,33 +62,88 @@ so each reported boundary is precise to the stated tolerance.
 
 \Cref{fig:mc_ec50_switch} places the $n = 1000$ Monte Carlo patient
 population sampled from $EC_{50,L} \sim \mathrm{LogNormal}$
-(mean $0.695~\mathrm{mg/L}$, $\mathrm{CV} = 1.117$; the same sample used to
-generate the $27\%$ escape fraction reported in the main text) against the
-continuous deterministic switch curve shown in the same figure's top panel.
-The sampling mean
-was lowered from the model's fixed baseline ($1.0~\mathrm{mg/L}$) so that
-this sweep's escape rate lands close to those reported for $E_{max,L}$
-(\Cref{sec:s4}) and $k_{immune}$ (\Cref{sec:s6}), rather than the $\sim$40\%
-escape rate obtained by sampling around the fixed baseline directly. The top
-panel shows final $R_b$/$R_{res}$ burden along a dense 131-point
-deterministic sweep of $EC_{50,L} \in [0.05, 3.3]~\mathrm{mg/L}$, with the
-bisected threshold ($0.868~\mathrm{mg/L}$) marked; the bottom panel shows
-where the sampled patient population actually falls relative to that switch,
-with each patient colored by their own simulated outcome (escape vs.\
-suppressed) rather than by which side of the threshold their sampled
-$EC_{50,L}$ happens to fall on. The two panels agree on the
-population divide. The Monte Carlo escape fraction reported
-in the main text is driven by this single deterministic boundary.
+(mean $0.6~\mathrm{mg/L}$, $\mathrm{CV} = 1.1$) against the continuous
+deterministic switch curve shown in the same figure's top panel. The top
+panel shows final $R_b$/$R_{res}$ burden along a 131-point deterministic
+sweep of $EC_{50,L} \in [0.05, 3.3]~\mathrm{mg/L}$, with the bisected
+threshold ($0.49~\mathrm{mg/L}$) marked. The bottom panel shows where the
+sampled patient population falls relative to that switch, each patient
+colored by their individual simulated outcome (escape vs.\ suppressed).
+
+\paragraph{Determination of the threshold.}
+Escape is scored on the terminal state of each simulation rather than on any
+transient feature of the trajectory. Writing
+$R_{res}(t_{\mathrm{end}};\,EC_{50,L})$ for the resistant reservoir density
+at the end of follow-up ($t_{\mathrm{end}} = 1944~\mathrm{h}$), obtained by
+integrating the model from the fixed initial condition
+$(S_b, R_b, S_{res}, R_{res}) = (0,\,0,\,100,\,100)$ with every parameter
+other than $EC_{50,L}$ held at baseline, the switch is the root
+$EC_{50,L}^{*}$ of
+\begin{equation}
+  f(EC_{50,L}) \;=\; R_{res}\!\left(t_{\mathrm{end}};\,EC_{50,L}\right)
+  - \mathrm{LOD},
+  \qquad f\!\left(EC_{50,L}^{*}\right) = 0 .
+  \label{eq:ec50_threshold}
+\end{equation}
+Because a larger $EC_{50,L}$ denotes \emph{weaker} potency---a higher drug
+concentration being required for the same effect---values above
+$EC_{50,L}^{*}$ give $f > 0$ and are classified as escape, and values below
+it give $f < 0$ and are classified as suppression. The criterion is thus an
+explicit quantitative one, a detectable resistant burden at the end of
+follow-up, and not a visual reading of the simulated time courses.
+
+The root is located by Brent's method (\texttt{scipy.optimize.brentq}),
+bracketed by the endpoints of the swept interval and solved to an absolute
+tolerance of $10^{-3}~\mathrm{mg/L}$. Each evaluation of $f$ entails one
+complete integration over the 81-day protocol (LSODA, relative and absolute
+tolerances $10^{-7}$ and $10^{-9}$), several orders of magnitude tighter
+than the LOD-scale quantities compared in \Cref{eq:ec50_threshold}, so the
+located boundary reflects model dynamics rather than integration error. The
+sign condition $f(0.05) < 0 < f(3.3)$ is verified before bisection; its
+failure would indicate that no crossing exists within the swept interval,
+and is reported as an absent threshold rather than propagating silently as
+an incorrect value. The 131-point grid serves as a diagnostic---it shows the
+transition to be a single sharp monotone switch rather than a gradual
+decline, supporting the uniqueness of the root that bisection returns---and
+supplies the plotted curve, but it does not set the reported value, which is
+correspondingly independent of the grid spacing.
+
+Applying the same procedure to the blood compartment gives a crossing that
+agrees with the reservoir's $0.49~\mathrm{mg/L}$ to within the bisection
+tolerance and is therefore not resolved as a separate value. The two are in
+any case expected to coincide, since both compartments experience the same
+linezolid effect term and are coupled by bidirectional bacterial exchange. A
+single threshold of $0.49~\mathrm{mg/L}$ is therefore reported for both.
+Thresholds throughout this supplement are quoted to two significant
+figures; the root-find itself is converged to
+$10^{-3}~\mathrm{mg/L}$, so no significance is attached to differences at
+or below that scale. The reservoir value is
+adopted as the operative threshold throughout, since it is the reservoir that
+seeds post-treatment relapse.
+
+The Monte Carlo escape fraction reported in the main text is driven by this
+single deterministic boundary.
+The escape fractions represent how close the calibration landed to
+its own threshold. The model is not comfortably clear of
+relapse along any of the three dimensions examined (drug-potency
+parameter, drug-efficacy parameter, and a host-immunity parameter).
+It sits close to criticality in all three, independently and
+simultaneously. The question of whether that reflects an
+incidental property of this particular calibration, or a more general
+feature of relapsing reservoir infections that have already reached the
+point of requiring a change in antibiotics, linezolid in this particular
+instance, is unclear. The question of patients who are near-critical across
+multiple physiological axes at once is one this model cannot resolve. It
+may be that the small mean-to-threshold gaps represent critically ill
+patients whose ultimate outcome cannot be precisely determined.
 
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=1.0\linewidth]{figures/mc_ec50_lzd_switch.png}
-    \caption{Top: final $R_b$/$R_{res}$ burden versus $EC_{50,L}$ from the
-    continuous deterministic sweep, with the bisected switch marked. Bottom:
+    \caption{Top: final $R_b$/$R_{res}$ burden versus $EC_{50,L}$. Bottom:
     the $n = 1000$ Monte Carlo-sampled patient population, colored by each
-    patient's own simulated outcome (escape vs.\ suppressed), split at the
-    same threshold.}
+    patient's own simulated outcome (escape vs.\ suppressed).}
     \label{fig:mc_ec50_switch}
 \end{figure}
 
@@ -89,20 +155,15 @@ in the main text is driven by this single deterministic boundary.
 
 \Cref{fig:supp_emax_switch} places the $n = 1000$ Monte Carlo patient
 population sampled from $E_{max,L} \sim \mathrm{LogNormal}$
-(mean $1.085~\mathrm{h}^{-1}$, $\mathrm{CV} = 0.307$; the same sample used to
-generate the $24\%$ escape fraction reported in the main text). The sampling
-mean was raised from the model's fixed baseline ($0.8~\mathrm{h}^{-1}$) so
-that this sweep's escape rate lands close to those reported for $EC_{50,L}$
-(\Cref{sec:s2}) and $k_{immune}$ (\Cref{sec:s6}), rather than the
-$\sim$61\% escape rate obtained by sampling around the fixed baseline
-directly. As with $EC_{50,L}$ in \Cref{sec:s2}, The top panel shows the
-continuous switch and the bottom panel shows where the sampled patient
-population falls relative to it, each patient colored by its own simulated
-outcome rather than by which side of the threshold its sampled $E_{max,L}$
-happens to fall on. The bisected threshold ($0.8414~\mathrm{h}^{-1}$) now
-sits below the (raised) sampled mean, so most simulated patients draw an
-$E_{max,L}$ value sufficient to hold resistant growth in check; roughly one
-quarter draw a value too low to clear the infection.
+(mean $1.1~\mathrm{h}^{-1}$, $\mathrm{CV} = 0.31$)  The sample generated a $24\%$relapse rate (escape fraction) as reported in the main text.  As with $EC_{50,L}$ in \Cref{sec:s2}, the escape threshold was
+located by the same bisection procedure. A deterministic sweep of $E_{max,L}$
+was performed, followed by root-finding (\texttt{scipy.optimize.brentq}) on the difference
+between the final resistant reservoir count and the LOD. The procedure returned a
+bisected threshold $0.84~\mathrm{h}^{-1}$, which is below the
+sampled mean. The top panel shows the continuous switch and the
+bottom panel shows where the sampled patient population falls relative to it.
+Each patient is colored by its own simulated outcome. The relationship between sampled mean and threshold favor 
+resolution of the bacteremia.
 
 \begin{figure}[H]
     \centering
@@ -125,19 +186,12 @@ quarter draw a value too low to clear the infection.
 
 \Cref{fig:supp_immune_switch} places the $n = 1000$ Monte Carlo patient
 population sampled from $k_{immune} \sim \mathrm{LogNormal}$
-(mean $0.243~\mathrm{h}^{-1}$, $\mathrm{CV} = 0.25$; the same sample used to
-generate the $24.3\%$ relapse rate reported in the main text). As with
-$EC_{50,L}$ in \Cref{sec:s2}, the top panel
-shows the continuous deterministic switch and the bottom panel shows where
-the sampled patient population falls relative to it, each patient colored by
-its own simulated outcome rather than by which side of the threshold its
-sampled $k_{immune}$ happens to fall on. The bisected threshold
-($0.2001~\mathrm{h}^{-1}$) sits below the sampled mean, so most simulated
-patients draw a $k_{immune}$ value sufficient to clear the resistant
-subpopulations. Roughly one quarter of samples draw a value too low to
-clear the infection. The persistence of the resistant strain remains
-sensitive to inter-patient variability in host immune clearance even though
-the majority of the population resolves the infection.
+(mean $0.24~\mathrm{h}^{-1}$, $\mathrm{CV} = 0.25$). As with
+$EC_{50,L}$ in \Cref{sec:s2}, the top panel shows the continuous deterministic switch and the bottom panel shows where
+the sampled patient population falls relative to it.  Each patient colored by
+its own simulated outcome. The bisected threshold
+($0.20~\mathrm{h}^{-1}$) sits below the sampled mean, favoring resolution of the bacteremia. The persistence of the resistant strain remains sensitive to inter-patient variability in host immune clearance despite
+the majority of the population is able to resolve the infection.
 
 \begin{figure}[H]
     \centering
@@ -158,10 +212,11 @@ the majority of the population resolves the infection.
 \section{Cross-parameter consistency of the Monte Carlo escape thresholds}
 \label{sec:s6b}
 
-The three Monte Carlo sweeps above ($EC_{50,L}$, \Cref{sec:s2};
-$E_{max,L}$, \Cref{sec:s3}; $k_{immune}$, \Cref{sec:s6}) each report an
-escape (relapse) fraction close to one quarter of the sampled population.
-This section checks whether that clustering is a coincidence of the three
+The three Monte Carlo sweeps above ($EC_{50,L}$,
+$E_{max,L}$, $k_{immune}$) each report different
+escape (clinical relapse) fractions of the sampled populations: $44\%$,
+$24\%$ and $26\%$ respectively.
+This section checks whether those fractions are a coincidence of the three
 reported percentages or a consequence of where each calibrated parameter
 sits relative to its own escape threshold.
 
@@ -173,8 +228,8 @@ variation ($\mathrm{CV} = \mathrm{SD}/\mathrm{mean}$) via
     \mu_{\ln} = \ln(\mathrm{mean}) - \frac{\sigma_{\ln}^2}{2},
     \label{eq:lognormal_params}
 \end{equation}
-the second term in $\mu_{\ln}$ ensuring $E[X] = \mathrm{mean}$ exactly. The
-distance between the calibrated mean and the independently bisected escape
+the second term in $\mu_{\ln}$ ensuring $E[X] = \mathrm{mean}$. The
+distance between the distribution mean and the independently bisected escape
 threshold, expressed in standard deviations of the underlying normal
 variable $\ln X$, is
 \begin{equation}
@@ -187,44 +242,36 @@ normal cumulative distribution function (CDF),
     \Phi(z) = \frac{1}{2}\left[1 + \mathrm{erf}\!\left(\frac{z}{\sqrt{2}}\right)\right],
     \label{eq:phi}
 \end{equation}
-evaluated on whichever side of $z$ corresponds to escape for that
-parameter. Which side that is follows directly from the pharmacology, not
-from a free choice: a \emph{higher} sampled $EC_{50,L}$ means a
-\emph{weaker} drug (more concentration needed for the same effect), so
-escape is the \emph{upper} tail, $P(Z>z) = 1-\Phi(z)$; a \emph{lower}
+evaluated on the side of $z$ that corresponds to escape for that
+parameter. The side that represents escape depends on the parameter being measured.  Higher values of $EC_{50,L}$ correspond to
+\emph{weaker} drug effect, which corresponds to 
+escape in the \emph{upper} tail, $P(Z>z) = 1-\Phi(z)$.   A \emph{lower}
 sampled $E_{max,L}$ or $k_{immune}$ means weaker killing capacity or weaker
-immune clearance respectively, so for both, escape is the \emph{lower}
-tail, $P(Z<z) = \Phi(z)$. Because the threshold in each case is located
-independently by bisection on the mechanistic model
-(\Cref{sec:s2,sec:s3,sec:s6}) rather than fit to the sampling distribution,
-\Cref{eq:zscore} is not circular: it is an after-the-fact check of how far
-apart two independently-derived numbers happen to sit, not a definition of
-either one.
+immune clearance respectively. Escape for both is in the \emph{lower}
+tail, $P(Z<z) = \Phi(z)$ of the normal distribution.
 
 As a worked example, $EC_{50,L}$'s calibration (mean $=0.6$~mg/L,
-$\mathrm{CV}=1.1$, threshold $=0.868$~mg/L; \Cref{sec:s2}) gives, from
+$\mathrm{CV}=1.1$, threshold $=0.488$~mg/L; \Cref{sec:s2}) gives, from
 \Cref{eq:lognormal_params}, $\sigma_{\ln} = \sqrt{\ln(1+1.1^2)} = 0.8905$
 and $\mu_{\ln} = \ln(0.6) - 0.8905^2/2 = -0.9073$; substituting into
-\Cref{eq:zscore} gives $z = \left[\ln(0.868) - (-0.9073)\right]/0.8905
-\approx 0.860$. Since escape is the upper tail for $EC_{50,L}$, the
-predicted escape fraction from \Cref{eq:phi} is $1-\Phi(0.860) =
-1-0.8051 = 0.1949$, i.e.\ 19.5\% --- the value reported in the first row of
+\Cref{eq:zscore} gives $z = \left[\ln(0.488) - (-0.9073)\right]/0.8905
+\approx 0.213$. Since escape is the upper tail for $EC_{50,L}$, the
+predicted escape fraction from \Cref{eq:phi} is $1-\Phi(0.213) =
+1-0.584 = 0.416$, i.e.\ 42\%.  This value reported in the first row of
 \Cref{tab:zscore_summary}. The other two rows follow the identical
 procedure, substituting each parameter's own mean, CV, and threshold and
 taking the lower tail instead of the upper. In practice $\Phi$ is evaluated
-numerically (e.g.\ \texttt{scipy.stats.norm.cdf(z)}) rather than by table
-lookup, but \Cref{eq:phi} is the exact quantity being computed.
+numerically (e.g.\ \texttt{scipy.stats.norm.cdf(z)}).  \Cref{eq:phi} is the exact quantity that is computed.
 
 \Cref{tab:zscore_summary} applies \Cref{eq:lognormal_params,eq:zscore} to
-the three calibrated sweeps. The $z$-score alone, with no other information
-about the underlying ODE model, predicts each reported escape fraction to
-within a few percentage points. In every case the calibrated mean sits
-under one standard deviation from its own threshold, though $EC_{50,L}$
-now sits somewhat further out (0.86~SD) than $E_{max,L}$ and $k_{immune}$
-(0.67--0.70~SD) --- a deliberate consequence of lowering $EC_{50,L}$'s
-calibrated mean to make linezolid more potent at sub-saturating
-concentrations (\Cref{sec:s2}), not an inconsistency in the underlying
-relationship.
+the three calibrated sweeps. The $z$-score alone predicts each reported escape fraction to within a few percentage points. In every case the calibrated mean sits
+under one standard deviation from its own threshold, and $EC_{50,L}$ is
+now the closest of the three (0.21~SD) rather than the furthest, against
+$k_{immune}$ and $E_{max,L}$ at 0.61--0.69~SD. Its sampling mean
+($0.6$~mg/L) and its bisected threshold ($0.488$~mg/L) are separated by
+about a fifth of a standard deviation of $\ln X$, which is why its escape
+fraction sits near one half: a calibration that close to its own switch
+splits the sampled population almost evenly.
 
 \begin{table}[H]
     \centering
@@ -232,36 +279,22 @@ relationship.
         \hline
         Parameter & Mean & CV & Threshold & $z$ & Escape: predicted / reported \\
         \hline
-        $EC_{50,L}$ (mg/L)      & 0.600 & 1.100 & 0.868  & $+0.86$ & 19.5\% / 21.8\% \\
-        $E_{max,L}$ (h$^{-1}$)  & 1.085 & 0.307 & 0.8414 & $-0.70$ & 24.2\% / 24\%   \\
-        $k_{immune}$ (h$^{-1}$) & 0.243 & 0.250 & 0.2001 & $-0.67$ & 25.3\% / 24.3\% \\
+        $EC_{50,L}$ (mg/L)      & 0.600 & 1.100 & 0.488 & $+0.21$ & 42\% / 44\% \\
+        $E_{max,L}$ (h$^{-1}$)  & 1.085 & 0.307 & 0.843 & $-0.69$ & 25\% / 24\% \\
+        $k_{immune}$ (h$^{-1}$) & 0.243 & 0.250 & 0.203 & $-0.61$ & 27\% / 26\% \\
         \hline
     \end{tabular}
     \caption{Log-normal sampling parameters, bisected escape threshold, and
     the resulting $z$-score (\Cref{eq:zscore}) for each of the three
-    Monte Carlo sweeps. ``Predicted'' is the standard-normal tail
+    Monte Carlo sweeps. Thresholds are given here to the precision of the
+    root-find rather than the two significant figures used elsewhere, so
+    that the tabulated $z$ can be reproduced from the tabulated inputs.
+    ``Predicted'' is the standard-normal tail
     probability at $z$; ``reported'' is the direct 1000-sample Monte Carlo
     escape fraction from the corresponding sweep script.}
     \label{tab:zscore_summary}
 \end{table}
 
-Because the mean-to-threshold gap is small in all three cases, the escape
-fractions themselves carry less information than they first appear to:
-each is largely a readout of how close its calibration landed to its own
-threshold, not an independent measurement of clinical risk. The finding
-worth stating plainly is therefore the gap itself, not the exact
-percentages it produces: the calibrated model is not comfortably clear of
-relapse along any of the three dimensions examined --- a drug-potency
-parameter, a drug-efficacy parameter, and a host-immunity parameter,
-calibrated separately from one another --- it sits close to criticality in
-all three, independently and simultaneously, with $EC_{50,L}$ now the
-furthest (but still sub-1-SD) of the three by design. Whether that
-reflects an incidental property of this particular calibration, or a more
-general feature of relapsing reservoir infections that have already
-reached the point of requiring salvage linezolid therapy, is a question
-this model cannot resolve on its own; the consistency across three
-parameters that were neither designed nor fit together is at least
-suggestive of the latter.
 
 
 % =============================================================================
@@ -269,17 +302,17 @@ suggestive of the latter.
 \label{sec:s7}
 
 \Cref{fig:supp_frb_regimes} summarizes Sweep~1 ($f_{r \to b}$ varied,
-$f_{b \to r}$ held at baseline) in a single view: peak $S_b$, peak $R_b$,
-and final $R_b$ overlaid on one log-scale axis, with the swept range shaded
+$f_{b \to r}$ held at baseline) in a single view: peak $R_b$ and final
+$R_b$ overlaid on one log-scale axis, with the swept range shaded
 by regime and the two precise, bisected thresholds marked. The two
 thresholds answer different clinical questions and sit at opposite ends of
-the six-decade range. The establishment threshold
-($f_{r \to b} = 2.44\times10^{-5}~\mathrm{h}^{-1}$) asks whether bacteremia
+the seven-decade range. The establishment threshold
+($f_{r \to b} = 2.2\times10^{-5}~\mathrm{h}^{-1}$) asks whether bacteremia
 happens at all: below it, the reservoir-to-blood seeding flux is too small
 for blood to ever accumulate enough bacteria to escape the model's
 near-zero floor, so infection simply never establishes over the entire
 81-day course. The clearance threshold
-($f_{r \to b} = 8.06\times10^{-3}~\mathrm{h}^{-1}$), roughly 330-fold
+($f_{r \to b} = 8.3\times10^{-3}~\mathrm{h}^{-1}$), roughly 370-fold
 higher, asks a different question given that bacteremia does establish:
 does it relapse after treatment, or resolve permanently? Below it ---
 across the whole plateau in between --- resistant bacteremia establishes,
@@ -304,28 +337,26 @@ log-decade of the model's own baseline rate ($5\times10^{-5}~\mathrm{h}^{-1}$).
 This transition is a threshold across independent simulated courses ---
 each grid point holds its own $f_{r \to b}$ fixed for the entire simulated
 course --- rather than a switch occurring partway through any single
-patient's timeline. Peak $S_{res}$ (the light dotted reference line in
-\Cref{fig:supp_frb_regimes}) varies by less than 6\% across the full
-six-decade range and is effectively flat on the scale of the figure.
+patient's timeline.
 
-Across the broad plateau separating the two transitions ($2.44\times10^{-5}$
-to $8.06\times10^{-3}~\mathrm{h}^{-1}$, the salmon-shaded band in
+Across the broad plateau separating the two transitions ($2.2\times10^{-5}$
+to $8.3\times10^{-3}~\mathrm{h}^{-1}$, the salmon-shaded band in
 \Cref{fig:supp_frb_regimes}), blood and reservoir diverge: once
 established, $R_b$ is suppressed below the LOD for essentially the entire
 linezolid course (at the baseline rate, $R_b$ falls from a pre-linezolid peak
-of $\sim4\times10^3$~CFU/mL to $\sim0.04$~CFU/mL within days of linezolid
+of $\sim4.9\times10^3$~CFU/mL to $\sim0.03$~CFU/mL within days of linezolid
 starting and stays there until the course ends), while $R_{res}$ is only
 partially suppressed and never crosses the LOD, settling on a lower plateau
-(down from a pre-treatment peak of $\sim9\times10^3$~CFU/mL) because
+(down from a pre-treatment peak of $\sim9.3\times10^3$~CFU/mL) because
 linezolid reaches the reservoir at only
 $\mathrm{lzd\_res\_fraction} = 0.30$ of its blood exposure. That suppressed
 level is not itself constant across the band: sampled at 40 log-spaced rates
 strictly inside the plateau, $R_{res}$ at the end of the linezolid course
-falls monotonically with $f_{r \to b}$, from $\sim5.9\times10^2$~CFU/mL just
+falls monotonically with $f_{r \to b}$, from $\sim6.0\times10^2$~CFU/mL just
 above the establishment threshold ($\sim5.9\times10^2$ at the baseline rate
 of $5\times10^{-5}~\mathrm{h}^{-1}$) to $\sim4.5\times10^1$~CFU/mL just below
 the clearance threshold --- a factor of 13 across the band, and within a
-factor of $\sim4.5$ of the LOD at its upper end. The reservoir is therefore
+factor of $\sim4.2$ of the LOD at its upper end. The reservoir is therefore
 progressively drained as $f_{r \to b}$ rises, well before the clearance
 threshold is reached; the sanctuary weakens continuously rather than
 surviving intact until it fails abruptly. Once linezolid is
@@ -341,12 +372,12 @@ escape range.
 \Cref{tab:frb_plateau_relapse} makes this within-course sequence explicit at
 seven rates spanning the plateau. Two features are worth noting. First, the
 relapse is complete rather than partial: final $R_b$ matches peak $R_b$ to
-three significant figures at every rate sampled, so the post-treatment
+within $0.1\%$ at every rate sampled, so the post-treatment
 rebound recovers the full pre-treatment burden and not some fraction of it.
 Second, the relapse is strictly a withdrawal phenomenon --- $R_b$ stays
-between $\sim10^{-2}$ and $\sim1.4$~CFU/mL for the entire 42-day linezolid
+between $\sim2\times10^{-2}$ and $\sim1.5$~CFU/mL for the entire 42-day linezolid
 course, two to three orders of magnitude below the LOD, and only crosses
-back above it 0.5--2.9~days \textit{after} the course ends. Nothing
+back above it 0.6--3.0~days \textit{after} the course ends. Nothing
 resembling relapse occurs while drug is on board. The rebound lag shortens
 as $f_{r \to b}$ increases, for the same reason $R_{res}$ at end-of-course
 falls: faster reservoir-to-blood transfer both drains the sanctuary during
@@ -359,13 +390,13 @@ treatment and reseeds blood more rapidly once treatment stops.
         $f_{r \to b}$ (h$^{-1}$) & Peak $R_b$ & Min $R_b$ on LZD
             & $R_{res}$ at LZD end & Final $R_b$ & Rebound lag (d) \\
         \hline
-        $3.66\times10^{-5}$          & $4.69\times10^{3}$ & $2.34\times10^{-2}$ & $5.93\times10^{2}$ & $4.69\times10^{3}$ & 2.9 \\
-        $5.00\times10^{-5}$\,$^{*}$  & $4.69\times10^{3}$ & $3.19\times10^{-2}$ & $5.92\times10^{2}$ & $4.69\times10^{3}$ & 2.3 \\
-        $1.00\times10^{-4}$          & $4.69\times10^{3}$ & $6.37\times10^{-2}$ & $5.89\times10^{2}$ & $4.69\times10^{3}$ & 1.6 \\
-        $2.74\times10^{-4}$          & $4.70\times10^{3}$ & $1.71\times10^{-1}$ & $5.78\times10^{2}$ & $4.70\times10^{3}$ & 1.1 \\
-        $7.52\times10^{-4}$          & $4.71\times10^{3}$ & $4.45\times10^{-1}$ & $5.48\times10^{2}$ & $4.71\times10^{3}$ & 0.8 \\
-        $2.06\times10^{-3}$          & $4.73\times10^{3}$ & $1.04\times10^{0}$  & $4.65\times10^{2}$ & $4.73\times10^{3}$ & 0.6 \\
-        $5.64\times10^{-3}$          & $4.81\times10^{3}$ & $1.42\times10^{0}$  & $2.30\times10^{2}$ & $4.81\times10^{3}$ & 0.5 \\
+        $3.3\times10^{-5}$          & $4.9\times10^{3}$ & $2.1\times10^{-2}$ & $6.0\times10^{2}$ & $4.9\times10^{3}$ & 3.0 \\
+        $5.0\times10^{-5}$\,$^{*}$  & $4.9\times10^{3}$ & $3.2\times10^{-2}$ & $5.9\times10^{2}$ & $4.9\times10^{3}$ & 2.2 \\
+        $9.4\times10^{-5}$          & $4.9\times10^{3}$ & $5.9\times10^{-2}$ & $5.9\times10^{2}$ & $4.9\times10^{3}$ & 1.7 \\
+        $2.6\times10^{-4}$          & $4.9\times10^{3}$ & $1.6\times10^{-1}$ & $5.8\times10^{2}$ & $4.9\times10^{3}$ & 1.2 \\
+        $7.4\times10^{-4}$          & $4.9\times10^{3}$ & $4.4\times10^{-1}$ & $5.5\times10^{2}$ & $4.9\times10^{3}$ & 0.9 \\
+        $2.1\times10^{-3}$          & $4.9\times10^{3}$ & $1.1\times10^{0}$  & $4.7\times10^{2}$ & $4.9\times10^{3}$ & 0.7 \\
+        $5.8\times10^{-3}$          & $5.0\times10^{3}$ & $1.5\times10^{0}$  & $2.3\times10^{2}$ & $5.0\times10^{3}$ & 0.6 \\
         \hline
     \end{tabular}
     \caption{Within-course relapse dynamics at seven $f_{r \to b}$ values
@@ -383,32 +414,46 @@ treatment and reseeds blood more rapidly once treatment stops.
     \label{tab:frb_plateau_relapse}
 \end{table}
 
-A second, smaller-magnitude trend operates within the same plateau: peak
-$S_b$ --- which occurs pre-vancomycin, around day 21, regardless of
-$f_{r \to b}$ --- declines gradually and monotonically as $f_{r \to b}$
-increases across the plateau (from $\sim4.82\times10^3$~CFU/mL near the
-establishment threshold to $\sim4.25$--$4.39\times10^3$~CFU/mL near the
-upper transition, roughly a 12\% decline). Both strains occupy blood
-simultaneously during the pre-vancomycin window and share its logistic
-carrying capacity ($B_{max,blood} = 6000$~CFU/mL); a
-higher $f_{r \to b}$ also seeds more resistant bacteria into blood earlier
-($R_b$ at day 21 rises from $\sim0.8$ to $\sim720$~CFU/mL across the same
-range), so the growing co-resident $R_b$ population increasingly crowds
-$S_b$ out of its own pre-treatment growth ceiling. This is distinct from,
-and much smaller in magnitude than, both the establishment threshold and
-the post-treatment relapse dynamics described above: it does not reflect
-$S_b$ being displaced from the reservoir (peak $S_{res}$ stays essentially
-flat across this same range, as already noted, since $S_{res}$ and
-$R_{res}$ do not compete for reservoir carrying capacity), only from the
-shared blood compartment the two strains briefly co-occupy before
-vancomycin clears $S_b$.
+At the upper end of the range (the medium seagreen-shaded band in
+\Cref{fig:supp_frb_regimes}), the difference between final $R_b$ and peak $R_b$ represent the effect of time.
+Peak $R_b$ and final $R_b$ are read at
+different points in the course, and beyond the clearance threshold those
+points fall on opposite sides of treatment. Inside the plateau the maximum
+occurs after the linezolid course ends because the maximum
+is the post-withdrawal relapse, which is why peak and final coincide
+there (\Cref{tab:frb_plateau_relapse}). Beyond the clearance threshold no
+relapse occurs, so the maximum reverts to the pre-treatment establishment
+peak when linezolid begins. 
 
-At the upper end of the range (the mediumseagreen-shaded band in
-\Cref{fig:supp_frb_regimes}), final $R_b$ undergoes a second, independent
-transition, dropping back to zero for $f_{r \to b} \gtrsim
-8.06\times10^{-3}~\mathrm{h}^{-1}$ even as peak $R_b$ continues to rise ---
-$R_b$ still establishes and peaks at these rates, but no longer relapses by
-the end of follow-up. Unlike the plateau regime, this second transition
+That reading holds only up to $f_{r \to b} \approx 9.2\times10^{-2}
+~\mathrm{h}^{-1}$, where peak $R_b$ itself steps down --- visibly, in
+\Cref{fig:supp_frb_regimes} --- from $\sim5.5\times10^{3}$ to
+$\sim1.8\times10^{3}$~CFU/mL across a rate change of under $5\%$, with the
+time of the peak jumping from day $22.8$ to day $0.7$. This is a third
+transition, and it is competitive rather than pharmacological: it occurs
+before any drug is given. Efflux to blood enters both reservoir equations
+as a loss term $-f_{r \to b}X_{res}$, while the two strains share a single
+logistic ceiling, $1 - (S_{res}+R_{res})/B_{max,res}$. Raising
+$f_{r \to b}$ therefore lowers the reservoir density at which each strain
+breaks even, and the resistant strain --- growing more slowly there
+($\rho_R^r = 0.1765$ against $\rho_S^r = 0.19415~\mathrm{h}^{-1}$) ---
+reaches its break-even point first. Past that rate the sensitive strain's
+own equilibrium density exceeds the level at which the resistant strain
+can still hold its share, and $R_{res}$ is competitively excluded from the
+reservoir while $S_{res}$ persists: at day $21$, the last day before
+vancomycin, $R_{res}$ falls from $2.6\times10^{2}$~CFU/mL at
+$f_{r \to b} = 5\times10^{-2}$ to $2.9\times10^{-2}$ at $10^{-1}$, while
+$S_{res}$ over the same interval only declines from $5.5\times10^{3}$ to
+$3.5\times10^{3}$. Deprived of its reservoir source and outgrown in blood
+($\rho_S = 0.72$ against $\rho_R = 0.649~\mathrm{h}^{-1}$), $R_b$ follows:
+at day $21$ it falls from $2.1\times10^{2}$~CFU/mL to below the LOD at
+$9.2\times10^{-2}$ and to $\sim10^{-4}$~CFU/mL beyond it. The residual
+$\sim1.8\times10^{3}$ peak is then only a startup transient at day
+$0.7$, as the initial $100$~CFU/mL reservoir inoculum washes into blood
+before $S_b$ overtakes it. Above this rate the resistant strain therefore
+never establishes at all, rather than establishing and being cured.
+
+Unlike the plateau regime, this second transition
 \textit{is} a genuine within-course dynamic: $R_b$ rises to near carrying
 capacity during the outbreak and is then driven back down by linezolid and
 the immune response before follow-up ends --- and $R_{res}$ collapses along
@@ -426,14 +471,14 @@ extinction together.
 \begin{figure}[H]
     \centering
     \includegraphics[width=1.0\linewidth]{figures/frb_sweep_regimes.png}
-    \caption{Regime summary for Sweep~1: peak $S_b$ (blue), peak $R_b$
-    (solid dark red), and final $R_b$ (dashed dark red) versus $f_{r \to b}$,
-    overlaid on one log-scale axis ($f_{b \to r}$ held at baseline; peak
-    $S_{res}$ shown as a light dotted reference line). Background shading
+    \caption{Regime summary for Sweep~1: peak $R_b$ (solid dark red) and
+    final $R_b$ (dashed dark red) versus $f_{r \to b}$, overlaid on one
+    log-scale axis ($f_{b \to r}$ held at baseline). Only the resistant
+    compartments are shown. Background shading
     marks the three regimes bisection identifies: unestablished (gray,
-    $f_{r \to b} < 2.44\times10^{-5}~\mathrm{h}^{-1}$), relapsing (salmon,
+    $f_{r \to b} < 2.2\times10^{-5}~\mathrm{h}^{-1}$), relapsing (salmon,
     the broad plateau), and cleared (green,
-    $f_{r \to b} > 8.06\times10^{-3}~\mathrm{h}^{-1}$), with the two
+    $f_{r \to b} > 8.3\times10^{-3}~\mathrm{h}^{-1}$), with the two
     threshold values marked by vertical dashed lines. Sub-LOD values are
     displayed at a fixed floor (half the LOD) rather than omitted, so every
     curve stays continuous and the regime boundaries read as visible jumps
@@ -441,11 +486,13 @@ extinction together.
     \label{fig:supp_frb_regimes}
 \end{figure}
 
-\Cref{fig:supp_fbr_regimes} gives the same view for Sweep~2 ($f_{b \to r}$
-varied, $f_{r \to b}$ held at baseline) --- and it looks deliberately
+\Cref{fig:supp_fbr_regimes} gives the corresponding view for Sweep~2
+($f_{b \to r}$ varied, $f_{r \to b}$ held at baseline), with the
+sensitive-strain curves retained here since they carry the sweep's only
+structure --- and it looks deliberately
 uneventful by comparison: peak $S_b$, peak $R_b$, and final $R_b$ are flat
-to within 1\% across roughly the lower four and a half of the six
-log-decades sampled ($10^{-8}$--$10^{-3.5}~\mathrm{h}^{-1}$), consistent
+to within 1\% across roughly the lower five and a half of the seven
+log-decades sampled ($10^{-7}$--$10^{-3.5}~\mathrm{h}^{-1}$), consistent
 with $f_{b \to r}$ acting only as an efflux from blood rather than a
 seeding route for either compartment, and no regime shading is drawn
 because bisection finds no threshold anywhere in the swept range. Peak
@@ -461,8 +508,10 @@ establishment occurs anywhere in this sweep.
 \begin{figure}[H]
     \centering
     \includegraphics[width=1.0\linewidth]{figures/fbr_sweep_regimes.png}
-    \caption{Regime summary for Sweep~2, same line and shading conventions
-    as \Cref{fig:supp_frb_regimes}. No background shading is drawn because
+    \caption{Regime summary for Sweep~2, following \Cref{fig:supp_frb_regimes}
+    but additionally showing the sensitive-strain curves (peak $S_b$ in blue,
+    peak $S_{res}$ as a light dotted reference line), which this sweep
+    discusses directly. No background shading is drawn because
     bisection finds no establishment or clearance threshold anywhere in the
     swept range: peak $S_b$, peak $R_b$, and final $R_b$ stay near their
     baseline levels throughout, and only peak $S_{res}$ (light dotted line)
@@ -476,8 +525,8 @@ establishment occurs anywhere in this sweep.
 
 The two exchange-rate sweeps in \Cref{sec:s7}
 ($f_{r \to b}$, reservoir $\to$ blood; $f_{b \to r}$, blood $\to$ reservoir)
-each step their target rate across a shared log-spaced grid spanning six
-decades ($10^{-8}$--$10^{-2}~\mathrm{h}^{-1}$), while holding the other
+each step their target rate across a shared log-spaced grid spanning seven
+decades ($10^{-7}$--$10^{0}~\mathrm{h}^{-1}$), while holding the other
 exchange rate fixed at its own baseline value
 ($f_{r \to b} = 5\times10^{-5}~\mathrm{h}^{-1}$,
 $f_{b \to r} = 1\times10^{-5}~\mathrm{h}^{-1}$). $f_{r \to b}$'s transition
@@ -487,8 +536,14 @@ clearing outright, falls within $[10^{-3}, 10^{-2}]~\mathrm{h}^{-1}$
 swept range, but its steepest response --- the monotonic rise in peak
 $S_{res}$ --- is also concentrated in that same band. The grid is therefore
 deliberately non-uniform for both sweeps: a coarse 40-point log-spaced pass
-covers the full six-decade range for context, supplemented by a dense
-160-point pass restricted to $[10^{-3}, 10^{-2}]~\mathrm{h}^{-1}$, so that
+covers the full seven-decade range for context, supplemented by two dense
+passes --- 160 points across $[10^{-3}, 10^{-2}]~\mathrm{h}^{-1}$ and a
+further 120 across $[10^{-2}, 10^{0}]~\mathrm{h}^{-1}$, the latter added to
+resolve the competitive-exclusion step at $f_{r \to b} \approx
+9.2\times10^{-2}~\mathrm{h}^{-1}$, where peak $R_b$ drops threefold
+across a rate change of under $5\%$ (\Cref{sec:s7}); the coarse pass
+alone places only about six points across those last $1.5$ decades and
+renders the step as a single straight segment --- so that
 $f_{r \to b}$'s sharp switch and the steepest portion of $f_{b \to r}$'s
 smooth $S_{res}$ response (both visible in
 \Cref{fig:supp_frb_regimes,fig:supp_fbr_regimes}) are both resolved rather
@@ -503,11 +558,12 @@ sweeps directly, with each sweep's own baseline rate marked.
     reported in the main text ($n = 193$ points per sweep). Top: grid for
     Sweep~1 ($f_{r \to b}$ varied, $f_{b \to r}$ held at baseline). Bottom:
     grid for Sweep~2 ($f_{b \to r}$ varied, $f_{r \to b}$ held at baseline).
-    Both sweeps use the same shared grid, concentrating 160 of 193 points
+    Both sweeps use the same shared grid of 302 points, concentrating 160
     inside $[10^{-3}, 10^{-2}]~\mathrm{h}^{-1}$ --- the band containing
     $f_{r \to b}$'s relapse-versus-clearance transition (\Cref{sec:s7}) ---
-    with the remaining 33 points spread log-uniformly across the full
-    six-decade range for context. The band's boundaries are not arbitrary:
+    and a further 119 inside $[10^{-2}, 10^{0}]~\mathrm{h}^{-1}$, which
+    covers the reservoir collapse, with the remaining 23 points spread
+    log-uniformly across the full seven-decade range for context. The band's boundaries are not arbitrary:
     $1/(10^{-3}~\mathrm{h}^{-1}) \approx 42$~days and
     $1/(10^{-2}~\mathrm{h}^{-1}) \approx 4$~days match the linezolid
     (42-day) and vancomycin (4-day) course lengths almost exactly, so this

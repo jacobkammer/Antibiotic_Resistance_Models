@@ -46,11 +46,11 @@ vancomycin window (before linezolid starts, so $E_L = 0$) is
 \begin{equation}
 \dot S_b \approx \Big[\rho_S \cdot \underbrace{\big(1 - \tfrac{S_b+R_b}{B_{max,blood}}\big)}_{\text{logistic}} - k_{immune}\,\mathrm{eff}_{blood} - E_V(t)\Big] S_b ,
 \end{equation}
-with $\rho_S = 0.60$ h$^{-1}$, $k_{immune}\,\mathrm{eff}_{blood} = 0.12$
+with $\rho_S = 0.72$ h$^{-1}$, $k_{immune}\,\mathrm{eff}_{blood} = 0.12$
 h$^{-1}$, and $E_V \to E_{max,V} = 1.7$ h$^{-1}$ at saturating
 concentrations. Once $S_b$ is small relative to $B_{max,blood} = 6000$
 CFU/mL, the logistic term is $\approx 1$ and the bracketed net rate is
-$0.60 - 0.12 - 1.7 = -1.22$ h$^{-1}$ -- i.e.\ vancomycin's direct kill now
+$0.72 - 0.12 - 1.7 = -1.10$ h$^{-1}$ -- i.e.\ vancomycin's direct kill now
 dominates blood-compartment growth outright, so $S_b$ declines from the
 moment vancomycin saturates rather than depending on the reservoir to
 collapse first. $S_{res}$ is subject to the same vancomycin effect, scaled
@@ -68,7 +68,7 @@ positive, $+0.08$ h$^{-1}$).
 \section{Quantitative trajectory}
 
 Numerically integrating \texttt{dual\_reservoir\_model} with baseline
-parameters ($\rho_S = 0.60$, $\rho_R = 0.55$, $\rho_{res,S} = 0.175$,
+parameters ($\rho_S = 0.72$, $\rho_R = 0.649$, $\rho_{res,S} = 0.19415$,
 $\rho_{res,R} = 0.1765$, $E_{max,V} = 1.7$, $EC_{50,V} = 0.25$,
 $B_{max,blood} = 6000$, $B_{max,res} = 10^4$, $f_{r\to b} = 5\times10^{-5}$,
 $f_{b\to r} = 1\times10^{-5}$, $Y_0 = [0,0,100,100]$) gives the sensitive-strain
@@ -80,18 +80,18 @@ time course in Table~\ref{tab:sb}.
 \renewcommand{\arraystretch}{1.35} % Adds vertical breathing room between rows
 \caption{$S_b$, $R_b$, and $S_{res}$ across the 4-day vancomycin course,
 with $E_{max,V} = 1.7$ h$^{-1}$, $EC_{50,V} = 0.25$ mg/L. Peak $S_b$ prior
-to treatment onset is unchanged at $4.80\times10^{3}$ CFU/mL (vancomycin
+to treatment onset is $5.00\times10^{3}$ CFU/mL (vancomycin
 has not yet started).}
 \vspace{0.5cm} % Adds 0.5cm of space before caption
 \begin{tabular}{l l l l}  % 4 columns
 \hline
 \textbf{Time} & \textbf{$S_b$ (CFU/mL)} & \textbf{$R_b$ (CFU/mL)} & \textbf{$S_{res}$ (CFU/mL)} \\
 \hline
-Vancomycin start ($t=504$ h) & $4.13\times10^{3}$ & $2.10$ & $3.99\times10^{3}$ \\
-$+24$ h & $<10^{-12}$ & $1.14\times10^{1}$ & $<10^{-11}$ \\
-$+48$ h & $<10^{-17}$ & $4.60\times10^{3}$ & $<10^{-18}$ \\
-$+72$ h & $<10^{-17}$ & $4.69\times10^{3}$ & $<10^{-18}$ \\
-Vancomycin end ($+96$ h, $t=600$ h) & $<10^{-17}$ & $4.42\times10^{3}$ & $<10^{-18}$ \\
+Vancomycin start ($t=504$ h) & $4.43\times10^{3}$ & $1.12$ & $6.16\times10^{3}$ \\
+$+24$ h & $<10^{-13}$ & $4.86$ & $<10^{-10}$ \\
+$+48$ h & $<10^{-17}$ & $4.74\times10^{3}$ & $<10^{-18}$ \\
+$+72$ h & $<10^{-17}$ & $4.89\times10^{3}$ & $<10^{-18}$ \\
+Vancomycin end ($+96$ h, $t=600$ h) & $<10^{-17}$ & $4.54\times10^{3}$ & $<10^{-18}$ \\
 \hline
 \end{tabular}
 \label{tab:sb}

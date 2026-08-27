@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import importlib.util
 import os
 
+from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0
+
 plt.rcParams.update({
     "font.size": 16,
     "axes.titlesize": 18,
@@ -18,6 +20,11 @@ plt.rcParams.update({
 FIGURES_DIR = "figures"
 os.makedirs(FIGURES_DIR, exist_ok=True)
 
+# FIGURES PRODUCED BY THIS SCRIPT
+#   mc_initial_conditions_kinetics.png      -- MONTE CARLO
+#   mc_initial_conditions_distributions.png -- MONTE CARLO
+#   Both draw S_res_0 / R_res_0 from log-normal distributions (seed 42).
+
 # Load model
 MODULE_NAME = "model_Bacteremia.py"
 spec = importlib.util.spec_from_file_location("model_mod", MODULE_NAME)
@@ -25,8 +32,8 @@ model_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model_mod)
 
 num_iterations = 1000
-total_h = 1944  # 21d pre-tx + 4d vancomycin + 42d linezolid + 14d post-tx follow-up
-vanco_start = 504
+total_h     = TOTAL_H
+vanco_start = VANCO_START
 t_eval = np.linspace(0, total_h, 1450)
 t_days = t_eval / 24.0
 
@@ -35,30 +42,8 @@ immune_model = model_mod.ImmuneResponse()
 
 van_func = pk.concentration_function("vancomycin", total_h, vanco_start)
 lzd_func = pk.concentration_function("linezolid", total_h, vanco_start + pk.van_duration)
-
-rho_S = 0.61    # raised from 0.60 -- see rho_S sensitivity analysis. Unlike the EC50_L/
-                # Emax_l/k_immune analyses, this script's outcome (governed by the
-                # reservoir's own S_res_0/R_res_0 persistence threshold) showed no
-                # detectable change at rho_S=0.61 in a single-point check, since rho_S
-                # does not appear in the dS_res/dR_res equations at all
-rho_R = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
-
-params = {
-    "rho_S":           rho_S,
-    "rho_R":           rho_R,
-    "rho_res_R":       0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
-    "rho_res_S":       0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
-    "Emax_v":            1.7,
-    "EC50_V":           0.25,
-    "Emax_l":          0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
-    "EC50_L":          1.0,
-    "B_max_blood":     6000,
-    "B_max_reservoir": 1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
-    "van_res_fraction":0.15,
-    "lzd_res_fraction":0.30,    # lowered from 0.45 -- Emax_l_res scales with rho_res_S; keeps R_res persistent despite S's reservoir growth advantage
-    "f_r_b":           5e-5,  # restored to original
-    "f_b_r":           1e-5,
-}
+# Model parameters come from parameters.py (single source of truth).
+params = dict(BASE_PARAMS)
 
 S_b_history   = np.zeros((num_iterations, len(t_eval)))
 R_b_history   = np.zeros((num_iterations, len(t_eval)))

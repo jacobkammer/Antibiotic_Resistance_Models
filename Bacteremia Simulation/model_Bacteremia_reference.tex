@@ -191,18 +191,18 @@ where noted).
 \hline
 \textbf{Key} & \textbf{Baseline value} & \textbf{Meaning} \\
 \hline
-\texttt{rho\_S} & 0.60--0.61 h$^{-1}$ & blood sensitive-strain growth rate \\
-\texttt{rho\_R} & 0.55 h$^{-1}$ & blood resistant-strain growth rate ($\sim$8--10\% fitness cost) \\
-\texttt{rho\_res\_S} & 0.175 h$^{-1}$ & reservoir sensitive-strain growth rate \\
-\texttt{rho\_res\_R} & 0.1765 h$^{-1}$ & reservoir resistant-strain growth rate (small fitness \emph{advantage}) \\
-\texttt{Emax\_v} & 0.40 h$^{-1}$ & vancomycin maximum kill rate \\
-\texttt{EC50\_V} & 0.245 mg/L & vancomycin half-maximal effective concentration \\
+\texttt{rho\_S} & 0.72 h$^{-1}$ & blood sensitive-strain growth rate \\
+\texttt{rho\_R} & 0.649 h$^{-1}$ & blood resistant-strain growth rate ($\sim$10\% fitness cost relative to \texttt{rho\_S}; exactly 9.9\%) \\
+\texttt{rho\_res\_S} & 0.19415 h$^{-1}$ & reservoir sensitive-strain growth rate \\
+\texttt{rho\_res\_R} & 0.1765 h$^{-1}$ & reservoir resistant-strain growth rate ($\sim$10\% fitness \emph{cost} relative to \texttt{rho\_res\_S}) \\
+\texttt{Emax\_v} & 1.7 h$^{-1}$ & vancomycin maximum kill rate \\
+\texttt{EC50\_V} & 0.25 mg/L & vancomycin half-maximal effective concentration \\
 \texttt{Emax\_l} & 0.8 h$^{-1}$ & linezolid maximum kill rate \\
-\texttt{EC50\_L} & 1.0 mg/L & linezolid half-maximal effective concentration \\
+\texttt{EC50\_L} & 0.6 mg/L & linezolid half-maximal effective concentration \\
 \texttt{B\_max\_blood} & 6000 CFU/mL & blood carrying capacity (shared by $S_b+R_b$) \\
 \texttt{B\_max\_reservoir} & $1\times10^4$ CFU/mL & reservoir carrying capacity (shared by $S_{res}+R_{res}$) \\
 \texttt{van\_res\_fraction} & 0.15 & vancomycin reservoir tissue-penetration fraction \\
-\texttt{lzd\_res\_fraction} & 0.45 & linezolid reservoir tissue-penetration fraction \\
+\texttt{lzd\_res\_fraction} & 0.30 & linezolid reservoir tissue-penetration fraction \\
 \texttt{f\_r\_b} & $5\times10^{-5}$ h$^{-1}$ & reservoir $\to$ blood exchange rate \\
 \texttt{f\_b\_r} & $1\times10^{-5}$ h$^{-1}$ & blood $\to$ reservoir exchange rate \\
 \hline
@@ -234,9 +234,9 @@ this project ($n=1000$ draws each, mean-corrected).}
 \hline
 \textbf{Quantity} & \textbf{Mean} & \textbf{CV} & \textbf{Source script} \\
 \hline
-$EC_{50,L}$ & 1.0 mg/L & 1.117 & \texttt{MC\_ec50\_lzd.py} \\
-$E_{max,L}$ & 0.8 h$^{-1}$ & 0.307 & \texttt{MC\_emax\_lzd.py} \\
-$k_{immune}$ & 0.172 h$^{-1}$ & 0.25 & \texttt{MC\_immune\_response.py} \\
+$EC_{50,L}$ & 0.6 mg/L & 1.1 & \texttt{MC\_ec50\_lzd.py} \\
+$E_{max,L}$ & 1.085 h$^{-1}$ & 0.307 & \texttt{MC\_emax\_lzd.py} \\
+$k_{immune}$ & 0.243 h$^{-1}$ & 0.25 & \texttt{MC\_immune\_response.py} \\
 $S_{res}(0)$ & 100 CFU/mL & 60.0 & \texttt{MC\_initial\_conditions.py} \\
 $R_{res}(0)$ & 100 CFU/mL & 60.0 & \texttt{MC\_initial\_conditions.py} \\
 \hline
@@ -245,7 +245,7 @@ $R_{res}(0)$ & 100 CFU/mL & 60.0 & \texttt{MC\_initial\_conditions.py} \\
 \end{table}
 
 Two notes on Table~\ref{tab:cv}: first, $k_{immune}$'s sampled mean
-(0.172 h$^{-1}$) differs from \texttt{ImmuneResponse}'s own hard-coded
+(0.243 h$^{-1}$) differs from \texttt{ImmuneResponse}'s own hard-coded
 default (0.12 h$^{-1}$) -- the Monte Carlo script re-tunes the sampling
 mean upward so that a realistic fraction of simulated patients resolve
 their infection, rather than sampling around the class default. Second,

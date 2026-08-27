@@ -30,10 +30,16 @@ only in scope and robustness.
         \[
           f(EC_{50,L}) = R_{res}(t_{\text{end}};\,EC_{50,L}) - \mathrm{LOD}, \qquad \mathrm{LOD} = 10\ \text{CFU/mL}
         \]
-  \item Root found via bisection using \texttt{scipy.optimize.brentq} over
-        $EC_{50,L} \in [0.3,\,2.0]$ mg/L.
-  \item Both scripts agree numerically: threshold $\approx 0.932$ mg/L at
-        $\rho_S = 0.61$.
+  \item Root found via bisection using \texttt{scipy.optimize.brentq}, to an
+        absolute tolerance of $10^{-3}$ mg/L, over each script's own
+        bracketing interval (see Difference~2 below).
+  \item Both scripts agree numerically: threshold $= 0.488$ mg/L under the
+        current baseline ($\rho_S = 0.72$, $\rho_R = 0.649$,
+        $\rho_{res,S} = 0.19415$,
+        $\rho_{res,R} = 0.1765$, $\mathtt{lzd\_res\_fraction} = 0.30$).
+        The agreement is a genuine consistency check, since the two scripts
+        bisect over different brackets and characterise the curve on
+        different grids.
 \end{itemize}
 
 \subsection*{Differences}
@@ -43,23 +49,42 @@ only in scope and robustness.
   \begin{itemize}
     \item \texttt{EC50\_lzd\_threshold\_sweep.py} bisects \emph{both}
           $R_b$ (blood, index 1) and $R_{res}$ (reservoir, index 3)
-          separately via \texttt{find\_threshold(compartment\_idx)}.
+          separately via \texttt{find\_threshold(compartment\_idx)},
+          The two crossings agree to within the $10^{-3}$ mg/L bisection
+          tolerance and are therefore not resolved as separate values; a
+          single threshold of $0.488$ mg/L is quoted for both. They are in
+          any case expected to coincide, since both compartments see the
+          same linezolid effect term and are coupled by bidirectional
+          exchange.
     \item \texttt{MC\_ec50\_lzd.py} bisects only $R_{res}$, producing a
           single \texttt{ESCAPE\_THRESH} used to classify Monte Carlo
           samples.
   \end{itemize}
 
-  \item \textbf{Sweep resolution (diagnostic only).}
+  \item \textbf{Bracketing interval and sweep resolution (grid is
+        diagnostic only).}
   \begin{itemize}
-    \item \texttt{threshold\_sweep.py}: 171 points, step $0.01$ mg/L.
-    \item \texttt{MC\_ec50\_lzd.py}: 121 points, step $\approx 0.014$ mg/L.
+    \item \texttt{EC50\_lzd\_threshold\_sweep.py} (deterministic):
+          $[0.1,\,1.3]$ mg/L, 121 points, step $0.01$ mg/L. Re-centred
+          from $[0.3,\,2.0]$: that interval was chosen when the threshold
+          sat at $0.868$ mg/L, and at the current $0.488$ it left the
+          suppressed zone in the leftmost $\sim$11\% of the axis.
+    \item \texttt{MC\_ec50\_lzd.py} (deterministic sweep inside a Monte
+          Carlo script): $[0.05,\,3.3]$ mg/L, 131 points,
+          step $\approx 0.025$ mg/L. The wider bracket is required because
+          this script must cover its own \emph{sampled} population: at
+          $EC_{50,L}$ mean $0.6$ mg/L with $CV = 1.1$, the 1st--99th
+          percentile of the log-normal draw spans roughly $[0.05,\,3.20]$
+          mg/L, which the narrower deterministic interval would not contain.
   \end{itemize}
-  These grids feed only the visualization; \texttt{brentq} itself is
+  Both intervals bracket the same $0.488$ mg/L root --- and they no longer
+  share an endpoint, so the agreement is a genuinely independent check. The grids feed only
+  the visualization and the monotonicity check; \texttt{brentq} itself is
   continuous and unaffected by grid spacing.
 
   \item \textbf{No-crossing fallback behavior.}
   \begin{itemize}
-    \item \texttt{threshold\_sweep.py}: if $f(EC50_{\min}) > 0$ or
+    \item \texttt{EC50\_lzd\_threshold\_sweep.py}: if $f(EC50_{\min}) > 0$ or
           $f(EC50_{\max}) < 0$ (no sign change), returns \texttt{None}.
     \item \texttt{MC\_ec50\_lzd.py}: in the same situation, falls back to a
           coarse grid-based estimate,
@@ -72,10 +97,20 @@ only in scope and robustness.
 
 \subsection*{Interpretation}
 \texttt{EC50\_lzd\_threshold\_sweep.py} functions as the more rigorous
-diagnostic tool (dual-compartment thresholds, finer sweep, strict
+diagnostic tool (dual-compartment thresholds, finer grid, strict
 no-crossing handling), while \texttt{MC\_ec50\_lzd.py} only needs a single
 $R_{res}$ threshold to partition its 1000-sample Monte Carlo population
 into ``suppressed'' vs. ``escape'' outcomes, favoring robustness
-(graceful fallback) over strictness.
+(graceful fallback, wider bracket) over strictness.
+
+The two scripts' brackets are chosen for different jobs, and the trade-off
+runs in both directions: the diagnostic script resolves the curve more
+finely but over a narrower interval, so a future re-parameterisation that
+displaced the threshold outside $[0.1,\,1.3]$ mg/L would trip its sign
+check and yield \texttt{None}, whereas \texttt{MC\_ec50\_lzd.py} would
+still bracket the root but characterise it on a coarser grid. Since the
+threshold is re-derived rather than hardcoded in either script, both should
+be rerun after any change to $\rho_S$, $\rho_{res,S}$, $\rho_{res,R}$, or
+$\mathtt{lzd\_res\_fraction}$, and their reported roots compared.
 
 \end{document}

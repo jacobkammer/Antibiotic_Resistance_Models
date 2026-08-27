@@ -15,6 +15,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import odeint
 
+from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0
+
 
 # code below sets global matplotlib parameters for consistent figure formatting
 plt.rcParams.update({
@@ -31,6 +33,9 @@ plt.rcParams.update({
 FIGURES_DIR = "figures"
 os.makedirs(FIGURES_DIR, exist_ok=True)
 
+# FIGURES PRODUCED BY THIS SCRIPT -- DETERMINISTIC (no sampling anywhere)
+#   baseline_reservoir_clearance.png
+
 MODULE_NAME = "model_Bacteremia.py"
 if not os.path.exists(MODULE_NAME):
     print(f"ERROR: Cannot find '{MODULE_NAME}' in the current directory.", file=sys.stderr)
@@ -41,10 +46,9 @@ model_mod = importlib.util.module_from_spec(spec)
 sys.modules["model_mod"] = model_mod
 spec.loader.exec_module(model_mod)
 
-LOD = 10.0   # limit of detection (CFU/mL)
 
-total_h      = 1944  # 21d pre-tx + 4d vancomycin + 42d linezolid + 14d post-tx follow-up
-vanco_start  = 504
+total_h     = TOTAL_H
+vanco_start = VANCO_START
 t_eval       = np.linspace(0, total_h, 1450)
 t_days       = t_eval / 24.0
 
@@ -60,29 +64,8 @@ lzd_func = pk.concentration_function("linezolid",  total_h, lzd_start)
 vanco_start_days = vanco_start / 24.0
 lzd_start_days   = lzd_start / 24.0
 lzd_end_days     = lzd_end / 24.0
+# Model parameters come from parameters.py (single source of truth).
 
-rho_S        = 0.61   
-rho_R        = 0.55    
-
-# Baseline params, identical to model_Bacteremia.py's __main__ block
-BASE_PARAMS = {
-    "rho_S":            rho_S,
-    "rho_R":            rho_R,
-    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
-    "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
-    "Emax_v":             1.7,
-    "EC50_V":            0.25,
-    "Emax_l":           0.8,    # fixed, decoupled from rho_S
-    "EC50_L":           1.0,
-    "B_max_blood":      6000,
-    "B_max_reservoir":  1e4,
-    "van_res_fraction": 0.15,
-    "lzd_res_fraction": 0.30,    # lowered from 0.45 -- Emax_l_res scales with rho_res_S; keeps R_res persistent despite S's reservoir growth advantage
-    "f_r_b":            5e-5,  
-    "f_b_r":            1e-5,
-}
-
-Y0 = [0.0, 0.0, 100.0, 100.0]   # model_Bacteremia.py's own default reservoir seed
 
 #------------------------------------------------------------------------
 # Simulation: integrate the dual-reservoir ODE model

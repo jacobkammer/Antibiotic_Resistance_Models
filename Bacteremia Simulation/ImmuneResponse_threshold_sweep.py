@@ -44,6 +44,29 @@
 # records the FINAL R_b / R_res at the end of each run, selects the k_immune
 # values that finish above the LOD, and locates the exact crossing point for
 # each compartment via root-finding.
+#
+# EC50_L was then consolidated onto a SINGLE project-wide value. Previously
+# the project carried two: a fixed baseline EC50_L = 1.0 used by every script
+# that holds EC50_L constant, and a sampling mean EC50_L_BASE = 0.6 used by
+# MC_ec50_lzd.py. That also contradicted MC_ec50_lzd.py's own docstring claim
+# that its sampling is "mean-corrected so E[EC50_L] lands exactly on
+# baseline". Both are now 0.6 mg/L.
+#
+# Lowering the fixed EC50_L 1.0 -> 0.6 makes linezolid more potent, which on
+# its own put the baseline BELOW the EC50_L escape threshold: the reservoir
+# cleared at baseline and the k_immune sweep lost its threshold entirely (no
+# k_immune in [0, 3] produced relapse -- even zero immune clearance cleared
+# the infection). rho_S was therefore raised 0.61 -> 0.72 h^-1, with rho_R
+# rescaled 0.55 -> 0.649 to preserve the ~10% fitness cost, restoring the
+# reservoir to the escape side. The mechanism is indirect: the reservoir kill
+# rate is Emax_l_res = Emax_l * (rho_res_S / rho_S), so a HIGHER rho_S
+# weakens reservoir killing. rho_res_R/rho_res_S were tried first and
+# rejected -- every value of either that reached baseline escape collapsed
+# peak S_b from ~4.8e3 to ~2 CFU/mL (R_b crowding S_b out of blood).
+#
+# Net effect here: the R_res threshold moved ~0.2000 -> 0.203 h^-1 (R_b to
+# 0.197). Without the rho_S compensation this sweep would have had no
+# threshold at all under the consolidated EC50_L.
 # =============================================================================
 import importlib.util
 import os
@@ -53,6 +76,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import odeint
 from scipy.optimize import brentq
+
+from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0
 
 plt.rcParams.update({
     "font.size": 16,
@@ -67,6 +92,10 @@ plt.rcParams.update({
 # all figures are written into figures/ alongside the scripts
 FIGURES_DIR = "figures"
 os.makedirs(FIGURES_DIR, exist_ok=True)
+
+# FIGURES PRODUCED BY THIS SCRIPT -- ALL DETERMINISTIC (no sampling anywhere)
+#   immune_response_threshold_sweep.png -- final R_b/R_res across the swept grid.
+#   The Monte Carlo treatment of k_immune lives in MC_immune_response.py.
 
 # ---------------------------------------------------------------------------
 # Load model
@@ -83,10 +112,9 @@ spec.loader.exec_module(model_mod)
 # ---------------------------------------------------------------------------
 # Simulation settings (matches MC_immune_response.py / model.py's own defaults)
 # ---------------------------------------------------------------------------
-LOD = 10.0   # limit of detection (CFU/mL)
 
-total_h     = 1944  # 21d pre-tx + 4d vancomycin + 42d linezolid + 14d post-tx follow-up
-vanco_start = 504
+total_h     = TOTAL_H
+vanco_start = VANCO_START
 t_eval      = np.linspace(0, total_h, 1150)
 t_days      = t_eval / 24.0
 
@@ -95,32 +123,19 @@ pk = model_mod.PharmacokineticModel()
 van_func = pk.concentration_function("vancomycin", total_h, vanco_start)
 lzd_func = pk.concentration_function("linezolid",  total_h, vanco_start + pk.van_duration)
 
-rho_S = 0.61    # raised from 0.60 to match MC_immune_response.py / the EC50_L and Emax_l
+# rho_S raised 0.61 -> 0.72 (rho_R 0.55 -> 0.649, ~10% fitness cost preserved) to offset
+# EC50_L 1.0 -> 0.6 while keeping lzd_res_fraction at 0.30: reservoir kill scales as
+# Emax_l_res = Emax_l * (rho_res_S / rho_S), so a higher rho_S weakens it.
+rho_S = 0.72    # raised from 0.60 to match MC_immune_response.py / the EC50_L and Emax_l
                 # threshold sweeps -- this shifts the k_immune escape threshold up from
                 # 0.1255 to 0.1521 h^-1 (bisected and confirmed directly against this
                 # script's own BASE_PARAMS)
-rho_R = 0.55    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
+rho_R = 0.649    # directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
 
 K_IMMUNE_BASE = 0.12   # model_Bacteremia.py's own default
 
-BASE_PARAMS = {
-    "rho_S":            rho_S,
-    "rho_R":            rho_R,
-    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
-    "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
-    "Emax_v":             1.7,
-    "EC50_V":            0.25,
-    "Emax_l":           0.8,  # fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
-    "EC50_L":           1.0,
-    "B_max_blood":      6000,
-    "B_max_reservoir":  1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
-    "van_res_fraction": 0.15,
-    "lzd_res_fraction": 0.30,    # lowered from 0.45 -- Emax_l_res scales with rho_res_S; keeps R_res persistent despite S's reservoir growth advantage
-    "f_r_b":            5e-5,  # restored to original
-    "f_b_r":            1e-5,
-}
+# Model parameters come from parameters.py (single source of truth).
 
-Y0 = [0.0, 0.0, 100.0, 100.0]
 
 
 def final_counts(k_immune):
@@ -183,7 +198,7 @@ def find_threshold(compartment_idx):
     lo_val, hi_val = f(KIM_MIN), f(KIM_MAX)
     if lo_val < 0 or hi_val > 0:
         return None   # no sign change in range -> no clean threshold to bisect
-    return brentq(f, KIM_MIN, KIM_MAX, xtol=1e-4)
+    return brentq(f, KIM_MIN, KIM_MAX, xtol=1e-3)
 
 
 threshold_R_b   = find_threshold(1)
@@ -196,7 +211,7 @@ def _describe(name, threshold, escapes):
     brentq root is ambiguous on its own)."""
     if threshold is not None:
         print(f"\nPrecise escape threshold (final {name} crosses LOD):   "
-              f"k_immune = {threshold:.4f} h^-1")
+              f"k_immune = {threshold:.3f} h^-1")
     elif len(escapes) == N_POINTS:
         print(f"\nNo clean {name} threshold found -- {name} escapes (stays above LOD) "
               f"across the entire swept range [{KIM_MIN}, {KIM_MAX}].")
@@ -211,7 +226,7 @@ if threshold_R_res is not None:
     below_threshold = K_IMMUNE_BASE < threshold_R_res
     print(f"\nmodel_Bacteremia.py's own default k_immune = {K_IMMUNE_BASE} is "
           f"{'BELOW' if below_threshold else 'AT/ABOVE'} the R_res escape threshold "
-          f"({threshold_R_res:.4f}) -> R_res {'escapes' if below_threshold else 'clears'}")
+          f"({threshold_R_res:.3f}) -> R_res {'escapes' if below_threshold else 'clears'}")
 elif len(escape_R_res) == N_POINTS:
     print(f"\nmodel_Bacteremia.py's own default k_immune = {K_IMMUNE_BASE} -> "
           f"R_res escapes (stays above LOD) regardless of k_immune in [{KIM_MIN}, {KIM_MAX}].")

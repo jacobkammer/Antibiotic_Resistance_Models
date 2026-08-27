@@ -51,18 +51,18 @@ in the parameter dictionary consumed by \texttt{dual\_reservoir\_model}.
 \toprule
 Parameter & Value \\
 \midrule
-$\rho_S$ & $0.61$ h$^{-1}$ \\
-$\rho_R$ & $0.55$ h$^{-1}$ \\
-$\rho_{res,S}$ & $0.175$ h$^{-1}$ \\
+$\rho_S$ & $0.72$ h$^{-1}$ \\
+$\rho_R$ & $0.649$ h$^{-1}$ \\
+$\rho_{res,S}$ & $0.19415$ h$^{-1}$ \\
 $\rho_{res,R}$ & $0.1765$ h$^{-1}$ \\
-$E_{max,V}$ & $0.40$ \\
-$EC_{50,V}$ & $0.245$ \\
+$E_{max,V}$ & $1.7$ \\
+$EC_{50,V}$ & $0.25$ \\
 $E_{max,L}$ & $0.8$ \\
-$EC_{50,L}$ & $1.0$ \\
+$EC_{50,L}$ & $0.6$ \\
 $B_{max,blood}$ & $6000$ CFU/mL \\
 $B_{max,res}$ & $10^4$ CFU/mL \\
 $\mathtt{van\_res\_fraction}$ & $0.15$ \\
-$\mathtt{lzd\_res\_fraction}$ & $0.45$ \\
+$\mathtt{lzd\_res\_fraction}$ & $0.30$ \\
 $f_{r\to b}$ & $5\times10^{-5}$ h$^{-1}$ \\
 $f_{b\to r}$ & $1\times10^{-5}$ h$^{-1}$ \\
 \bottomrule
@@ -72,7 +72,7 @@ $f_{b\to r}$ & $1\times10^{-5}$ h$^{-1}$ \\
 \end{table}
 
 \item \textbf{Compute the log-normal sampling parameters.} With
-\texttt{K\_IMMUNE\_MEAN = 0.172} and \texttt{CV = 0.25}:
+\texttt{K\_IMMUNE\_MEAN = 0.243} and \texttt{CV = 0.25}:
 \begin{equation}
 \sigma_{\ln} = \sqrt{\ln(1+CV^2)}, \qquad
 \mu_{\ln} = \ln(\texttt{K\_IMMUNE\_MEAN}) - \tfrac{1}{2}\sigma_{\ln}^2.
@@ -92,14 +92,67 @@ constructs a fresh \texttt{ImmuneResponse(k\_immune=k\_immune)}, integrates
 \texttt{dual\_reservoir\_model} with \texttt{odeint}
 (\texttt{rtol=1e-7}, \texttt{atol=1e-9}, \texttt{mxstep=5000}) from the fixed
 \texttt{Y0} over the fixed \texttt{t\_eval}, and returns only the final-time
-$R_b$ and $R_{res}$ (\texttt{sol[-1, 1]}, \texttt{sol[-1, 3]}). This is
-evaluated at \texttt{sweep\_k\_immune = linspace(0.02, 0.22, 101)}, storing
+$R_b$ and $R_{res}$ (\texttt{sol[-1, 1]}, \texttt{sol[-1, 3]}) --- see the
+note below for what those indices mean. This is
+evaluated at \texttt{sweep\_k\_immune = linspace(0.02, 0.65, 101)}, storing
 the results in \texttt{sweep\_R\_b} and \texttt{sweep\_R\_res}.
+
+\begin{quote}
+\small
+\textbf{Reading \texttt{sol[-1, 1]} and \texttt{sol[-1, 3]}.}
+\texttt{odeint} returns a two-dimensional array: one row per time point,
+one column per state variable. Here that is $1450 \times 4$ --- 1450 time
+points (the length of \texttt{t\_eval}) by the four bacterial
+subpopulations.
+
+The column order is fixed by the order of the initial-condition vector,
+\texttt{Y0 = [0.0, 0.0, 100.0, 100.0]}, which is
+$[\,S_b,\ R_b,\ S_{res},\ R_{res}\,]$:
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\hline
+Column & Variable & Meaning \\
+\hline
+\texttt{sol[:, 0]} & $S_b$     & sensitive strain, blood \\
+\texttt{sol[:, 1]} & $R_b$     & \textbf{resistant strain, blood} \\
+\texttt{sol[:, 2]} & $S_{res}$ & sensitive strain, reservoir \\
+\texttt{sol[:, 3]} & $R_{res}$ & \textbf{resistant strain, reservoir} \\
+\hline
+\end{tabular}
+\end{center}
+
+The \texttt{-1} is Python's index for the \emph{last} row, i.e.\ the final
+time point: $t = 1944$~h (day 81), the end of the 14-day post-treatment
+follow-up. Combining the two:
+
+\begin{itemize}
+\item \texttt{sol[-1, 1]} $= R_b(t_{\mathrm{end}})$, the resistant
+\emph{blood} count at the end of follow-up;
+\item \texttt{sol[-1, 3]} $= R_{res}(t_{\mathrm{end}})$, the resistant
+\emph{reservoir} count at the end of follow-up.
+\end{itemize}
+
+\texttt{\_final\_counts} discards the whole trajectory and returns only
+these two numbers because the escape criterion is scored purely on the
+terminal state: a simulated patient has \emph{escaped} if their final
+resistant burden still exceeds the limit of detection. That reduction to a
+single number per run is also what makes the bisection in step~8 possible
+--- \texttt{brentq} requires a scalar function of $k_{\mathrm{immune}}$,
+and \texttt{sol[-1, 3]} $-$ \texttt{LOD} is exactly that.
+
+Only the two \emph{resistant} columns are returned. The sensitive strain is
+cleared by vancomycin in every run well before follow-up ends, so
+$S_b(t_{\mathrm{end}})$ and $S_{res}(t_{\mathrm{end}})$ are zero
+regardless of $k_{\mathrm{immune}}$ and carry no information about
+relapse. The full trajectories of all four compartments \emph{are} kept
+separately, in the history arrays of step~9, for the kinetics figure.
+\end{quote}
 
 \item \textbf{Root-find \texttt{ESCAPE\_THRESH}.} Using the same
 \texttt{\_final\_counts}, \texttt{scipy.optimize.brentq} solves
 $R_{res}^{\mathrm{final}}(k_{\mathrm{immune}}) - \mathrm{LOD} = 0$ over
-$[0.02, 0.22]$ (falling back to the coarse sweep crossing if the endpoint
+$[0.02, 0.65]$ (falling back to the coarse sweep crossing if the endpoint
 signs don't bracket a root), giving a single precise threshold value,
 \texttt{ESCAPE\_THRESH}.
 
@@ -217,9 +270,7 @@ would land above the escape threshold identified by
 \item $CV$ was then widened from $0.20$ to $0.25$, which dropped resolution
 to $\sim$64\%, so the mean was re-solved to $0.14719$ -- chosen so that the
 30th percentile of $\mathrm{LogNormal}(\mathrm{mean}, CV{=}0.25)$ sits
-exactly at the $0.1255$ threshold, restoring resolution to $\sim$70\%. This
-value ($0.14719$) is what the module docstring at the top of the file still
-documents.
+exactly at the $0.1255$ threshold, restoring resolution to $\sim$70\%.
 \item Separately, $\rho_S$ was raised project-wide from $0.60$ to $0.61$
 (see the $\rho_S$ sensitivity analysis referenced throughout the project).
 Because of a vancomycin-driven competitive-release effect -- $S_b$ grows
@@ -232,20 +283,28 @@ change.
 \item That shift was not accompanied by a re-tuning of the sampling
 distribution at the time: with the mean still at $0.14719$ but the threshold
 now at $0.1521$, resolution dropped to only $\sim$40\% ($\sim$60\% escape).
-\item \texttt{K\_IMMUNE\_MEAN} was therefore re-tuned a second time, to its
-current code value of $0.172$ -- targeting $\sim$65\% of samples above the
-(directly bisected, not estimated) $0.1521$ threshold, i.e.\ $\sim$35\%
-relapse, within a stated 30--40\% target band.
+\item \texttt{K\_IMMUNE\_MEAN} was therefore re-tuned a second time, to
+$0.172$ -- targeting $\sim$65\% of samples above the (directly bisected,
+not estimated) $0.1521$ threshold, i.e.\ $\sim$35\% relapse.
+\item Giving $\rho_{res,S}$ a 10\% growth advantage over $\rho_{res,R}$ then
+made the reservoir markedly more robust to host immunity, pushing the
+threshold up again to $\sim$$0.2000$ h$^{-1}$; at a mean of $0.172$ that
+left only $\sim$22\% of samples above threshold ($\sim$78\% relapse), so
+\texttt{K\_IMMUNE\_MEAN} was re-solved a third time to $0.243$, targeting a
+20--30\% relapse band.
+\item Consolidating $EC_{50,L}$ onto a single project-wide $0.6$~mg/L, with
+$\rho_S$ raised $0.61 \to 0.72$~h$^{-1}$ to compensate, moved the threshold
+to its present $0.203$~h$^{-1}$. \texttt{K\_IMMUNE\_MEAN} was left at
+$0.243$: a direct 1000-sample run gives $26.0\%$ relapse (260/1000), still
+inside the target band, so no further re-tuning was required.
 \end{itemize}
 
-\noindent \textbf{Note:} the module docstring at the top of
-\texttt{MC\_immune\_response.py} still states
-"$k_{\mathrm{immune}} \sim \mathrm{LogNormal}(\mathrm{mean}=0.14719,
-CV=0.25)$," reflecting the \emph{first} re-tuning above. The code's actual
-\texttt{K\_IMMUNE\_MEAN} is $0.172$, from the \emph{second} re-tuning
-(triggered by the $\rho_S$ change) -- the docstring was not updated to match.
-A reader relying on the docstring alone would compute the wrong
-$\mu_{\ln}/\sigma_{\ln}$ for the distribution the code actually samples from.
+\noindent \textbf{Note:} the module docstring and
+\texttt{K\_IMMUNE\_MEAN} in \texttt{MC\_immune\_response.py} now agree at
+$0.243$. They were out of step for part of this history --- the docstring
+lagged at $0.14719$ while the code had moved to $0.172$ --- so a reader
+working from an older copy of the file may compute $\mu_{\ln}/\sigma_{\ln}$
+for a distribution the code does not sample from.
 
 \subsection{Why the other fixed parameters take their values}
 
@@ -269,10 +328,16 @@ below its old, much larger equilibrium level.
 
 \subsection{Why the switch-curve sweep range and re-derivation}
 
-\texttt{SWEEP\_MIN}/\texttt{SWEEP\_MAX} $= [0.02, 0.22]$ is chosen to match
-the range already swept by the standalone
-\texttt{ImmuneResponse\_threshold\_sweep.py}, so the two scripts' derived
-thresholds are directly comparable. \texttt{ESCAPE\_THRESH} is computed by
+\texttt{SWEEP\_MIN}/\texttt{SWEEP\_MAX} $= [0.02, 0.65]$, widened from an
+earlier $[0.02, 0.22]$: giving $\rho_{res,S}$ a 10\% growth advantage over
+$\rho_{res,R}$ pushed the escape threshold up, and the calibrated mean
+($0.243$, CV $0.25$) puts the 99th percentile of the sampled distribution
+near $0.42$~h$^{-1}$, so the histogram panel needs the wider axis to show
+the sampled population without clipping. Note this no longer matches the
+standalone \texttt{ImmuneResponse\_threshold\_sweep.py}, which still sweeps
+$[0.02, 0.22]$; the two thresholds remain directly comparable because both
+are located by bisection rather than read off their grids, and both report
+$0.203$~h$^{-1}$. \texttt{ESCAPE\_THRESH} is computed by
 root-finding here rather than hardcoded, consistent with the same evolution
 away from hardcoded threshold constants seen in
 \texttt{MC\_ec50\_lzd.py} and \texttt{MC\_emax\_lzd.py} -- so that if

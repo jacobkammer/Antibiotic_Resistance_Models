@@ -71,19 +71,49 @@
 # sampled median=0.425 [5th=0.102, 95th=1.675] -- indistinguishable from
 # the CV=1.117 run above at this sample size.
 #
-# this file generates 3 figures:
+# this file generates 2 figures:
 # 1. mc_ec50_lzd_sweep_kinetics.png
-# 2. mc_ec50_lzd_sweep_outcomes.png
-# 3. mc_ec50_lzd_switch.png 
+# 2. mc_ec50_lzd_switch.png
+# (a third, mc_ec50_lzd_sweep_outcomes.png -- per-patient scatter of peak/final
+# burdens vs sampled EC50_L -- was removed along with its plotting block.)
+#
+# EC50_L was then consolidated onto a SINGLE project-wide value. Previously
+# the project carried two: a fixed baseline EC50_L = 1.0 used by every script
+# that holds EC50_L constant, and a sampling mean EC50_L_BASE = 0.6 used by
+# MC_ec50_lzd.py. That also contradicted MC_ec50_lzd.py's own docstring claim
+# that its sampling is "mean-corrected so E[EC50_L] lands exactly on
+# baseline". Both are now 0.6 mg/L.
+#
+# Lowering the fixed EC50_L 1.0 -> 0.6 makes linezolid more potent, which on
+# its own put the baseline BELOW the EC50_L escape threshold: the reservoir
+# cleared at baseline and the k_immune sweep lost its threshold entirely (no
+# k_immune in [0, 3] produced relapse -- even zero immune clearance cleared
+# the infection). rho_S was therefore raised 0.61 -> 0.72 h^-1, with rho_R
+# rescaled 0.55 -> 0.649 to preserve the ~10% fitness cost, restoring the
+# reservoir to the escape side. The mechanism is indirect: the reservoir kill
+# rate is Emax_l_res = Emax_l * (rho_res_S / rho_S), so a HIGHER rho_S
+# weakens reservoir killing. rho_res_R/rho_res_S were tried first and
+# rejected -- every value of either that reached baseline escape collapsed
+# peak S_b from ~4.8e3 to ~2 CFU/mL (R_b crowding S_b out of blood).
+#
+# Net effect here: the escape threshold moved 0.868 -> 0.488 mg/L and escape
+# rose 21.8% -> 43.6% (436/1000, same SEED=44). This sweep is unaffected by
+# the EC50_L consolidation itself (it overrides EC50_L with its own sampled
+# draws) and responds only to the rho_S change. At mean 0.6 vs threshold
+# 0.488 the calibration now sits ~0.21 SD from its own switch -- the closest
+# of the three sweeps, which is why its escape fraction approaches one half.
 # =============================================================================
 import importlib.util
 import os
 import sys
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import odeint
 from scipy.optimize import brentq
+
+from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0
 
 plt.rcParams.update({
     "font.size": 16,
@@ -98,6 +128,15 @@ plt.rcParams.update({
 # all figures are written into figures/ alongside the scripts
 FIGURES_DIR = "figures"
 os.makedirs(FIGURES_DIR, exist_ok=True)
+
+# FIGURES PRODUCED BY THIS SCRIPT
+#   mc_ec50_lzd_sweep_kinetics.png  -- MONTE CARLO. 4 panels (S_b, R_b, S_res,
+#       R_res); 1000 sampled patients, median + 5th-95th percentile band.
+#   mc_ec50_lzd_switch.png          -- MIXED, one source per panel:
+#       top    = DETERMINISTIC  (131-point fixed-parameter sweep + brentq root)
+#       bottom = MONTE CARLO    (the 1000 samples, coloured by each patient's
+#                                own simulated final R_res vs LOD -- NOT by
+#                                which side of the plotted threshold they fall)
 
 # ---------------------------------------------------------------------------
 # Load model
@@ -118,14 +157,13 @@ spec.loader.exec_module(model_mod)#execute module
 # Simulation settings
 # ---------------------------------------------------------------------------
 NUM_ITERATIONS = 1000#number of iterations
-LOD            = 10.0       # limit of detection (CFU/mL)#limit of detection
 CV             = 1.1        # lowered from 1.117 -- log-normal spread applied to EC50_L
                              # (coefficient of variation); negligible effect on escape rate,
                              # see header narrative above
 SEED           = 44#seed for random number generator
 
-total_h      = 1944  # 21d pre-tx + 4d vancomycin + 42d linezolid + 14d post-tx follow-up
-vanco_start  = 504
+total_h     = TOTAL_H
+vanco_start = VANCO_START
 t_eval       = np.linspace(0, total_h, 1150)
 t_days       = t_eval / 24.0
 
@@ -142,8 +180,11 @@ lzd_end_days     = (vanco_start + pk.van_duration + pk.lzd_duration) / 24.0
 # ---------------------------------------------------------------------------
 # Fixed parameters (all except EC50_L held at baseline)
 # ---------------------------------------------------------------------------
-rho_S        = 0.61    
-rho_R        = 0.55    #10% fitness cost
+# rho_S raised 0.61 -> 0.72 (rho_R 0.55 -> 0.649, ~10% fitness cost preserved) to offset
+# EC50_L 1.0 -> 0.6 while keeping lzd_res_fraction at 0.30: reservoir kill scales as
+# Emax_l_res = Emax_l * (rho_res_S / rho_S), so a higher rho_S weakens it.
+rho_S        = 0.72    
+rho_R        = 0.649    #10% fitness cost
 
 EC50_L_BASE = 0.6     # lowered again from 0.695 -- see header narrative above. This is a
                       # deliberate departure from the ~24-27% cross-script calibration target
@@ -151,24 +192,9 @@ EC50_L_BASE = 0.6     # lowered again from 0.695 -- see header narrative above. 
                       # escape instead, making linezolid more potent at realistic
                       # (sub-saturating) concentrations.
 
-BASE_PARAMS = {
-    "rho_S":            rho_S,
-    "rho_R":            rho_R,
-    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
-    "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
-    "Emax_v":             1.7,
-    "EC50_V":            0.25,
-    "Emax_l":           0.8,  # fixed, decoupled from rho_S
-    "B_max_blood":      6000,
-    "B_max_reservoir":  1e4,
-    "van_res_fraction": 0.15,
-    "lzd_res_fraction": 0.30,    # lowered from 0.45 -- Emax_l_res scales with rho_res_S; keeps R_res persistent despite S's reservoir growth advantage
-    "f_r_b":            5e-5,  
-    "f_b_r":            1e-5,
-}
+# Model parameters come from parameters.py (single source of truth).
 
 # Fixed initial conditions — only EC50_L is varied across iterations
-Y0 = [0.0, 0.0, 100.0, 100.0]
 
 # ---------------------------------------------------------------------------
 # Run Monte Carlo sweep: vary EC50_L, hold everything else fixed
@@ -222,11 +248,22 @@ def _f_res(ec50_l):
 
 
 if _f_res(SWEEP_MIN) > 0 or _f_res(SWEEP_MAX) < 0:
-    ESCAPE_THRESH = float(sweep_ec50[np.argmax(sweep_R_res > LOD)])  # fallback: coarse crossing
+    # No sign change across the bracket. Only fall back to the coarse grid crossing if the
+    # grid actually contains one -- otherwise np.argmax on an all-False array silently
+    # returns index 0, i.e. SWEEP_MIN, which would be plotted as a real switch.
+    escapes_on_grid = sweep_R_res > LOD
+    if escapes_on_grid.any() and not escapes_on_grid.all():
+        ESCAPE_THRESH = float(sweep_ec50[np.argmax(escapes_on_grid)])
+    else:
+        ESCAPE_THRESH = float("nan")
 else:
     ESCAPE_THRESH = brentq(_f_res, SWEEP_MIN, SWEEP_MAX, xtol=1e-3)
 
-print(f"Precise escape threshold (final R_res crosses LOD): {ESCAPE_THRESH:.3f} mg/L")
+if np.isnan(ESCAPE_THRESH):
+    print(f"No escape threshold exists in [{SWEEP_MIN}, {SWEEP_MAX}]: R_res "
+          f"{'escapes' if (sweep_R_res > LOD).all() else 'clears'} across the entire swept range.")
+else:
+    print(f"Precise escape threshold (final R_res crosses LOD): {ESCAPE_THRESH:.3f} mg/L")
 
 REGIME_COLORS = {"suppressed": "#4c72b0", "escape": "#c44e52"}  # blue / red
 
@@ -266,6 +303,14 @@ for i in range(NUM_ITERATIONS):
 
 print("Simulations complete. Generating figure...", flush=True)# prints completion message
 
+# ---------------------------------------------------------------------------
+# Escape classification, computed here because the kinetics figure below needs
+# it: each patient is escaped iff their own final R_res is above the LOD.
+# ---------------------------------------------------------------------------
+final_R_res  = np.nan_to_num(R_res_hist[:, -1], nan=0.0)
+escaped_mask = final_R_res > LOD
+
+
 
 # ---------------------------------------------------------------------------
 # Helper functions for formatting the time-course plots
@@ -279,6 +324,7 @@ def annotate_windows(ax):# adds shaded regions for antibiotic windows
 def style_kinetic(ax, title, ylabel, ylim_top): # formats a kinetic (bacterial count vs. time) plot
     ax.set_yscale("log")
     ax.set_ylim(LOD * 0.5, ylim_top)
+    ax.set_xlim(0, t_days[-1])   # shared time axis, so all four panels align
     ax.set_xlabel("Time (days)")
     ax.set_ylabel(ylabel)
     ax.set_title(title, fontsize=17)
@@ -307,16 +353,23 @@ for ax, hist, lc, mc, title, ylim in panels:
         tr = np.where(hist[j] == 0, np.nan, hist[j])
         ax.plot(t_days, tr, color=lc, alpha=0.12, lw=0.8)
 
-    med  = np.nanpercentile(hist, 50, axis=0)
-    lo5  = np.nanpercentile(hist,  5, axis=0)
-    hi95 = np.nanpercentile(hist, 95, axis=0)
-
-    med  = np.where(med  == 0, np.nan, med)
-    lo5  = np.where(lo5  == 0, np.nan, lo5)
-    hi95 = np.where(hi95 == 0, np.nan, hi95)
+    # Summarise over the ESCAPED patients only. Taking the median over all 1000
+    # rows makes the post-treatment relapse vanish from the plot: sub-LOD values
+    # are stored as 0, escape is a minority outcome, so the all-patient median is
+    # 0 (-> NaN) exactly where the relapse happens. Restricting to escaped rows
+    # and using nanmedian keeps the relapse visible and states its n in the
+    # legend. Sub-LOD points within that subset become NaN, so a gap here means
+    # "not detectable in any escaped patient", not "no data".
+    esc = np.where(hist[escaped_mask] == 0, np.nan, hist[escaped_mask])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")   # all-NaN slices are expected on drug
+        med  = np.nanmedian(esc, axis=0)
+        lo5  = np.nanpercentile(esc,  5, axis=0)
+        hi95 = np.nanpercentile(esc, 95, axis=0)
 
     ax.fill_between(t_days, lo5, hi95, color=lc, alpha=0.18)
-    ax.plot(t_days, med, color=mc, lw=2, label=f"Median (n={NUM_ITERATIONS})")
+    ax.plot(t_days, med, color=mc, lw=2,
+            label=f"Median of escaped (n={int(escaped_mask.sum())})")
 
     style_kinetic(ax, title, "CFU/mL", ylim)
 
@@ -327,53 +380,14 @@ print(f"Saved: {out_file}")
 
 
 # ---------------------------------------------------------------------------
-# Outcome metrics (one summary value per iteration)
+# Outcome metrics (one summary value per iteration).
+# peak_S_b/peak_R_b feed the console summary. final_R_res/escaped_mask are
+# defined earlier, above the kinetics figure, which also needs them.
 # ---------------------------------------------------------------------------
 peak_S_b    = np.nanmax(S_b_hist, axis=1)
 peak_R_b    = np.nanmax(R_b_hist, axis=1)
-peak_S_res  = np.nanmax(S_res_hist, axis=1)
-final_R_b   = np.nan_to_num(R_b_hist[:, -1],   nan=0.0)
-final_R_res = np.nan_to_num(R_res_hist[:, -1], nan=0.0)
 
 
-# ---------------------------------------------------------------------------
-# FIGURE: outcome scatter plots vs EC50_L (log scale)
-# 4 panels: peak S_b, peak R_b, peak S_res, final R_b
-# ---------------------------------------------------------------------------
-log10_ec50 = np.log10(ec50_l_samples)
-
-outcomes = [
-    (peak_S_b,   "Peak $S_b$ (CFU/mL)"),
-    (peak_R_b,   "Peak $R_b$ (CFU/mL)"),
-    (peak_S_res, "Peak $S_{res}$ (CFU/mL)"),
-    (final_R_b,  "Final $R_b$ (CFU/mL)"),
-]
-
-fig2, axes2 = plt.subplots(2, 2, figsize=(12, 9))
-fig2.suptitle(r"Outcomes vs $EC_{50,L}$ (linezolid)", fontsize=19, fontweight="bold")
-
-for ax, (y_vals, ylabel) in zip(axes2.flat, outcomes):
-    nonzero = y_vals > LOD
-    ax.scatter(log10_ec50[nonzero], y_vals[nonzero],
-               s=18, alpha=0.5, color="darkorange", edgecolors="none")
-    ax.axvline(np.log10(EC50_L_BASE), color="black", ls="--", lw=1.0, alpha=0.7,
-               label=f"Baseline ({EC50_L_BASE:.1f})")
-    ax.set_yscale("log")
-    if not nonzero.any():
-        # e.g. Peak/Final R_b now clears for every sampled EC50_L -- give the
-        # empty log-scale axis an explicit range so tight_layout doesn't crash
-        ax.set_ylim(LOD * 0.1, LOD * 10)
-        ax.text(0.5, 0.5, "All values below LOD", transform=ax.transAxes,
-                ha="center", va="center", fontsize=16, color="gray")
-    ax.set_xlabel(r"$\log_{10}(EC_{50,L})$")
-    ax.set_ylabel(ylabel)
-    ax.grid(True, which="both", ls=":", alpha=0.35)
-    ax.legend(fontsize=13)
-
-plt.tight_layout()
-out_file = os.path.join(FIGURES_DIR, "mc_ec50_lzd_sweep_outcomes.png")
-plt.savefig(out_file, dpi=300, bbox_inches="tight")
-print(f"Saved: {out_file}")
 
 
 # ---------------------------------------------------------------------------
@@ -385,8 +399,8 @@ print(f"Saved: {out_file}")
 # ESCAPE_THRESH reads as a genuine switch rather than a coarse step between a
 # handful of categories.
 # Bottom panel answers the question the switch alone doesn't: given the same
-# realistic inter-patient EC50_L variability used for the kinetics/outcomes
-# figures above, what fraction of virtual patients actually land on each
+# realistic inter-patient EC50_L variability used for the kinetics figure
+# above, what fraction of virtual patients actually land on each
 # side of it. Each sample is colored by its own simulated outcome (final
 # R_res vs LOD), not by which side of the threshold its EC50_L happens to
 # fall on, so the figure stays consistent with the simulated data.
@@ -396,7 +410,6 @@ FLOOR = LOD * 0.5   # display floor for values that fell below the LOD (i.e. 0)
 disp_sweep_R_b   = np.where(sweep_R_b   <= LOD, FLOOR, sweep_R_b)
 disp_sweep_R_res = np.where(sweep_R_res <= LOD, FLOOR, sweep_R_res)
 
-escaped_mask    = final_R_res > LOD
 frac_escape     = escaped_mask.mean()
 escaped_ec50    = ec50_l_samples[escaped_mask]
 suppressed_ec50 = ec50_l_samples[~escaped_mask]

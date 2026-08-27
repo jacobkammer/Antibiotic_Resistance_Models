@@ -1,0 +1,413 @@
+% =============================================================================
+% Combined analysis of linezolid potency (EC50_L).
+%
+% Supersedes and merges two earlier documents:
+%   - EC50_lzd_threshold_methods.tex  (deterministic threshold determination,
+%     EC50_lzd_threshold_sweep.py)
+%   - MC_ec50_lzd_description.tex     (Monte Carlo population, MC_ec50_lzd.py)
+%
+% All values verified against the code at the current baseline
+% (rho_S = 0.72, EC50_L = 0.6, lzd_res_fraction = 0.30).
+% =============================================================================
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\title{Analysis of Linezolid Potency ($EC_{50,L}$)\\
+\large Deterministic escape threshold and Monte Carlo patient population}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+
+Linezolid's  $EC_{50,L}$, is analysed
+in two complementary ways, implemented in two scripts.
+
+\begin{enumerate}
+\item A \textbf{deterministic threshold analysis}
+(\texttt{EC50\_lzd\_threshold\_sweep.py}) treats $EC_{50,L}$ as a
+bifurcation parameter and locates, by root-finding, the exact value
+separating suppression from resistant escape. It answers: \emph{where is
+the switch?}
+\item A \textbf{Monte Carlo population analysis}
+(\texttt{MC\_ec50\_lzd.py}) draws $1000$ virtual patients from a log-normal
+$EC_{50,L}$ distribution and simulates each one. It answers: \emph{given
+realistic inter-patient variability, what fraction of patients fall on
+each side of that switch, and what do their bacterial kinetics look
+like?}
+\end{enumerate}
+
+The two are independent: the Monte Carlo script derives the threshold
+internally, over a different bracketing interval from the threshold analysis. The deterministic threshold analysis calculates the bifurcation point using the bisection method.  Both methods agree, providing a consistency check as discussed in \S\ref{sec:agreement}.
+
+Both use the same model (\texttt{model\_Bacteremia.py}'s
+\texttt{dual\_reservoir\_model}), the same treatment protocol, the same
+initial condition, and the same fixed parameters (Table~\ref{tab:base}).
+
+\subsection{Role of $EC_{50,L}$ in the model}
+
+$EC_{50,L}$ independently controls how much linezolid effect is achieved at sub-saturating drug concentrations.
+\begin{equation}
+E_L(t) = \frac{E_{max,L}\, L(t)}{EC_{50,L} + L(t)},
+\label{eq:hill}
+\end{equation}
+the value of $EC_{50,L}$ for each patient will affect how they respond clinically given the identical serum drug concentrations.
+
+\subsection{Protocol and initial condition}
+
+Every simulation in this document integrates the model from the fixed
+initial condition
+$\mathbf{Y}_0 = (S_b, R_b, S_{res}, R_{res}) = (0,\,0,\,100,\,100)$
+CFU$\cdot$mL$^{-1}$ over $t_{\mathrm{end}} = 1944$~h ($81$~d): $21$~d of
+untreated growth, $4$~d of vancomycin beginning at $t = 504$~h, $42$~d of
+linezolid, and $14$~d of post-treatment follow-up. The limit of detection
+is $\mathrm{LOD} = 10$~CFU$\cdot$mL$^{-1}$.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+Parameter & Value & Description \\
+\midrule
+$\rho_S$              & $0.72$ h$^{-1}$          & Sensitive growth rate, blood \\
+$\rho_R$              & $0.649$ h$^{-1}$         & Resistant growth rate, blood ($\sim$10\% fitness cost) \\
+$\rho_{res,S}$        & $0.19415$ h$^{-1}$       & Sensitive growth rate, reservoir \\
+$\rho_{res,R}$        & $0.1765$ h$^{-1}$        & Resistant growth rate, reservoir ($\sim$10\% fitness cost) \\
+$E_{max,V}$           & $1.7$                    & Maximal vancomycin effect \\
+$EC_{50,V}$           & $0.25$ mg$\cdot$L$^{-1}$ & Vancomycin half-maximal concentration \\
+$E_{max,L}$           & $0.8$                    & Maximal linezolid effect \\
+$B_{max,blood}$       & $6\times10^{3}$ CFU$\cdot$mL$^{-1}$ & Blood carrying capacity (shared by $S_b + R_b$) \\
+$B_{max,res}$         & $1\times10^{4}$ CFU$\cdot$mL$^{-1}$ & Reservoir carrying capacity (shared by $S_{res} + R_{res}$) \\
+$\phi_V$              & $0.15$                   & Vancomycin reservoir penetration fraction \\
+$\phi_L$              & $0.30$                   & Linezolid reservoir penetration fraction \\
+$f_{r\to b}$          & $5\times10^{-5}$ h$^{-1}$ & Reservoir-to-blood transfer rate \\
+$f_{b\to r}$          & $1\times10^{-5}$ h$^{-1}$ & Blood-to-reservoir transfer rate \\
+$\mathrm{LOD}$        & $10$ CFU$\cdot$mL$^{-1}$  & Limit of detection \\
+\bottomrule
+\end{tabular}
+\caption{Baseline parameters, identical in both analyses. $EC_{50,L}$ is
+absent because it is the quantity under study: swept in
+\S\ref{sec:deterministic}, sampled in \S\ref{sec:montecarlo}. Its fixed
+project-wide value, used by every \emph{other} script, is
+$0.6$~mg$\cdot$L$^{-1}$ --- the same number used here as the Monte Carlo
+sampling mean.}
+\label{tab:base}
+\end{table}
+
+
+% =============================================================================
+\section{Part I --- Deterministic escape threshold}
+\label{sec:deterministic}
+
+Every value comes from fixed-parameter integrations, with no statistical sampling.
+
+\subsection{Definition of the threshold}
+
+$EC_{50,L}$ is treated as a bifurcation parameter of the dual-compartment
+(blood--reservoir) model, and the resistance-escape threshold
+$EC_{50,L}^{*}$ is defined as the value separating trajectories in which
+the resistant subpopulation is eradicated by end of follow-up from those in
+which it persists.
+
+Persistence is scored on the terminal state of the simulation and not
+on transient feature of the trajectory. Let
+$R_{res}(t;\,EC_{50,L})$ and $R_b(t;\,EC_{50,L})$ denote the resistant
+densities in the reservoir and blood compartments. Defining the residual
+end-of-simulation burden relative to the limit of detection,
+\begin{equation}
+  f_c(EC_{50,L}) \;=\; X_c\!\left(t_{\mathrm{end}};\,EC_{50,L}\right) - \mathrm{LOD},
+  \qquad c \in \{b,\,res\},
+  \label{eq:objective}
+\end{equation}
+where $X_b \equiv R_b$ and $X_{res} \equiv R_{res}$, the threshold is the
+root
+\begin{equation}
+  f_c\!\left(EC_{50,L}^{*}\right) = 0 .
+  \label{eq:root}
+\end{equation}
+Values $EC_{50,L} > EC_{50,L}^{*}$ (reduced potency, since a larger
+$EC_{50,L}$ requires a higher drug concentration for the same effect via
+Eq.~\eqref{eq:hill}) yield $f_c > 0$ and are classified as escape;
+values below yield $f_c < 0$ and are classified as suppression. This approach provides an explicit and quantitative criterion for separating clinical response from relapse.
+
+\subsection{Numerical procedure}
+
+The threshold is located in two stages.
+
+\paragraph{Stage 1: deterministic parameter sweep.}
+A single simulation is run at each of $121$ values of $EC_{50,L}$ on a
+uniform grid spanning $[0.1,\,1.3]$~mg$\cdot$L$^{-1}$ (step
+$0.01$~mg$\cdot$L$^{-1}$), with every other parameter, the initial
+condition, the dosing schedule, and the pharmacokinetic concentration
+profiles held fixed, so that $EC_{50,L}$ is the sole source of variation
+between runs. Only the terminal values $R_b(t_{\mathrm{end}})$ and
+$R_{res}(t_{\mathrm{end}})$ are retained. This sweep characterizes the
+shape of the dose response curve.  It confirms that
+the transition is a single, monotone switch and not a gradual
+decline or a multi-valued response.  These procedure ensures there is only one root.
+
+
+\paragraph{Stage 2: root-finding.}
+The precise crossing is obtained by solving Eq.~\eqref{eq:root} with
+Brent's method \cite{brent1973}, a bracketing algorithm combining
+bisection with inverse quadratic interpolation. Each evaluation of $f_c$
+entails one complete ODE integration over the full protocol. The root is
+bracketed by the sweep endpoints as noted above and is solved to an absolute tolerance of
+$10^{-3}$~mg$\cdot$L$^{-1}$. Prior to bisection, the sign condition
+\begin{equation}
+  f_c(0.1) < 0 \quad\text{and}\quad f_c(1.3) > 0
+  \label{eq:bracket}
+\end{equation}
+is verified explicitly (failure of either condition indicates that no sign
+change and no threshold within the interval).
+Equations~\eqref{eq:objective}--\eqref{eq:bracket} are solved independently
+for the blood ($c = b$) and reservoir ($c = res$) compartments, yielding
+two separate thresholds.
+
+\subsection{Numerical implementation}
+
+All integrations use the LSODA solver as exposed by
+\texttt{scipy.integrate.odeint}, with relative and absolute tolerances of
+$10^{-7}$ and $10^{-9}$ and a maximum of $5000$ internal steps per output
+interval; solutions are evaluated on a fixed grid of $1150$ time points
+spanning $[0,\,t_{\mathrm{end}}]$. Root-finding uses
+\texttt{scipy.optimize.brentq}. The solver tolerances are several orders of
+magnitude tighter than the LOD-scale quantities compared in
+Eq.~\eqref{eq:objective}, ensuring that the located threshold reflects
+model dynamics rather than integration error.
+
+\subsection{Result}
+\label{sec:threshold_result}
+
+Under Table~\ref{tab:base}, the resistant reservoir and the resistant blood
+compartment both cross the limit of detection at
+\begin{equation}
+EC_{50,L}^{*} = 0.488~\mathrm{mg}\cdot\mathrm{L}^{-1},
+\end{equation}
+the two crossings agreeing to within the $10^{-3}$~mg$\cdot$L$^{-1}$
+bisection tolerance and therefore not resolved as separate values. They are
+expected to coincide because both experience the same linezolid effect term
+through the shared blood-compartment efficacy and are coupled by
+bidirectional bacterial exchange. The reservoir value is adopted as the
+operative threshold in downstream analyses, since it is the reservoir that
+seeds post-treatment relapse.
+
+The threshold is re-derived by root-finding it is recomputed when upstream parameters are revised.
+The following are examples:
+
+\begin{itemize}
+\item raising $\rho_S$ from $0.60$ to $0.61$~h$^{-1}$ moved the threshold
+from $0.988$ to $0.932$~mg$\cdot$L$^{-1}$;
+\item granting the sensitive strain a $10\%$ reservoir growth advantage
+($\rho_{res,S} = 0.19415$ versus $\rho_{res,R} = 0.1765$~h$^{-1}$), with a
+compensating reduction of $\phi_L$ from $0.45$ to $0.30$, moved it to
+$0.868$~mg$\cdot$L$^{-1}$;
+\item a subsequent rise in $\rho_S$ from $0.61$ to $0.72$~h$^{-1}$ moved it
+to its present $0.488$~mg$\cdot$L$^{-1}$.
+\end{itemize}
+
+\subsection{Assumptions and limitations}
+
+Two assumptions underlie the procedure. First, Brent's method returns a
+single root within the bracketing interval, so the threshold is well
+defined only if the terminal resistant burden is monotone in $EC_{50,L}$
+over $[0.1,\,1.3]$~mg$\cdot$L$^{-1}$. The $121$-point grid sweep of
+Stage~1 is the check on this assumption, and confirms a single sharp
+transition under the present parameterisation; a non-monotone response
+arising from a future re-parameterisation would render the reported root
+non-unique. Second, the bracketing interval is fixed a priori, and a
+parameter revision displacing the threshold outside
+$[0.1,\,1.3]$~mg$\cdot$L$^{-1}$ would violate Eq.~\eqref{eq:bracket}; that
+condition is tested explicitly at each run, so such a displacement is
+reported as an absent threshold rather than propagating silently as an
+incorrect value.
+
+
+% =============================================================================
+\section{Part II --- Monte Carlo patient population}
+\label{sec:montecarlo}
+
+\subsection{Sampling distribution}
+
+$EC_{50,L}$ is sampled from a mean-corrected log-normal distribution,
+\begin{equation}
+\sigma_{\ln} = \sqrt{\ln(1+CV^2)}, \qquad
+\mu_{\ln} = \ln(EC_{50,L,\mathrm{base}}) - \tfrac{1}{2}\sigma_{\ln}^2, \qquad
+EC_{50,L} \sim \mathrm{LogNormal}(\mu_{\ln}, \sigma_{\ln}^2),
+\label{eq:lognormal}
+\end{equation}
+with $EC_{50,L,\mathrm{base}} = 0.6$~mg/L and $CV = 1.1$, so that
+$\mathbb{E}[EC_{50,L}]$ lands exactly on baseline.  The same
+mean-corrected, CV-parameterized convention is used by
+\texttt{MC\_immune\_response.py} and \texttt{MC\_emax\_lzd.py}. The
+$EC_{50,L}$ is a single value used throughout the project.  Numerically:
+$\sigma_{\ln} = 0.8905$ and $\mu_{\ln} = -0.9073$.
+
+\subsection{Procedure, as implemented}
+
+The code's order of execution.
+
+\begin{enumerate}
+\item \textbf{Load the model.} \texttt{model\_Bacteremia.py} is loaded
+dynamically via \texttt{importlib} (rather than a plain \texttt{import}) so
+a missing file produces an explicit error rather than an
+\texttt{ImportError} traceback.
+
+\item \textbf{Fix run-level constants.} \texttt{NUM\_ITERATIONS = 1000},
+\texttt{LOD = 10.0} CFU/mL, \texttt{CV = 1.1}, \texttt{SEED = 44},
+\texttt{total\_h = 1944}~h, \texttt{vanco\_start = 504}~h, and a shared
+evaluation grid \texttt{t\_eval = linspace(0, 1944, 1150)} used by every
+ODE solve.
+
+\item \textbf{Build the drug-concentration and immune-response callables
+once.} \texttt{PharmacokineticModel().concentration\_function(...)} is
+called once each for vancomycin and linezolid, and
+\texttt{ImmuneResponse()} is instantiated once. These closures are reused
+unmodified by all $1000$ solves --- only $EC_{50,L}$ changes between
+iterations.
+
+\item \textbf{Fix \texttt{BASE\_PARAMS} and the initial state}
+(Table~\ref{tab:base}, $\mathbf{Y}_0$ above). $EC_{50,L}$ is 
+absent from \texttt{BASE\_PARAMS}.  It is merged in per call at step~7.
+
+\item \textbf{Compute the log-normal parameters} of
+Eq.~\eqref{eq:lognormal} once.
+
+\item \textbf{Draw all $1000$ samples at once.} A seeded generator,
+\texttt{rng = np.random.default\_rng(44)}, draws the full vector in a
+single call.  The run is fully reproducible and sample $i$ is used by
+iteration $i$.
+
+\item \textbf{Compute the internal deterministic switch curve
+($131$ points)} over $[0.05,\,3.3]$~mg/L, recording final $R_b$ and
+$R_{res}$ at each point, then root-find \texttt{ESCAPE\_THRESH} on the same
+objective as Eq.~\eqref{eq:root}. If the endpoint signs fail to bracket a
+root, the code falls back to the coarse grid crossing.
+
+\item \textbf{Main Monte Carlo loop ($1000$ iterations).} Pre-allocated
+\texttt{NaN}-filled arrays (each $1000 \times 1150$) are filled by, for
+each $i$: building \texttt{params\_i} as a shallow copy of
+\texttt{BASE\_PARAMS} with only $EC_{50,L}$ replaced by sample $i$;
+integrating from the same $\mathbf{Y}_0$ over the same \texttt{t\_eval};
+flooring each of the four trajectories to $0$ wherever it falls below the
+LOD. This ensures that sub-detection noise reads as true clearance and not a small positive count.  The full trajectory is stored into row $i$. All run-to-run
+variance is attributable to sampled $EC_{50,L}$ alone. 
+
+\item \textbf{Classify each patient.} \texttt{final\_R\_res} is the last
+time point of each row, and \texttt{escaped\_mask = final\_R\_res > LOD}
+marks each patient as escape or suppression by their \emph{own} simulated
+outcome.
+
+\item \textbf{Render the two figures} (\S\ref{sec:outputs}) directly from
+the stored arrays.  No further simulation is performed.
+
+\item \textbf{Print a console summary} of the sampled $EC_{50,L}$
+distribution and, where any samples exceed the LOD, the median and
+5th/95th percentiles of peak $S_b$ and peak $R_b$.
+\end{enumerate}
+
+\subsection{Result}
+
+Against the $0.488$~mg/L threshold, the sampled population splits
+\begin{center}
+\textbf{$43.6\%$ escape ($436/1000$)} \quad versus \quad
+\textbf{$56.4\%$ suppressed ($564/1000$)},
+\end{center}
+with sampled median $0.43$~mg/L (5th--95th percentile
+$0.10$--$1.68$~mg/L).
+
+This fraction is largely a readout of how close the calibration sits to its
+own switch. Applying Eq.~\eqref{eq:lognormal}, the sampling mean
+($0.6$~mg/L) and the threshold ($0.488$~mg/L) are separated by
+\begin{equation}
+z = \frac{\ln(0.488) - \mu_{\ln}}{\sigma_{\ln}}
+  = \frac{\ln(0.488) - (-0.9073)}{0.8905} \approx 0.213,
+\end{equation}
+about a fifth of a standard deviation of $\ln X$. The standard-normal upper
+tail at that $z$ predicts $1 - \Phi(0.213) = 0.416$, i.e.\ $41.6\%$ escape,
+within two points of the simulated $43.6\%$.  It illustrates that a calibration that close to its own switch necessarily splits the population close to evenly.
+
+\subsection{Why the two stages, in this order}
+\label{sec:agreement}
+
+The deterministic sweep answers \emph{where the switch is}; the Monte Carlo
+loop answers \emph{how a population distributes around it}. Keeping them
+separate matters for one specific reason: in the figures, each Monte Carlo
+sample is coloured by its \emph{own} simulated outcome (whether that
+patient's final $R_{res}$ exceeds the LOD), not by which side of
+\texttt{ESCAPE\_THRESH} its sampled $EC_{50,L}$ happens to fall on. Were
+the classification taken from the threshold, the population panel would
+agree with the switch panel by construction and could demonstrate nothing.
+As built, the deterministic switch is a prediction and the Monte Carlo
+colouring is the outcome, so any disagreement is visible rather than
+hidden.
+
+The same independence applies across scripts. \texttt{MC\_ec50\_lzd.py}
+bisects over $[0.05,\,3.3]$ on a $131$-point grid, while
+\texttt{EC50\_lzd\_threshold\_sweep.py} bisects over $[0.1,\,1.3]$ on a
+$121$-point grid. The intervals no longer share an endpoint, and the grids
+differ in both extent and spacing, yet both locate the threshold at
+$0.488$~mg/L. The wider Monte Carlo bracket is required because that script
+must cover its own sampled population: at mean $0.6$ with $CV = 1.1$, the
+1st--99th percentile of the log-normal draw spans roughly
+$[0.05,\,3.20]$~mg/L, which the narrower diagnostic interval would not
+contain.
+
+
+% =============================================================================
+\section{Figures}
+\label{sec:outputs}
+
+Four figures cover this analysis. Two are purely deterministic, one is
+purely Monte Carlo, and one is a combination of both methods.  This is an important distinction, because the deterministic scatter plot superficially does resembles a Monte Carlo.
+
+\paragraph{\texttt{ec50\_lzd\_threshold\_sweep.png} --- DETERMINISTIC.}
+Final $R_b$ and $R_{res}$ across the $121$-point grid, escape zones shaded,
+both bisected thresholds marked. Sub-LOD values are floored to
+$\mathrm{LOD}/2$ for display so the curves stay continuous and the
+transition reads as a visible jump rather than a gap.
+
+\paragraph{\texttt{ec50\_terminal\_burden\_vs\_ec50.png} --- DETERMINISTIC.}
+The same runs as a categorical outcome plot: $24$ markers subsampled from
+the same grid, $R_{res}$ only. Open circles are pinned at the LOD for runs
+that clear (their true residual is $\sim$$10^{-12}$ and would fall off a
+log axis); filled circles sit at the true final count for runs that escape.
+\emph{Each marker is one fixed-parameter run.}
+
+\paragraph{\texttt{mc\_ec50\_lzd\_sweep\_kinetics.png} --- MONTE CARLO.}
+A four-panel time course ($S_b$, $R_b$, $S_{res}$, $R_{res}$) over the
+$1944$-h window, each panel showing $20$ individual sample trajectories
+plus a median and $5^{\mathrm{th}}$--$95^{\mathrm{th}}$-percentile band,
+with the dosing windows overlaid and all four panels sharing a
+$0$--$81$~day axis.
+
+The median and band are taken over the \emph{escaped} patients only
+($n = 436$), not all $1000$ iterations. Sub-LOD values are stored as $0$,
+so an all-patient median is itself $0$ wherever escape (clinical relapse) is a minority outcome making the relapse disappear from the plot. Restricting to escaped rows and
+using \texttt{nanmedian} keeps it visible. A gap therefore means ``not
+detectable in any escaped patient'', not ``no data'', and the band is a
+conditional quantity: the spread among patients who escaped.
+
+\paragraph{\texttt{mc\_ec50\_lzd\_switch.png} --- MIXED, one source per
+panel.} The top panel is the continuous \emph{deterministic} switch curve
+(final $R_b$/$R_{res}$ versus $EC_{50,L}$ from the $131$-point sweep) with
+\texttt{ESCAPE\_THRESH} marked and the suppressed/escape regimes shaded.
+The bottom panel is a \emph{Monte Carlo} histogram of the $1000$ sampled
+$EC_{50,L}$ values, split and coloured by each patient's actual simulated
+outcome. Both panels share an $x$-axis spanning the sweep interval, which
+clips display of the roughly top $1\%$ of draws above $3.3$~mg/L; those
+samples are still counted in the reported escape fraction.
+
+\begin{thebibliography}{9}
+\bibitem{brent1973}
+Brent, R.~P. (1973). \emph{Algorithms for Minimization without
+Derivatives}, ch.~4. Prentice-Hall, Englewood Cliffs, NJ.
+R.P. Brent, "An algorithm with Guaranteed convergence for finding a zero of a Function", Computer Journal 14, 422-425, 1971.
+\end{thebibliography}
+
+\end{document}

@@ -25,6 +25,8 @@ import numpy as np
 from scipy.integrate import odeint
 from scipy.optimize import brentq
 
+from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0
+
 plt.rcParams.update({
     "font.size": 16,
     "axes.titlesize": 18,
@@ -38,6 +40,13 @@ plt.rcParams.update({
 # all figures are written into figures/ alongside the scripts
 FIGURES_DIR = "figures"
 os.makedirs(FIGURES_DIR, exist_ok=True)
+
+# FIGURES PRODUCED BY THIS SCRIPT -- ALL DETERMINISTIC (no sampling anywhere)
+#   frb_sweep_kinetics.png / fbr_sweep_kinetics.png -- trajectories, one per grid point.
+#   frb_sweep_regimes.png  -- regime summary, RESISTANT COMPARTMENTS ONLY.
+#   fbr_sweep_regimes.png  -- regime summary, retains the sensitive-strain curves.
+#   transfer_rate_sweep_grid.png -- the log-spaced grid itself.
+#   Every point is ONE fixed-parameter run over a chosen transfer rate.
 
 # ---------------------------------------------------------------------------
 # Load model
@@ -55,34 +64,49 @@ spec.loader.exec_module(model_mod)
 # ---------------------------------------------------------------------------
 # Simulation settings
 # ---------------------------------------------------------------------------
-LOD            = 10.0       # limit of detection (CFU/mL)
-RATE_MIN       = 1e-8       # lower bound of the log-spaced grid (shared by both rates)
-RATE_MAX       = 1e-2       # upper bound of the log-spaced grid (shared by both rates)
+RATE_MIN       = 1e-7       # lower bound of the log-spaced grid (shared by both rates)
+RATE_MAX       = 1e0        # upper bound of the log-spaced grid (shared by both rates)
 COARSE_POINTS  = 40         # coarse coverage of the full range, for context
 ZOOM_MIN       = 1e-3       # transition band identified in the first grid sweep
 ZOOM_MAX       = 1e-2
 ZOOM_POINTS    = 160        # dense coverage within the zoom band
+
+# Second dense band, covering the reservoir-collapse regime. Above roughly
+# 3e-2 h^-1 the reservoir is drained into blood faster than it refills and
+# peak S_res falls from ~6.7e3 to its 1e2 CFU/mL initial value -- the same
+# one-directional-transfer effect that produces the clearance threshold. The
+# coarse pass alone puts only ~6 points across those last 1.5 decades, too
+# few to resolve the collapse, so it gets its own band rather than diluting
+# the clearance band above (whose 160 points/decade resolve the sharp
+# relapse-to-clearance switch).
+COLLAPSE_MIN    = 1e-2
+COLLAPSE_MAX    = 1e0
+COLLAPSE_POINTS = 120       # 60 points/decade across the collapse
 
 
 def build_grid():
     """Build a log-spaced RATE_GRID used by run_transfer_rate_sweep.
 
     1. Generate a coarse log-spaced grid across the full range.
-    2. Remove coarse points inside the ZOOM_MIN–ZOOM_MAX transition band.
-    3. Add a dense log-spaced set of points inside that zoom band.
+    2. Remove coarse points inside either dense band.
+    3. Add dense log-spaced sets inside the clearance band (ZOOM_MIN-ZOOM_MAX)
+       and the reservoir-collapse band (COLLAPSE_MIN-COLLAPSE_MAX).
     4. Merge, sort, and deduplicate the points before returning.
     """
     coarse = np.logspace(np.log10(RATE_MIN), np.log10(RATE_MAX), COARSE_POINTS)
-    coarse = coarse[(coarse < ZOOM_MIN) | (coarse > ZOOM_MAX)]
-    zoom   = np.logspace(np.log10(ZOOM_MIN), np.log10(ZOOM_MAX), ZOOM_POINTS)
-    return np.unique(np.concatenate([coarse, zoom])) #remove duplicates and sorts the combined array
+    in_zoom     = (coarse >= ZOOM_MIN)     & (coarse <= ZOOM_MAX)
+    in_collapse = (coarse >= COLLAPSE_MIN) & (coarse <= COLLAPSE_MAX)
+    coarse = coarse[~(in_zoom | in_collapse)]
+    zoom     = np.logspace(np.log10(ZOOM_MIN), np.log10(ZOOM_MAX), ZOOM_POINTS)
+    collapse = np.logspace(np.log10(COLLAPSE_MIN), np.log10(COLLAPSE_MAX), COLLAPSE_POINTS)
+    return np.unique(np.concatenate([coarse, zoom, collapse])) #remove duplicates and sorts the combined array
 
 
 RATE_GRID  = build_grid()
 NUM_POINTS = len(RATE_GRID)
 
-total_h      = 1944  # 21d pre-tx + 4d vancomycin + 42d linezolid + 14d post-tx follow-up
-vanco_start  = 504
+total_h     = TOTAL_H
+vanco_start = VANCO_START
 t_eval       = np.linspace(0, total_h, 1150)
 t_days       = t_eval / 24.0
 
@@ -95,42 +119,12 @@ lzd_func = pk.concentration_function("linezolid",  total_h, vanco_start + pk.van
 vanco_start_days = vanco_start / 24.0
 lzd_start_days   = (vanco_start + pk.van_duration) / 24.0
 lzd_end_days     = (vanco_start + pk.van_duration + pk.lzd_duration) / 24.0
-
-# ---------------------------------------------------------------------------
-# Fixed parameters (all except the swept transfer rate held at baseline)
-# ---------------------------------------------------------------------------
-rho_S        = 0.61    # raised from 0.60 -- see rho_S sensitivity analysis. At the actual
-                       # baseline transfer rates used below (f_r_b=5e-5, f_b_r=1e-5), this
-                       # produces no change (both sit far below the 1e-3-1e-2 transition
-                       # band), but it does shift behavior inside that band itself.
-                       # Re-verified after giving rho_res_S a 10% growth advantage over
-                       # rho_res_R and lowering lzd_res_fraction 0.45 -> 0.30 to compensate:
-                       # re-running this sweep (frb_sweep_regimes.png / fbr_sweep_
-                       # regimes.png) shows the visible curvature still concentrated in the
-                       # same 1e-3-1e-2 region, so the zoom band below is unchanged
-rho_R        = 0.55    # directly tuned (~9.8% fitness cost relative to rho_S = 0.61,
-                       # down from 20%). Was quoted as 8.3% while rho_S was 0.60.
-
-BASE_PARAMS = {
-    "rho_S":            rho_S,
-    "rho_R":            rho_R,
-    "rho_res_R":        0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
-    "rho_res_S":        0.19415,  # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir
-    "Emax_v":             1.7,
-    "EC50_V":            0.25,
-    "Emax_l":           0.8,  
-    "EC50_L":           1.0,
-    "B_max_blood":      6000,
-    "B_max_reservoir":  1e4,    # lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
-    "van_res_fraction": 0.15,
-    "lzd_res_fraction": 0.30,    # lowered from 0.45 -- Emax_l_res scales with rho_res_S; keeps R_res persistent despite S's reservoir growth advantage
-}
+# Model parameters come from parameters.py (single source of truth).
 
 F_R_B_BASE = 5e-5   # reservoir -> blood baseline (restored to original)
 F_B_R_BASE = 1e-5   # blood -> reservoir baseline
 
 # Fixed initial conditions — only the swept rate is varied across iterations
-Y0 = [0.0, 0.0, 100.0, 100.0]
 
 
 # ---------------------------------------------------------------------------
@@ -309,7 +303,16 @@ print(f"f_r_b clearance threshold (final R_b crosses LOD, high side):    "
 # reference line), with the swept rate's regime shaded when the sweep has
 # genuine thresholds to show.
 # ---------------------------------------------------------------------------
-def plot_regime_switch(sweep, filename, thresholds=None, title_suffix=""):
+def plot_regime_switch(sweep, filename, thresholds=None, title_suffix="",
+                       show_sensitive=True):
+    """Regime summary for one sweep.
+
+    show_sensitive=False drops the sensitive-strain series (peak S_b and the
+    peak S_res reference line), leaving only the resistant compartments. Used
+    for the f_r_b figure, whose argument is about R_b's establishment and
+    clearance thresholds; the f_b_r figure keeps them, since its own section
+    discusses peak S_res directly.
+    """
     rates      = sweep["rates"]
     log10_rate = np.log10(rates)
     FLOOR = LOD * 0.5   # display floor for sub-LOD values, so cleared/
@@ -336,9 +339,10 @@ def plot_regime_switch(sweep, filename, thresholds=None, title_suffix=""):
 
     ax.axhline(LOD, color="black", ls=":", lw=1.0, alpha=0.6, label=f"LOD ({int(LOD)} CFU/mL)")
 
-    ax.plot(log10_rate, peak_S_res, color="mediumpurple", lw=1.3, ls=":",
-            alpha=0.8, label="Peak $S_{res}$ (reservoir, for reference)")
-    ax.plot(log10_rate, peak_S_b,  color="royalblue", lw=2.2, label="Peak $S_b$")
+    if show_sensitive:
+        ax.plot(log10_rate, peak_S_res, color="mediumpurple", lw=1.3, ls=":",
+                alpha=0.8, label="Peak $S_{res}$ (reservoir, for reference)")
+        ax.plot(log10_rate, peak_S_b,  color="royalblue", lw=2.2, label="Peak $S_b$")
     ax.plot(log10_rate, peak_R_b,  color="firebrick",  lw=2.2, label="Peak $R_b$")
     ax.plot(log10_rate, final_R_b, color="firebrick",  lw=2.2, ls="--", label="Final $R_b$")
 
@@ -361,7 +365,8 @@ def plot_regime_switch(sweep, filename, thresholds=None, title_suffix=""):
 
 
 plot_regime_switch(sweep_f_r_b, "frb_sweep_regimes.png",
-                    thresholds=(threshold_establish, threshold_clear))
+                    thresholds=(threshold_establish, threshold_clear),
+                    show_sensitive=False)
 plot_regime_switch(sweep_f_b_r, "fbr_sweep_regimes.png",
                     title_suffix=" (no threshold in swept range)")
 
