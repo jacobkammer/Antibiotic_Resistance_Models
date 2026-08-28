@@ -23,5 +23,5 @@ print(f"Converged in {result.iterations} iterations.")
 
 data = np.array([1, 2, np.nan, 4, 5])
 
-b_hominusprint(np.percentile(data, 50))      # returns nan
+print(np.percentile(data, 50))      # returns nan
 print(np.nanpercentile(data, 50))   # returns 3.0 (median of [1, 2, 4, 5])

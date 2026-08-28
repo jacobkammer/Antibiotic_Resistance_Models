@@ -110,3 +110,127 @@ NUM_ITERATIONS = 1000
 #   f_r_b     establishment 2.230e-5 h^-1, clearance 8.329e-3 h^-1
 #   S_res_0   no threshold in [1, 2000] -- R_res escapes at every value tested
 # ---------------------------------------------------------------------------
+
+
+# ===========================================================================
+# Figure provenance
+# ===========================================================================
+# Figures are gitignored, so git cannot tell when a PNG on disk was produced
+# by an older parameterisation than the code that is now checked in. That
+# happened repeatedly during development: manuscript tables and figures were
+# citing results from a superseded calibration.
+#
+# Every figure is therefore stamped twice:
+#   1. invisibly, in the PNG's own tEXt metadata, so the file itself carries
+#      the parameter hash that produced it (visible via `exiftool`, PIL, or
+#      `miktex`-independent tooling);
+#   2. as a row in figure_provenance.tsv, which IS tracked by git, so a stale
+#      figure shows up as an uncommitted diff.
+#
+# To check for stale figures:   python parameters.py --check
+# ===========================================================================
+import datetime as _dt
+import hashlib as _hashlib
+import json as _json
+import os as _os
+import pathlib as _pathlib
+
+_MANIFEST = "figure_provenance.tsv"
+
+
+def param_hash():
+    """Short, stable hash of everything that can change a simulation result."""
+    payload = {
+        "BASE_PARAMS": BASE_PARAMS, "TOTAL_H": TOTAL_H, "VANCO_START": VANCO_START,
+        "LOD": LOD, "Y0": Y0, "K_IMMUNE_DEFAULT": K_IMMUNE_DEFAULT,
+        "EFF_BLOOD": EFF_BLOOD, "EFF_RES": EFF_RES, "SAMPLING": SAMPLING,
+        "NUM_ITERATIONS": NUM_ITERATIONS,
+    }
+    blob = _json.dumps(payload, sort_keys=True, default=str).encode()
+    return _hashlib.sha256(blob).hexdigest()[:12]
+
+
+def save_figure(target, out_file, script):
+    """savefig() with provenance. `target` may be a Figure or the pyplot module.
+
+    Writes the parameter hash into the PNG metadata and records a row in
+    figure_provenance.tsv so stale figures are detectable from git alone.
+    """
+    h = param_hash()
+    stamp = _dt.datetime.now().isoformat(timespec="seconds")
+    name = _os.path.basename(script)
+    target.savefig(
+        out_file, dpi=300, bbox_inches="tight",
+        metadata={"Software": name, "Comment": f"param_hash={h} generated={stamp}"},
+    )
+    _record(_os.path.basename(out_file), h, name, stamp)
+    return h
+
+
+def _record(figure, h, script, stamp):
+    """Upsert one row of the manifest, keeping it sorted by figure name."""
+    rows = {}
+    if _os.path.exists(_MANIFEST):
+        with open(_MANIFEST, encoding="utf-8") as fh:
+            for line in fh:
+                if line.strip() and not line.startswith("figure\t"):
+                    parts = line.rstrip("\n").split("\t")
+                    if len(parts) == 4:
+                        rows[parts[0]] = parts
+    rows[figure] = [figure, h, script, stamp]
+    with open(_MANIFEST, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write("figure\tparam_hash\tscript\tgenerated\n")
+        for k in sorted(rows):
+            fh.write("\t".join(rows[k]) + "\n")
+
+
+def _check():
+    """Report figures whose recorded hash differs from the current parameters."""
+    current = param_hash()
+    print(f"current param_hash: {current}\n")
+    if not _os.path.exists(_MANIFEST):
+        print(f"no {_MANIFEST}; run the scripts to generate one")
+        return 1
+    stale, missing, ok = [], [], 0
+    with open(_MANIFEST, encoding="utf-8") as fh:
+        for line in fh:
+            if not line.strip() or line.startswith("figure\t"):
+                continue
+            fig, h, script, stamp = line.rstrip("\n").split("\t")
+            if not _os.path.exists(_os.path.join(FIGURES_DIR, fig)):
+                missing.append((fig, script))
+            elif h != current:
+                stale.append((fig, h, script))
+            else:
+                ok += 1
+    # PNGs on disk that no script has ever stamped -- the case that let stale
+    # figures survive recalibration unnoticed
+    recorded = set()
+    with open(_MANIFEST, encoding='utf-8') as fh:
+        for line in fh:
+            if line.strip() and not line.startswith('figure'):
+                recorded.add(line.split(chr(9))[0])
+    on_disk = ({f.name for f in _pathlib.Path(FIGURES_DIR).glob('*.png')}
+               if _os.path.isdir(FIGURES_DIR) else set())
+    unstamped = sorted(on_disk - recorded)
+
+    for fig, h, script in stale:
+        print(f'  STALE      {fig:42s} built at {h} by {script}')
+    for fig, script in missing:
+        print(f'  ABSENT     {fig:42s} (recorded, not on disk; rerun {script})')
+    for fig in unstamped:
+        print(f'  UNSTAMPED  {fig:42s} (on disk, provenance unknown)')
+    summary = (f'{ok} current, {len(stale)} stale, {len(missing)} absent, '
+               f'{len(unstamped)} unstamped')
+    print()
+    print('  ' + summary)
+    return 1 if (stale or missing or unstamped) else 0
+
+
+FIGURES_DIR = "figures"
+
+if __name__ == "__main__":
+    import sys
+    if "--check" in sys.argv:
+        sys.exit(_check())
+    print(f"param_hash: {param_hash()}")

@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import odeint
 
-from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0
+from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0, save_figure
 
 
 # code below sets global matplotlib parameters for consistent figure formatting
@@ -145,5 +145,5 @@ axes[1].annotate(
 )
 
 out_file = os.path.join(FIGURES_DIR, "baseline_reservoir_clearance.png")
-fig.savefig(out_file, dpi=300, bbox_inches="tight")
+save_figure(fig, out_file, __file__)
 print(f"\nSaved: {out_file}")

@@ -49,7 +49,7 @@ import numpy as np
 from scipy.integrate import odeint
 from scipy.optimize import brentq
 
-from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0
+from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0, save_figure
 
 plt.rcParams.update({
     "font.size": 16,
@@ -279,7 +279,7 @@ for label, ax in zip(["A", "B", "C", "D"], axes.flat):
             fontsize=22, fontweight="bold", va="top")
 
 out_file = os.path.join(FIGURES_DIR, "mc_immune_response.png")
-fig.savefig(out_file, dpi=300, bbox_inches="tight")
+save_figure(fig, out_file, __file__)
 print(f"\nSaved: {out_file}")
 
 # ── Relapse/escape rate: fraction of runs where R_b or R_res is still above
@@ -368,5 +368,5 @@ ax_hist.grid(True, axis="y", ls=":", alpha=0.35)
 ax_hist.legend(loc="upper right", fontsize=12, framealpha=0.9)
 
 out_file = os.path.join(FIGURES_DIR, "mc_immune_response_switch.png")
-fig2.savefig(out_file, dpi=300, bbox_inches="tight")
+save_figure(fig2, out_file, __file__)
 print(f"Saved: {out_file}")

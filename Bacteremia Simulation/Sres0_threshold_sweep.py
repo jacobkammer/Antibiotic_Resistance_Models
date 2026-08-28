@@ -41,7 +41,7 @@ import numpy as np
 from scipy.integrate import odeint
 from scipy.optimize import brentq
 
-from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0
+from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0, save_figure
 
 plt.rcParams.update({
     "font.size": 16,
@@ -231,5 +231,5 @@ ax.legend(loc="upper right", fontsize=15, framealpha=0.85)
 
 fig.tight_layout()
 out_file = os.path.join(FIGURES_DIR, "sres0_threshold_sweep.png")
-fig.savefig(out_file, dpi=300, bbox_inches="tight")
+save_figure(fig, out_file, __file__)
 print(f"\nSaved: {out_file}")

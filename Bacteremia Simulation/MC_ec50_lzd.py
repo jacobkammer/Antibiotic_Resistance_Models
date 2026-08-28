@@ -113,7 +113,7 @@ import numpy as np
 from scipy.integrate import odeint
 from scipy.optimize import brentq
 
-from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0
+from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0, save_figure
 
 plt.rcParams.update({
     "font.size": 16,
@@ -375,7 +375,7 @@ for ax, hist, lc, mc, title, ylim in panels:
 
 plt.tight_layout()
 out_file = os.path.join(FIGURES_DIR, "mc_ec50_lzd_sweep_kinetics.png")
-plt.savefig(out_file, dpi=300, bbox_inches="tight")
+save_figure(plt, out_file, __file__)
 print(f"Saved: {out_file}")
 
 
@@ -456,7 +456,7 @@ ax_hist.grid(True, axis="y", ls=":", alpha=0.35)
 ax_hist.legend(loc="upper right", fontsize=12, framealpha=0.9)
 
 out_file = os.path.join(FIGURES_DIR, "mc_ec50_lzd_switch.png")
-fig3.savefig(out_file, dpi=300, bbox_inches="tight")
+save_figure(fig3, out_file, __file__)
 print(f"Saved: {out_file}")
 
 

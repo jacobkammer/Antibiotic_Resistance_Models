@@ -25,7 +25,7 @@ import numpy as np
 from scipy.integrate import odeint
 from scipy.optimize import brentq
 
-from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0
+from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0, save_figure
 
 plt.rcParams.update({
     "font.size": 16,
@@ -262,7 +262,7 @@ def plot_sweep_kinetics(sweep, filename):
 
     plt.tight_layout()
     out_file = os.path.join(FIGURES_DIR, filename)
-    plt.savefig(out_file, dpi=300, bbox_inches="tight")
+    save_figure(plt, out_file, __file__)
     print(f"Saved: {out_file}")
     plt.close(fig)
 
@@ -359,7 +359,7 @@ def plot_regime_switch(sweep, filename, thresholds=None, title_suffix="",
 
     plt.tight_layout()
     out_file = os.path.join(FIGURES_DIR, filename)
-    plt.savefig(out_file, dpi=300, bbox_inches="tight")
+    save_figure(plt, out_file, __file__)
     print(f"Saved: {out_file}")
     plt.close(fig)
 
@@ -399,7 +399,7 @@ ax.grid(True, which="both", ls=":", alpha=0.35)
 
 plt.tight_layout()
 out_file = os.path.join(FIGURES_DIR, "transfer_rate_sweep_grid.png")
-plt.savefig(out_file, dpi=300, bbox_inches="tight")
+save_figure(plt, out_file, __file__)
 print(f"Saved: {out_file}")
 
 
