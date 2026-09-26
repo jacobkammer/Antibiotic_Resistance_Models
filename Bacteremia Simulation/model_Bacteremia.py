@@ -1,11 +1,18 @@
 # =============================================================================
-# Model for Monte Carlo exploration
-# Used by run_MC_transfer_rates.py
+# Dual-reservoir model: PK, immune response, and the ODE right-hand side.
+# Imported by every analysis script (threshold sweeps, Monte Carlo analyses,
+# baseline/initial-condition checks, study_summary_figures.py, and
+# test_solver_convergence.py); all parameters come from parameters.py.
 # =============================================================================
 import numpy as np
-from scipy.integrate import odeint
 import os
 import sys
+
+from parameters import (
+    BASE_PARAMS, EFF_BLOOD, EFF_RES, HILL_COEFFICIENTS, K_IMMUNE_DEFAULT,
+    PK_PARAMS, TOTAL_H, VANCO_START, Y0,
+)
+from solver import integrate_model
 
 
 class PharmacokineticModel:
@@ -20,21 +27,8 @@ class PharmacokineticModel:
     """
 
     def __init__(self):
-        # Vancomycin
-        self.van_dose     = 1000    # mg (15 mg/kg for 67 kg patient)
-        self.van_interval = 8       # h (q8h dosing)
-        self.van_duration = 96      # h (4-day course)
-        self.van_volume   = 50      # L (Vd)
-        self.van_fu       = 0.50    # free fraction (protein binding ~50%)
-        self.van_cl       = 5.0     # L/h (CrCl ~80 mL/min)
-
-        # Linezolid
-        self.lzd_dose     = 600     # mg (standard 600 mg q12h)
-        self.lzd_interval = 12      # h (q12h dosing)
-        self.lzd_duration = 1008    # h (42-day / 6-week course, standard for endocarditis)
-        self.lzd_volume   = 45      # L
-        self.lzd_fu       = 0.70    # free fraction (~70%)
-        self.lzd_cl       = 6.0     # L/h → ke = 0.133 h⁻¹, t½ ≈ 5.2 h
+        for name, value in PK_PARAMS.items():
+            setattr(self, name, value)
 
     def concentration_function(self, drug_type: str, total_time_h: float, start_h: float = 0):
         if drug_type == 'vancomycin':
@@ -60,17 +54,10 @@ class PharmacokineticModel:
 class ImmuneResponse:
     """Fixed immune clearance model."""
 
-    def __init__(self, k_immune=0.12, eff_blood=1.0, eff_res=0.1):
-        # Strain-specific eff_blood_S/eff_blood_R (S=1.0, R=5.0) was tried to
-        # make R_b clear without relapsing, but R_b never establishes a real,
-        # visible infection under any constant R-specific value -- it's a
-        # switch between "never appears" and "relapses to ~4e3+ CFU/mL after
-        # treatment ends" with no stable middle ground (S_b is crowded out of
-        # blood by S_b's own carrying-capacity dominance until vancomycin/
-        # linezolid clear it, then R_b's fate purely depends on whether it can
-        # out-run reservoir reseeding after linezolid stops). Reverted to a
-        # single eff_blood so R_b shows a real, treated infection and accepts
-        # the post-treatment relapse -- see baseline_reservoir_clearance.py.
+    def __init__(self, k_immune=K_IMMUNE_DEFAULT, eff_blood=EFF_BLOOD,
+                 eff_res=EFF_RES):
+        # A single blood efficacy multiplier is applied to both strains; the
+        # reservoir multiplier represents reduced compartmental immune access.
         self.k_immune  = k_immune
         self.eff_blood = eff_blood
         self.eff_res   = eff_res
@@ -88,14 +75,6 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
     S_res = max(0.0, S_res)
     R_res = max(0.0, R_res)
 
-    # Smooth floor transitions to prevent solver stiffness
-    _nf = 10.0
-    _ns = 2
-    smooth_S_b   = S_b**_ns   / (_nf**_ns + S_b**_ns)
-    smooth_R_b   = R_b**_ns   / (_nf**_ns + R_b**_ns)
-    smooth_S_res = S_res**_ns / (_nf**_ns + S_res**_ns)
-    smooth_R_res = R_res**_ns / (_nf**_ns + R_res**_ns)
-
     V = max(0.0, van_func(t))
     L = max(0.0, lzd_func(t))
 
@@ -103,11 +82,11 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
     # Pharmacodynamics
     # -------------------------------------------------------------------------
     # Vancomycin: bactericidal
-    h_V = 1.0
+    h_V = HILL_COEFFICIENTS["vancomycin"]
     vancomycin_kill = (params['Emax_v'] * V**h_V) / (params['EC50_V']**h_V + V**h_V)
 
     # Linezolid: BACTERIOSTATIC
-    h_L = 1.0
+    h_L = HILL_COEFFICIENTS["linezolid"]
     E_L = (params['Emax_l'] * L**h_L) / (params['EC50_L']**h_L + L**h_L)
 
     # -------------------------------------------------------------------------
@@ -126,29 +105,29 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
     imm_R_res = immune_model.eff_res   * immune_eff * R_res
 
     # -------------------------------------------------------------------------
-    # Exchange rates
+    # Exchange: one-way seeding from the reservoir into blood. There is no
+    # blood -> reservoir return term.
     # -------------------------------------------------------------------------
-    f_r_b = params['f_r_b']   
-    f_b_r = params['f_b_r']   
+    k_r_b = params['k_r_b']
 
     # -------------------------------------------------------------------------
     # Differential equations
     # -------------------------------------------------------------------------
     # Blood — Sensitive (S_b): Susceptible to both V and L
     dS_b = (
-        params['rho_S'] * S_b * logistic_blood * smooth_S_b
+        params['rho_S'] * S_b * logistic_blood
         - E_L * S_b
         - imm_S_b
         - vancomycin_kill * S_b
-        + f_r_b * S_res - f_b_r * S_b
+        + k_r_b * S_res
     )
 
     # Blood — Resistant (R_b): Susceptible ONLY to linezolid (L)
     dR_b = (
-        params['rho_R'] * R_b * logistic_blood * smooth_R_b
+        params['rho_R'] * R_b * logistic_blood
         - E_L * R_b
         - imm_R_b
-        + f_r_b * R_res - f_b_r * R_b
+        + k_r_b * R_res
     )
 
     # Reservoir tissue penetration effects
@@ -157,8 +136,12 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
     vancomycin_kill_res = (params['Emax_v'] * V_res**h_V) / \
                           (params['EC50_V']**h_V + V_res**h_V)
 
-    lzd_res_fraction = params.get('lzd_res_fraction', 0.45)
-    Emax_l_res = params['Emax_l'] * (params['rho_res_S'] / params['rho_S'])
+    lzd_res_fraction = params['lzd_res_fraction']
+    # Reduced linezolid efficacy against slow-growing, biofilm/SCV bone bacteria:
+    # alpha = params['lzd_res_efficacy'] (parameters.py), an independent
+    # calibrated factor deliberately not tied to the reservoir growth rates.
+    # This is the only place alpha is used.
+    Emax_l_res = params['Emax_l'] * params['lzd_res_efficacy']
 
     L_res = lzd_res_fraction * L   
     E_L_res_S = (Emax_l_res * L_res**h_L) / (params['EC50_L']**h_L   + L_res**h_L)
@@ -166,19 +149,19 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
 
     # Reservoir — Sensitive (S_res)
     dS_res = (
-        params['rho_res_S'] * S_res * logistic_res * smooth_S_res
+        params['rho_res_S'] * S_res * logistic_res
         - E_L_res_S * S_res
         - imm_S_res
         - vancomycin_kill_res * S_res
-        - f_r_b * S_res + f_b_r * S_b
+        - k_r_b * S_res
     )
 
     # Reservoir — Resistant (R_res)
     dR_res = (
-        params['rho_res_R'] * R_res * logistic_res * smooth_R_res
+        params['rho_res_R'] * R_res * logistic_res
         - E_L_res_R * R_res
         - imm_R_res
-        - f_r_b * R_res + f_b_r * R_b
+        - k_r_b * R_res
     )
 
     return [dS_b, dR_b, dS_res, dR_res]
@@ -187,11 +170,11 @@ def dual_reservoir_model(y, t, params, van_func, lzd_func, immune_model):
 if __name__ == "__main__":
     print("Dual-reservoir model (decoupled growth) starting...", flush=True)
 
-    total_h = 1944   # 21d pre-tx + 4d vancomycin + 42d linezolid + 14d post-tx follow-up
-    vanco_start = 504
+    total_h = TOTAL_H
+    vanco_start = VANCO_START
 
     pk           = PharmacokineticModel()
-    immune_model = ImmuneResponse(k_immune=0.12)
+    immune_model = ImmuneResponse()
 
     lzd_start = vanco_start + pk.van_duration
     lzd_end   = lzd_start   + pk.lzd_duration
@@ -199,49 +182,25 @@ if __name__ == "__main__":
     van_func = pk.concentration_function('vancomycin', total_h, vanco_start)
     lzd_func = pk.concentration_function('linezolid',  total_h, lzd_start)
 
-    # =========================================================================
-    # Adjusted Growth Parameters for Smooth Trajectories
-    # =========================================================================
-    # rho_S raised 0.61 -> 0.72 (rho_R 0.55 -> 0.649, ~10% fitness cost preserved) to offset
-    # EC50_L 1.0 -> 0.6 while keeping lzd_res_fraction at 0.30: reservoir kill scales as
-    # Emax_l_res = Emax_l * (rho_res_S / rho_S), so a higher rho_S weakens it.
-    rho_S = 0.72         # h⁻¹ Lowered from 0.80 for slower post-treatment R_b regrowth; Emax_l auto-follows
-    rho_R = 0.649         # h⁻¹ Directly tuned (~8.3% fitness cost relative to rho_S, down from 20%)
-
-    params = {
-        'rho_S':           rho_S,
-        'rho_R':           rho_R,
-        'rho_res_R':       0.1765,  # narrow window just above the reservoir persistence threshold (0.17594055) so S_b can also establish in blood -- see model_Bacteremia.py
-        'rho_res_S':       0.19415, # 1.1x rho_res_R -- sensitive strain grows 10% faster in the reservoir (fitness cost for R, mirroring the blood compartment)
-        'Emax_v':            1.7,
-        'EC50_V':           0.25,
-        'Emax_l':          0.8,    # Fixed, decoupled from rho_S (was tied for "perfect bacteriostasis")
-        'EC50_L':          0.6,   # lowered from 1.0 -- single project-wide EC50_L, matching MC_ec50_lzd.py's sampling mean (EC50_L_BASE)
-        'B_max_blood':     6000,
-        'B_max_reservoir': 1e4,     # Lowered from 4.5e6 so escaped R_res plateaus well above the LOD but far below its old level
-        'van_res_fraction':0.15,
-        'lzd_res_fraction':0.30,   # restored from 0.18 -- rho_S now carries the compensation
-        'f_r_b':           5e-5,   # Original value
-        'f_b_r':           1e-5,
-    }
-
-    y0 = [0, 0, 100, 100]   
+    params = dict(BASE_PARAMS)
+    y0 = list(Y0)
     t_eval = np.linspace(0, total_h, 1150)
 
-    solution = odeint(dual_reservoir_model, y0, t_eval,
-                      args=(params, van_func, lzd_func, immune_model),
-                      rtol=1e-8, atol=1e-10, mxstep=5000)
+    solution = integrate_model(
+        dual_reservoir_model, y0, t_eval,
+        (params, van_func, lzd_func, immune_model),
+    )
 
     S_b   = np.clip(solution[:, 0], 1, None)
     
     t_days           = t_eval / 24.0
     vanco_start_days = vanco_start / 24.0
 
-    net_growth_blood = rho_S - immune_model.eff_blood * immune_model.k_immune
+    net_growth_blood = params['rho_S'] - immune_model.eff_blood * immune_model.k_immune
     print(f"Net blood growth before Abx: {net_growth_blood:.3f} h^-1", flush=True)
     assert net_growth_blood > 0, "ERROR: Host clears infection without antibiotics!"
 
-    print(f"Exchange rates: f_r_b = {params['f_r_b']}, f_b_r = {params['f_b_r']}", flush=True)
+    print(f"Reservoir -> blood exchange rate: k_r_b = {params['k_r_b']}", flush=True)
     pre_tx_idx = t_eval <= vanco_start
     peak_S_b   = np.max(S_b[pre_tx_idx])
     print(f"Peak S_b before vancomycin: {peak_S_b:.2e} CFU/mL", flush=True)

@@ -1,43 +1,11 @@
-"""
-Monte Carlo simulation varying k_immune with a log-normal distribution.
-k_immune ~ LogNormal(mean=0.243, CV=0.25)
-4-panel figure: S_b, R_b, S_res, R_res — each with individual MC trajectories,
-5th–95th percentile band, and median.
+"""Monte Carlo simulation of host immune-clearance variability.
 
-Mean raised from the model's own default (0.12) to 0.142 so that ~70% of
-samples land above the R_b/R_res escape threshold (k_immune = 0.1255 h^-1,
-see ImmuneResponse_threshold_sweep.py) and resolve the infection -- at the
-model default, only ~31-37% of samples resolved. CV was then widened from
-0.20 to 0.25 (dropping resolution to ~64%), so the mean was re-solved to
-0.14719 -- the 30th percentile of LogNormal(mean, CV=0.25) sits exactly at
-the 0.1255 threshold -- restoring resolution to ~70%. Later raised to 0.172
-(see K_IMMUNE_MEAN below). Then rho_res_S was given a 10% growth advantage
-over rho_res_R (fitness cost for R in the reservoir, mirroring blood), which
-pushed the escape threshold up to ~0.2000 h^-1 -- the mean was re-solved
-again to 0.243 to restore a 20-30% relapse rate (see K_IMMUNE_MEAN below).
+``k_immune`` is sampled from the mean-corrected log-normal distribution in
+``parameters.SAMPLING``. Its sampling mean equals the fixed model default;
+all other model and protocol parameters use the shared baseline configuration.
 
-EC50_L was then consolidated onto a SINGLE project-wide value. Previously
-the project carried two: a fixed baseline EC50_L = 1.0 used by every script
-that holds EC50_L constant, and a sampling mean EC50_L_BASE = 0.6 used by
-MC_ec50_lzd.py. That also contradicted MC_ec50_lzd.py's own docstring claim
-that its sampling is "mean-corrected so E[EC50_L] lands exactly on
-baseline". Both are now 0.6 mg/L.
-
-Lowering the fixed EC50_L 1.0 -> 0.6 makes linezolid more potent, which on
-its own put the baseline BELOW the EC50_L escape threshold: the reservoir
-cleared at baseline and the k_immune sweep lost its threshold entirely (no
-k_immune in [0, 3] produced relapse -- even zero immune clearance cleared
-the infection). rho_S was therefore raised 0.61 -> 0.72 h^-1, with rho_R
-rescaled 0.55 -> 0.649 to preserve the ~10% fitness cost, restoring the
-reservoir to the escape side. The mechanism is indirect: the reservoir kill
-rate is Emax_l_res = Emax_l * (rho_res_S / rho_S), so a HIGHER rho_S
-weakens reservoir killing. rho_res_R/rho_res_S were tried first and
-rejected -- every value of either that reached baseline escape collapsed
-peak S_b from ~4.8e3 to ~2 CFU/mL (R_b crowding S_b out of blood).
-
-Net effect here: the threshold moved ~0.2000 -> 0.203 h^-1 and relapse
-24.3% -> 26.0% (260/1000). Without the rho_S compensation this sweep would
-have had no threshold at all under the consolidated EC50_L.
+Relapse means resistant blood clears by linezolid completion and becomes
+detectable during follow-up. Reservoir persistence is reported separately.
 """
 
 import importlib.util
@@ -46,10 +14,13 @@ import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.integrate import odeint
 from scipy.optimize import brentq
+from solver import integrate_model
 
-from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0, save_figure
+from parameters import (
+    BASE_PARAMS, LOD, NUM_ITERATIONS, RNG_SEEDS, SAMPLING, TOTAL_H,
+    VANCO_START, Y0, bacteremia_outcome_masks, canonical_time_grid, save_figure,
+)
 
 plt.rcParams.update({
     "font.size": 16,
@@ -69,7 +40,7 @@ os.makedirs(FIGURES_DIR, exist_ok=True)
 #   mc_immune_response.png        -- MONTE CARLO. 4-panel kinetics over 1000
 #       sampled patients, median + 5th-95th percentile band.
 #   mc_immune_response_switch.png -- MIXED, one source per panel:
-#       top    = DETERMINISTIC  (101-point fixed-parameter sweep + brentq root)
+#       top    = DETERMINISTIC  (101-point fixed-parameter sweep + Brent switch)
 #       bottom = MONTE CARLO    (1000 sampled patients, coloured by outcome)
 
 # ── Load model module ─────────────────────────────────────────────────────────
@@ -78,8 +49,8 @@ model_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model_mod)
 
 # ── Simulation settings ───────────────────────────────────────────────────────
-NUM_ITER    = 1000
-t_eval      = np.linspace(0, TOTAL_H, 1450)
+NUM_ITER    = NUM_ITERATIONS
+t_eval      = canonical_time_grid()
 t_days      = t_eval / 24.0
 
 pk       = model_mod.PharmacokineticModel()
@@ -92,21 +63,14 @@ params = dict(BASE_PARAMS)
 
 # ── Log-normal sampling of k_immune ──────────────────────────────────────────
 # CV = sqrt(exp(σ²) - 1)  →  σ = sqrt(ln(1 + CV²))
-# μ  = ln(mean) - σ²/2   ensures E[k_immune] = 0.12
-K_IMMUNE_MEAN = 0.243     # re-tuned from 0.172 -- giving rho_res_S a 10% growth advantage
-                          # over rho_res_R (see rho_res_S above) makes the reservoir far more
-                          # robust to host immunity: the R_b/R_res escape threshold shifted
-                          # from 0.1521 h^-1 to ~0.2000 h^-1 (bisected directly). 0.172 now
-                          # puts only ~22% of samples above threshold (78% relapse, verified
-                          # via 1000-iteration MC). 0.243 puts ~76% of samples above
-                          # threshold, targeting ~24% relapse (20-30% target band).
-CV            = 0.25
+# μ  = ln(mean) - σ²/2   ensures E[k_immune] = K_IMMUNE_MEAN
+K_IMMUNE_MEAN, CV = SAMPLING["k_immune"]
 
 sigma_ln = np.sqrt(np.log(1.0 + CV**2))
 mu_ln    = np.log(K_IMMUNE_MEAN) - sigma_ln**2 / 2.0
 
-np.random.seed(42)
-k_immune_samples = np.random.lognormal(mu_ln, sigma_ln, NUM_ITER)
+rng = np.random.default_rng(RNG_SEEDS["MC_immune_response"])
+k_immune_samples = rng.lognormal(mu_ln, sigma_ln, NUM_ITER)
 
 print(f"k_immune  mean={k_immune_samples.mean():.4f}  "
       f"std={k_immune_samples.std():.4f}  "
@@ -116,26 +80,20 @@ print(f"k_immune  mean={k_immune_samples.mean():.4f}  "
 
 # ---------------------------------------------------------------------------
 # Continuous deterministic switch curve + precise escape threshold.
-# Mirrors MC_ec50_lzd.py / MC_emax_lzd.py's own fine sweep + bisection.
-# Direction matches Emax_l: LOW k_immune (weak host immunity) is the escape
-# zone, the opposite of EC50_L.
+# Mirrors the companion analyses' fine sweep and switch localization.
+# If a crossing exists, lower k_immune is the persistence side.
 # ---------------------------------------------------------------------------
 def _final_counts(k_immune):
     """One deterministic run at a fixed k_immune; returns (final R_b, final R_res)."""
     immune_i = model_mod.ImmuneResponse(k_immune=k_immune)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        sol = odeint(
-            model_mod.dual_reservoir_model, Y0, t_eval,
-            args=(params, van_func, lzd_func, immune_i),
-            rtol=1e-7, atol=1e-9, mxstep=5000,
-        )
+    sol = integrate_model(
+        model_mod.dual_reservoir_model, Y0, t_eval,
+        args=(params, van_func, lzd_func, immune_i),
+    )
     return sol[-1, 1], sol[-1, 3]
 
 
-SWEEP_MIN, SWEEP_MAX = 0.02, 0.65   # widened from 0.22 -- at the new rho_res_S/rho_res_R ratio the
-                                     # escape threshold moved to ~0.20 and K_IMMUNE_MEAN=0.243 puts
-                                     # the 99th percentile of sampled k_immune near 0.42
+SWEEP_MIN, SWEEP_MAX = 0.02, 0.65   # covers the configured sampling distribution
 N_SWEEP = 101
 
 print(f"\nRunning deterministic switch-curve sweep across [{SWEEP_MIN}, {SWEEP_MAX}] "
@@ -147,29 +105,34 @@ for i, kim in enumerate(sweep_k_immune):
     sweep_R_b[i], sweep_R_res[i] = _final_counts(kim)
 
 
-def _f_res(k_immune):
-    return _final_counts(k_immune)[1] - LOD
+escapes_on_grid = sweep_R_res >= LOD
+crossings = np.flatnonzero(escapes_on_grid[:-1] & ~escapes_on_grid[1:])
+if len(crossings) == 1:
+    bracket_index = crossings[0]
 
+    def _reservoir_objective(k_immune):
+        return _final_counts(k_immune)[1] - LOD
 
-if _f_res(SWEEP_MIN) < 0 or _f_res(SWEEP_MAX) > 0:
-    # No sign change across the bracket. Only fall back to the coarse grid crossing if the
-    # grid actually contains one -- otherwise np.argmax on an all-False array silently
-    # returns index 0, i.e. SWEEP_MIN, which would be plotted as a real switch.
-    escapes_on_grid = sweep_R_res > LOD
-    if escapes_on_grid.any() and not escapes_on_grid.all():
-        ESCAPE_THRESH = float(sweep_k_immune[np.argmax(sweep_R_res <= LOD)])
-    else:
-        ESCAPE_THRESH = float("nan")
+    ESCAPE_THRESH = brentq(
+        _reservoir_objective,
+        sweep_k_immune[bracket_index], sweep_k_immune[bracket_index + 1],
+        xtol=1e-6,
+    )
 else:
-    ESCAPE_THRESH = brentq(_f_res, SWEEP_MIN, SWEEP_MAX, xtol=1e-3)
+    ESCAPE_THRESH = float("nan")
 
 if np.isnan(ESCAPE_THRESH):
-    print(f"No escape threshold exists in [{SWEEP_MIN}, {SWEEP_MAX}]: R_res "
-          f"{'escapes' if (sweep_R_res > LOD).all() else 'clears'} across the entire swept range.")
+    print(f"No reservoir-persistence threshold exists in [{SWEEP_MIN}, {SWEEP_MAX}]: R_res "
+          f"{'persists' if (sweep_R_res > LOD).all() else 'clears'} across the entire swept range.")
 else:
-    print(f"Precise escape threshold (final R_res crosses LOD): {ESCAPE_THRESH:.3f} h^-1")
+    print(f"Precise reservoir-persistence threshold: {ESCAPE_THRESH:.3f} h^-1")
 
 REGIME_COLORS = {"suppressed": "#4c72b0", "escape": "#c44e52"}  # blue / red
+OUTCOME_COLORS = {
+    "resolved": "#4c72b0",    # blue
+    "relapse": "#dd8452",     # orange
+    "persistent": "#c44e52",  # red
+}
 
 # ── Storage ───────────────────────────────────────────────────────────────────
 S_b_hist   = np.full((NUM_ITER, len(t_eval)), np.nan)
@@ -180,13 +143,10 @@ R_res_hist = np.full((NUM_ITER, len(t_eval)), np.nan)
 # ── Monte Carlo loop ──────────────────────────────────────────────────────────
 for i, k_im in enumerate(k_immune_samples):
     immune_i = model_mod.ImmuneResponse(k_immune=k_im)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        sol = odeint(
-            model_mod.dual_reservoir_model, Y0, t_eval,
-            args=(params, van_func, lzd_func, immune_i),
-            rtol=1e-7, atol=1e-9, mxstep=5000,
-        )
+    sol = integrate_model(
+        model_mod.dual_reservoir_model, Y0, t_eval,
+        args=(params, van_func, lzd_func, immune_i),
+    )
 
     # Clip negatives, then mask below LOD with NaN (log-scale friendly)
     s_b, r_b, s_r, r_r = [np.clip(sol[:, j], 0, None) for j in range(4)]
@@ -224,7 +184,9 @@ def _draw_panel(ax, history, S_or_R, compartment, color_main, y_max):
                label=f"LOD ({int(LOD)} CFU/mL)")
 
     # Individual trajectories (random subsample)
-    rng_idx = np.random.default_rng(0).choice(NUM_ITER, N_TRACES, replace=False)
+    rng_idx = np.random.default_rng(RNG_SEEDS["MC_immune_response_traces"]).choice(
+        NUM_ITER, N_TRACES, replace=False
+    )
     for i in rng_idx:
         ax.plot(t_days, history[i, :], color=color_main, alpha=0.12, lw=0.7)
 
@@ -261,12 +223,12 @@ def _draw_panel(ax, history, S_or_R, compartment, color_main, y_max):
 # ── 4-panel figure ────────────────────────────────────────────────────────────
 fig, axes = plt.subplots(2, 2, figsize=(14, 10), constrained_layout=True)
 
-fig.suptitle(
-    f"Monte Carlo — Immune Response Variability\n"
-    rf"$k_{{immune}}$ ~ LogNormal  (mean = {K_IMMUNE_MEAN}, CV = {CV}),  "
-    f"n = {NUM_ITER} simulations",
-    fontsize=21, fontweight="bold",
-)
+# fig.suptitle(
+#     f"Monte Carlo — Immune Response Variability\n"
+#     rf"$k_{{immune}}$ ~ LogNormal  (mean = {K_IMMUNE_MEAN}, CV = {CV}),  "
+#     f"n = {NUM_ITER} simulations",
+#     fontsize=21, fontweight="bold",
+# )
 
 _draw_panel(axes[0, 0], S_b_hist,   S_or_R="S", compartment="blood",      color_main="royalblue", y_max=1e6)
 _draw_panel(axes[0, 1], R_b_hist,   S_or_R="R", compartment="blood",      color_main="crimson",   y_max=1e6)
@@ -287,12 +249,15 @@ print(f"\nSaved: {out_file}")
 #    rather than resolving) ────────────────────────────────────────────────
 final_R_b   = np.nan_to_num(R_b_hist[:, -1],   nan=0.0)
 final_R_res = np.nan_to_num(R_res_hist[:, -1], nan=0.0)
-relapsed    = (final_R_b > LOD) | (final_R_res > LOD)
+relapsed, persistent_bacteremia, resolved = bacteremia_outcome_masks(
+    R_b_hist, t_eval
+)
 
-print(f"\nRelapse (final R_b and/or R_res > LOD): "
+print(f"\nPost-linezolid bacteremia relapse: "
       f"{relapsed.sum()}/{NUM_ITER} = {relapsed.mean()*100:.1f}%")
-print(f"Resolution (both compartments cleared):  "
-      f"{(~relapsed).sum()}/{NUM_ITER} = {(~relapsed).mean()*100:.1f}%")
+print(f"Persistent treatment failure: {persistent_bacteremia.sum()}/{NUM_ITER} = "
+      f"{persistent_bacteremia.mean()*100:.1f}%")
+print(f"Resolution: {resolved.sum()}/{NUM_ITER} = {resolved.mean()*100:.1f}%")
 
 # ---------------------------------------------------------------------------
 # FIGURE: switch curve (continuous, deterministic) + sampled patient
@@ -306,39 +271,54 @@ FLOOR = LOD * 0.5   # display floor for values that fell below the LOD (i.e. 0)
 disp_sweep_R_b   = np.where(sweep_R_b   <= LOD, FLOOR, sweep_R_b)
 disp_sweep_R_res = np.where(sweep_R_res <= LOD, FLOOR, sweep_R_res)
 
-escaped_mask       = final_R_res > LOD
+escaped_mask       = relapsed
+reservoir_persistent = final_R_res >= LOD
 frac_escape        = escaped_mask.mean()
 escaped_k_immune   = k_immune_samples[escaped_mask]
 suppressed_k_immune = k_immune_samples[~escaped_mask]
 
 # Escape/suppressed split -- quoted in supplement.tex (tab:zscore_summary), so
 # print it rather than leaving it readable only off the histogram legend below,
-# which rounds to whole percent. NOTE this is NOT the relapse rate printed
-# above: escape is the reservoir alone (final_R_res > LOD), relapse is either
-# compartment, so escaped is a subset of relapsed and the two can differ. The
-# other two rows of tab:zscore_summary are escape fractions, so this is the
-# figure that belongs alongside them.
+# which rounds to whole percent. The endpoint is final resistant bacteremia,
+# matching the relapse definition used in the other Monte Carlo analyses.
 n_escape = int(escaped_mask.sum())
 n_total  = int(escaped_mask.size)
-print(f"  Escape threshold  k_immune = {ESCAPE_THRESH:.3f} h^-1 (escape below)")
-print(f"  Escape      {frac_escape * 100:5.1f}%  ({n_escape}/{n_total})")
-print(f"  Suppressed  {(1 - frac_escape) * 100:5.1f}%  ({n_total - n_escape}/{n_total})")
-print(f"  (relapse rate above counts either compartment: "
-      f"{relapsed.sum()}/{n_total}; escape is a subset)")
+if np.isnan(ESCAPE_THRESH):
+    print(f"  Reservoir threshold none in [{SWEEP_MIN}, {SWEEP_MAX}] h^-1")
+else:
+    print(f"  Reservoir threshold k_immune = {ESCAPE_THRESH:.3f} h^-1 (persistence below)")
+print(f"  Bacteremia relapse {frac_escape * 100:5.1f}%  ({n_escape}/{n_total})")
+print(f"  Persistent failure {persistent_bacteremia.mean() * 100:5.1f}%  "
+      f"({persistent_bacteremia.sum()}/{n_total})")
+print(f"  Resolution         {resolved.mean() * 100:5.1f}%  "
+      f"({resolved.sum()}/{n_total})")
+
+# Displayed switch window.  The deterministic sweep still spans [0.02, 0.65]
+# h^-1, but the whole transition lives near the low end, so plotting the full
+# sweep pins every feature against the left spine.  0--0.10 h^-1 centres the
+# switch and the sampled mode in the frame while keeping ~88% of the sampled
+# patients in view (the remaining right tail is flat, suppressed cases).
+PLOT_KIM_MIN, PLOT_KIM_MAX = 0.0, 0.10
 
 fig2, (ax_top, ax_hist) = plt.subplots(
     2, 1, figsize=(11, 8.5), sharex=True,
     gridspec_kw={"height_ratios": [3, 1.1], "hspace": 0.08},
 )
-fig2.suptitle(r"Resistant Escape Switch vs $k_{immune}$ (host immune clearance)",
-              fontsize=19, fontweight="bold")
 
-# --- Top: continuous switch curve ---
-ax_top.axvspan(SWEEP_MIN, ESCAPE_THRESH, color=REGIME_COLORS["escape"],     alpha=0.10)
-ax_top.axvspan(ESCAPE_THRESH, SWEEP_MAX, color=REGIME_COLORS["suppressed"], alpha=0.10)
+# --- Top: continuous response curve ---
+if np.isnan(ESCAPE_THRESH):
+    ax_top.axvspan(PLOT_KIM_MIN, SWEEP_MAX, color=REGIME_COLORS["suppressed"],
+                   alpha=0.10, label="R_res below LOD across swept range")
+else:
+    # Shade from the window edge, not SWEEP_MIN: below the threshold the
+    # reservoir persists regardless, so leaving 0--SWEEP_MIN blank would only
+    # add dead space on the left.
+    ax_top.axvspan(PLOT_KIM_MIN, ESCAPE_THRESH, color=REGIME_COLORS["escape"], alpha=0.10)
+    ax_top.axvspan(ESCAPE_THRESH, SWEEP_MAX, color=REGIME_COLORS["suppressed"], alpha=0.10)
 ax_top.axhline(LOD, color="black", ls=":", lw=1.0, alpha=0.7, label=f"LOD ({int(LOD)} CFU/mL)")
-ax_top.axvline(ESCAPE_THRESH, color="black", ls="--", lw=1.4,
-               label=fr"Switch ($k_{{immune}}$ = {ESCAPE_THRESH:.2g})")
+if not np.isnan(ESCAPE_THRESH):
+    ax_top.axvline(ESCAPE_THRESH, color="black", ls="--", lw=1.4,
+                   label=fr"Switch ($k_{{immune}}$ = {ESCAPE_THRESH:.2g})")
 
 ax_top.plot(sweep_k_immune, disp_sweep_R_res, color="indianred", lw=2.2,
             label="Final $R_{res}$ (reservoir)")
@@ -351,19 +331,30 @@ ax_top.set_ylabel("Final resistant count (CFU/mL)")
 ax_top.grid(True, which="both", ls=":", alpha=0.35)
 ax_top.legend(loc="upper right", fontsize=13, framealpha=0.9)
 
-# --- Bottom: where the sampled patient population falls, by actual outcome ---
-bin_edges = np.linspace(SWEEP_MIN, SWEEP_MAX, 31)
-ax_hist.hist(suppressed_k_immune, bins=bin_edges, color=REGIME_COLORS["suppressed"],
-             alpha=0.75, edgecolor="white", linewidth=0.4,
-             label=f"Suppressed ({(1 - frac_escape) * 100:.0f}% of patients)")
-ax_hist.hist(escaped_k_immune, bins=bin_edges, color=REGIME_COLORS["escape"],
-             alpha=0.75, edgecolor="white", linewidth=0.4,
-             label=f"Escape ({frac_escape * 100:.0f}% of patients)")
-ax_hist.axvline(ESCAPE_THRESH, color="black", ls="--", lw=1.4)
+# --- Bottom: sampled patient population by actual bacteremia outcome ---
+bin_edges = np.linspace(PLOT_KIM_MIN, PLOT_KIM_MAX, 26)
+ax_hist.hist(
+    [k_immune_samples[resolved], k_immune_samples[relapsed],
+     k_immune_samples[persistent_bacteremia]],
+    bins=bin_edges,
+    stacked=True,
+    color=[OUTCOME_COLORS["resolved"], OUTCOME_COLORS["relapse"],
+           OUTCOME_COLORS["persistent"]],
+    alpha=0.80,
+    edgecolor="white",
+    linewidth=0.4,
+    label=[
+        f"Clinical resolution ({resolved.mean() * 100:.1f}%)",
+        f"Bacteremia relapse ({relapsed.mean() * 100:.1f}%)",
+        f"Persistent bacteremia ({persistent_bacteremia.mean() * 100:.1f}%)",
+    ],
+)
+if not np.isnan(ESCAPE_THRESH):
+    ax_hist.axvline(ESCAPE_THRESH, color="black", ls="--", lw=1.4)
 
-ax_hist.set_xlim(SWEEP_MIN, SWEEP_MAX)
+ax_hist.set_xlim(PLOT_KIM_MIN, PLOT_KIM_MAX)
 ax_hist.set_xlabel(r"$k_{immune}$ (h$^{-1}$)")
-ax_hist.set_ylabel("Patients\n(n)")
+ax_hist.set_ylabel("Cases\n(n)")
 ax_hist.grid(True, axis="y", ls=":", alpha=0.35)
 ax_hist.legend(loc="upper right", fontsize=12, framealpha=0.9)
 

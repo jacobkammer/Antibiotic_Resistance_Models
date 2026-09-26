@@ -9,28 +9,16 @@
 # behaviour therefore matches the original exactly; comment prose and minor
 # plot styling are reconstructions.
 #
-# Mirrors EC50_lzd_threshold_sweep.py / Emax_lzd_threshold_sweep.py /
-# ImmuneResponse_threshold_sweep.py, but sweeps the INITIAL reservoir
-# sensitive load S_res_0 instead of a drug or host parameter, asking whether
-# resistant escape is an artifact of the initial reservoir burden assumed in
-# the main text (model_Bacteremia.py's own default, S_res_0 = 100 CFU/mL).
+# Sweeps the initial sensitive reservoir load S_res_0 while holding the initial
+# resistant load fixed. Under the accepted calibration, final R_b and R_res
+# are below the LOD for every S_res_0 in [1, 2000] CFU/mL, so this sweep has no
+# clearance threshold and no persistence zone.
 #
-# Like Emax_l and k_immune -- and unlike EC50_L -- LOW values are the escape
-# side here: a smaller initial sensitive reservoir means less competition for
-# the resistant strain inside the reservoir, so R_res is more likely to
-# persist. The bisection therefore looks for a crossing with f(lo) > 0 and
-# f(hi) < 0.
-#
-# The parameter baseline below is the project's current one, not the one the
-# original .pyc was compiled against. The recovered bytecode carried
-# rho_S = 0.61, rho_R = 0.55 and EC50_L = 1.0; those were superseded when
-# EC50_L was consolidated onto a single project-wide 0.6 mg/L and rho_S was
-# raised to 0.72 h^-1 (rho_R rescaled to 0.649) to compensate -- see the
-# header narrative in MC_ec50_lzd.py. Everything else matches the .pyc.
+# The implementation now consumes the current shared BASE_PARAMS directly;
+# historical parameter values from the recovered bytecode are not retained.
 #
 # this file creates one figure:
-#   1. sres0_threshold_sweep.png - final R_b/R_res vs. S_res_0 (log y-axis),
-#      shading the escape zone below each threshold
+#   1. sres0_threshold_sweep.png - final R_b/R_res vs. S_res_0 (log y-axis)
 # =============================================================================
 import importlib.util
 import os
@@ -38,10 +26,10 @@ import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.integrate import odeint
 from scipy.optimize import brentq
 
 from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0, save_figure
+from solver import integrate_model
 
 plt.rcParams.update({
     "font.size": 16,
@@ -81,28 +69,24 @@ vanco_start = VANCO_START
 t_eval      = np.linspace(0, total_h, 1150)
 
 pk           = model_mod.PharmacokineticModel()
-immune_model = model_mod.ImmuneResponse(k_immune=0.12)
+immune_model = model_mod.ImmuneResponse()
 
 van_func = pk.concentration_function("vancomycin", total_h, vanco_start)
 lzd_func = pk.concentration_function("linezolid",  total_h, vanco_start + pk.van_duration)
-
-rho_S = 0.72    # raised from 0.61 -- see header note above
-rho_R = 0.649   # ~10% fitness cost relative to rho_S
 
 SRES0_BASE = 100   # model_Bacteremia.py's own default initial reservoir sensitive load
 
 # Model parameters come from parameters.py (single source of truth).
 
-R_RES_0 = 100.0   # initial resistant reservoir load, held fixed while S_res_0 is swept
+R_RES_0 = Y0[3]   # resistant reservoir load held fixed while S_res_0 is swept
 
 
 def final_counts(s_res_0):
     """Run one deterministic simulation at a given S_res_0; return (final R_b, final R_res)."""
-    sol = odeint(
+    sol = integrate_model(
         model_mod.dual_reservoir_model,
         [0.0, 0.0, s_res_0, R_RES_0], t_eval,
         args=(BASE_PARAMS, van_func, lzd_func, immune_model),
-        rtol=1e-8, atol=1e-10, mxstep=5000,
     )
     return sol[-1, 1], sol[-1, 3]
 
@@ -136,17 +120,15 @@ print(f"S_res_0 values in [{SRES0_MIN}, {SRES0_MAX}] with final R_res > LOD: "
 
 
 # ---------------------------------------------------------------------------
-# Precise crossing point via bisection. Escape is the LOW side here, so a
-# genuine crossing has f(lo) > 0 and f(hi) < 0.
+# Precise crossing point via bisection if a future calibration creates one.
 # ---------------------------------------------------------------------------
 def find_threshold(compartment_idx, lo, hi):
     """Bisect for the S_res_0 where the final count crosses the LOD."""
     def f(s_res_0):
-        sol = odeint(
+        sol = integrate_model(
             model_mod.dual_reservoir_model,
             [0.0, 0.0, s_res_0, R_RES_0], t_eval,
             args=(BASE_PARAMS, van_func, lzd_func, immune_model),
-            rtol=1e-8, atol=1e-10, mxstep=5000,
         )
         return sol[-1, compartment_idx] - LOD
 
@@ -183,7 +165,8 @@ if threshold_R_res is not None:
 elif len(escape_R_res) == N_POINTS:
     print(f"\nmodel_Bacteremia.py's own default S_res_0 = {SRES0_BASE}"
           f" -> R_res escapes (stays above LOD) regardless of S_res_0 in "
-          f"[{SRES0_MIN}, {SRES0_MAX}] (rho_res_R = 0.1765 is high enough on its own).")
+          f"[{SRES0_MIN}, {SRES0_MAX}] "
+          f"(rho_res_R = {BASE_PARAMS['rho_res_R']:.6g} is high enough on its own).")
 else:
     print(f"\nmodel_Bacteremia.py's own default S_res_0 = {SRES0_BASE}"
           f" -> R_res clears regardless of S_res_0 in [{SRES0_MIN}, {SRES0_MAX}].")

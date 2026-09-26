@@ -1,14 +1,26 @@
-Threshold re-derivation summary
-Baseline change: rho_res_S = 1.1 x rho_res_R (0.19415 vs 0.1765), lzd_res_fraction 0.45 -> 0.30
+Current accepted calibration, deterministic transitions, and outcomes
 
-File                              | Old threshold                                              | New threshold
------------------------------------------------------------------------------------------------------------------------------------------------
-EC50_lzd_threshold_sweep.py       | 0.932 mg/L                                                 | 0.868 mg/L
-MC_ec50_lzd.py                    | 0.988 mg/L (~53% escape)                                   | 0.868 mg/L (21.8% escape / 78.2% suppressed, 218/1000)
-Emax_lzd_threshold_sweep.py       | 0.8027 h^-1                                                | 0.8414 h^-1
-MC_emax_lzd.py                    | 0.8027 h^-1 (~48% escape)                                  | 0.8414 h^-1 (23.6% escape / 76.4% suppressed, 236/1000)
-transfer_rates_evaluation.py      | 1e-3-1e-2 transition band                                  | unchanged, re-verified
-  (was MC_transfer_rates_equilibrium.py)
-MC_initial_conditions.py          | R_res_0 ~= 7.57 CFU/mL, ~70% resolution                    | R_res_0 ~= 5.25 CFU/mL, 56.1% resolution (439/1000 escape)
-Sres0_threshold_sweep.py          | R_b had an S_res_0-dependent crowding-out threshold within | Both R_b and R_res now persist across the entire [1,2000]
-                                   | [1,2000]                                                   | range -- no threshold found
+Growth rates: rho_S = 1.1 h^-1; rho_R = 0.99 h^-1 (10% cost); rho_res_S = 0.50 h^-1; rho_res_R = 0.45 h^-1 (10% cost).
+Linezolid reservoir/bone penetration = 0.40, the lower end of the reported 0.40-0.60 range.
+Reservoir linezolid efficacy: Emax_L,res = 0.41 x Emax_L (independent factor; no longer scaled by rho_res_S/rho_S).
+Fixed baselines equal Monte Carlo means: EC50_L = 1.13 mg/L; Emax_L = 1.65 h^-1 (Schmidt et al.); k_immune = 0.10 h^-1.
+Reservoir carrying capacity B_max_reservoir = 1e7 CFU/mL; reservoir->blood transfer k_r_b = 1e-7 h^-1. Exchange is one-way; the blood->reservoir term (k_b_r) was removed from the model.
+Outcome-calibrated sampling distributions:
+- EC50_L: mean 1.13 mg/L, CV 0.60, mean-corrected log-normal.
+- Emax_L: mean 1.65 h^-1, CV 0.080, mean-corrected log-normal.
+- k_immune: mean 0.10 h^-1, CV 0.80, mean-corrected log-normal.
+
+The LOD is a hard extinction boundary at 10 CFU/mL. A subpopulation crossing below the LOD is set to exactly zero and cannot regrow autonomously. Transfer from a detectable reservoir can re-establish blood bacteria when accumulated arrivals reach the LOD.
+
+Bacteremia relapse requires resistant blood below the LOD at linezolid completion followed by resistant blood at or above the LOD during follow-up. Persistent bacteremia at linezolid completion is classified separately as persistent treatment failure. Resolution means neither relapse nor persistent bacteremia.
+
+Analysis                          | Current verified result
+--------------------------------------------------------------------------------------------------------------------------
+EC50_lzd_threshold_sweep.py       | deterministic reservoir-persistence transition 1.3 mg/L (1.349)
+MC_ec50_lzd.py                    | relapse 28.9% (289/1000); persistent failure 1.1% (11/1000); resolution 70.0% (700/1000)
+Emax_lzd_threshold_sweep.py       | deterministic reservoir-persistence transition 1.5 h^-1 (1.549)
+MC_emax_lzd.py                    | relapse 22.0% (220/1000); persistent failure 0.0% (0/1000); resolution 78.0% (780/1000)
+ImmuneResponse_threshold_sweep.py | deterministic reservoir-persistence transition 0.047 h^-1
+MC_immune_response.py             | relapse 24.0% (240/1000); persistent failure 0.0% (0/1000); resolution 76.0% (760/1000)
+
+The deterministic values are Brent-localized hard-LOD classification boundaries and are reported to two significant figures; they are not continuous roots where terminal burden equals the LOD. Existing figures predating this calibration are legacy outputs and must be regenerated before quantitative use.

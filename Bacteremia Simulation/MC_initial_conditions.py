@@ -1,10 +1,13 @@
 import numpy as np
-from scipy.integrate import odeint
+from solver import integrate_model
 import matplotlib.pyplot as plt
 import importlib.util
 import os
 
-from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0, save_figure
+from parameters import (
+    BASE_PARAMS, LOD, NUM_ITERATIONS, RNG_SEEDS, SAMPLING, TOTAL_H,
+    VANCO_START, Y0, save_figure,
+)
 
 plt.rcParams.update({
     "font.size": 16,
@@ -23,7 +26,9 @@ os.makedirs(FIGURES_DIR, exist_ok=True)
 # FIGURES PRODUCED BY THIS SCRIPT
 #   mc_initial_conditions_kinetics.png      -- MONTE CARLO
 #   mc_initial_conditions_distributions.png -- MONTE CARLO
-#   Both draw S_res_0 / R_res_0 from log-normal distributions (seed 42).
+#   Both draw S_res_0 / R_res_0 from the distributions and seed configured in
+#   parameters.py. The accepted calibration gives 0.6% bacteremia relapse
+#   (6/1000), defined by final R_b > LOD.
 
 # Load model
 MODULE_NAME = "model_Bacteremia.py"
@@ -31,7 +36,7 @@ spec = importlib.util.spec_from_file_location("model_mod", MODULE_NAME)
 model_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model_mod)
 
-num_iterations = 1000
+num_iterations = NUM_ITERATIONS
 total_h     = TOTAL_H
 vanco_start = VANCO_START
 t_eval = np.linspace(0, total_h, 1450)
@@ -50,27 +55,18 @@ R_b_history   = np.zeros((num_iterations, len(t_eval)))
 S_res_history = np.zeros((num_iterations, len(t_eval)))
 R_res_history = np.zeros((num_iterations, len(t_eval)))
 
-np.random.seed(42)
+np.random.seed(RNG_SEEDS["MC_initial_conditions"])
 # CV = sqrt(exp(σ²) - 1)  →  σ = sqrt(ln(1 + CV²))
 # μ  = ln(mean) - σ²/2   ensures E[S_res_0] = S_RES_0_BASE, E[R_res_0] = R_RES_0_BASE
 # (same mean-corrected, CV-based convention as MC_ec50_lzd.py / MC_emax_lzd.py / MC_immune_response.py)
-CV = 60.0    # deliberately extreme: with both means fixed at 100 CFU/mL (matching the
-             # other MC scripts), this much right-skew illustrates just how uncertain/
-             # heterogeneous the true founding reservoir population is. Originally tuned
-             # for ~70% resolution against a ~7.57 CFU/mL R_res_0 threshold; after giving
-             # rho_res_S a 10% growth advantage over rho_res_R (0.19415 vs 0.1765) and
-             # lowering lzd_res_fraction 0.45 -> 0.30 to compensate, the R_res_0 threshold
-             # moved to ~5.25 CFU/mL (re-bisected) and actual resolution across the same
-             # 1000-sample draw dropped to 56.1% (439/1000 escape/relapse) -- not re-tuned
-             # back to ~70%, since CV wasn't the point of that change
+S_RES_0_BASE, CV = SAMPLING["S_res_0"]
+R_RES_0_BASE, r_res_cv = SAMPLING["R_res_0"]
+if r_res_cv != CV:
+    raise ValueError("S_res_0 and R_res_0 must use the same CV in this joint analysis")
 
-S_RES_0_BASE = 100    # matches the fixed reservoir initial condition used in the other
-                       # MC scripts (MC_ec50_lzd.py, MC_emax_lzd.py, MC_immune_response.py)
-R_RES_0_BASE = 100    # reservoir persistence threshold (R_res_0 ~= 5.25 CFU/mL at the
-                       # current baseline, found by bisection with S_res_0=100 fixed) --
-                       # S_res_0 still has no effect on this threshold (S_res and R_res
-                       # don't compete for the shared reservoir carrying capacity the way
-                       # S_b/R_b do in blood; re-confirmed by Sres0_threshold_sweep.py)
+# The two means and common, deliberately broad CV come from parameters.py.
+# This analysis isolates uncertainty in founding reservoir burden; it does not
+# override the shared model baseline or retune the distribution to an outcome.
 
 sigma_ln = np.sqrt(np.log(1.0 + CV**2))
 s_res_mu = np.log(S_RES_0_BASE) - sigma_ln**2 / 2.0
@@ -81,13 +77,25 @@ R_res_0_samples = np.random.lognormal(r_res_mu, sigma_ln, num_iterations)
 
 for i in range(num_iterations):
     y0 = [0.0, 0.0, S_res_0_samples[i], R_res_0_samples[i]]
-    solution = odeint(model_mod.dual_reservoir_model, y0, t_eval,
-                      args=(params, van_func, lzd_func, immune_model))
+    solution = integrate_model(
+        model_mod.dual_reservoir_model, y0, t_eval,
+        args=(params, van_func, lzd_func, immune_model),
+    )
 
-    S_b_history[i, :]   = np.where(solution[:, 0] < 10.0, 0.0, solution[:, 0])
-    R_b_history[i, :]   = np.where(solution[:, 1] < 10.0, 0.0, solution[:, 1])
-    S_res_history[i, :] = np.where(solution[:, 2] < 10.0, 0.0, solution[:, 2])
-    R_res_history[i, :] = np.where(solution[:, 3] < 10.0, 0.0, solution[:, 3])
+    S_b_history[i, :]   = np.where(solution[:, 0] < LOD, 0.0, solution[:, 0])
+    R_b_history[i, :]   = np.where(solution[:, 1] < LOD, 0.0, solution[:, 1])
+    S_res_history[i, :] = np.where(solution[:, 2] < LOD, 0.0, solution[:, 2])
+    R_res_history[i, :] = np.where(solution[:, 3] < LOD, 0.0, solution[:, 3])
+
+relapsed = R_b_history[:, -1] > LOD
+reservoir_persistent = R_res_history[:, -1] > LOD
+print(f"Bacteremia relapse (final R_b > LOD): {relapsed.sum()}/{num_iterations} "
+      f"= {relapsed.mean() * 100:.1f}%")
+print(f"Resistant reservoir persistent at final follow-up: "
+      f"{reservoir_persistent.sum()}/{num_iterations} "
+      f"= {reservoir_persistent.mean() * 100:.1f}%")
+print(f"No bacteremia relapse: "
+      f"{(~relapsed).sum()}/{num_iterations} = {(~relapsed).mean() * 100:.1f}%")
 
 vanco_start_days = vanco_start / 24.0
 lzd_start_days   = (vanco_start + pk.van_duration) / 24.0

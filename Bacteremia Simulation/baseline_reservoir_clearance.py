@@ -1,11 +1,9 @@
 # =============================================================================
 # Baseline reservoir clearance check
 #
-# Runs a single deterministic simulation with the baseline parameters defined
-# below (rho_S = 0.61, rho_R = 0.55, Emax_l = 0.8, EC50_L = 1.0, reservoir
-# seed = 100 CFU/mL each), then plots blood vs. reservoir kinetics for both
-# strains to show whether each compartment clears below the LOD by the
-# end of the simulation.
+# Runs a single deterministic simulation with BASE_PARAMS and Y0 from
+# parameters.py, then plots blood vs. reservoir kinetics for both strains to
+# show whether each compartment is below the LOD at the simulation endpoint.
 # =============================================================================
 import importlib.util
 import os
@@ -13,9 +11,9 @@ import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.integrate import odeint
 
 from parameters import BASE_PARAMS, LOD, TOTAL_H, VANCO_START, Y0, save_figure
+from solver import integrate_model
 
 
 # code below sets global matplotlib parameters for consistent figure formatting
@@ -53,7 +51,7 @@ t_eval       = np.linspace(0, total_h, 1450)
 t_days       = t_eval / 24.0
 
 pk           = model_mod.PharmacokineticModel()
-immune_model = model_mod.ImmuneResponse(k_immune=0.12)
+immune_model = model_mod.ImmuneResponse()
 
 lzd_start = vanco_start + pk.van_duration
 lzd_end   = lzd_start + pk.lzd_duration
@@ -74,14 +72,13 @@ lzd_end_days     = lzd_end / 24.0
 #   - t_eval: time points at which the solution is returned
 #   - args: (BASE_PARAMS, van_func, lzd_func, immune_model) — fixed
 #           parameters plus vancomycin/linezolid concentrations and immunity
-#   - rtol=1e-8, atol=1e-10: relative and absolute integration tolerances
-#   - mxstep=5000: maximum internal steps the solver is allowed
+#   - integration settings and positive-state validation are centralized in
+#     solver.py / parameters.SOLVER_CONFIG
 #------------------------------------------------------------------------
 
-sol = odeint(
+sol = integrate_model(
     model_mod.dual_reservoir_model, Y0, t_eval,
-    args=(BASE_PARAMS, van_func, lzd_func, immune_model),
-    rtol=1e-8, atol=1e-10, mxstep=5000,
+    (BASE_PARAMS, van_func, lzd_func, immune_model),
 )
 
 S_b, R_b, S_res, R_res = sol[:, 0], sol[:, 1], sol[:, 2], sol[:, 3]
@@ -130,16 +127,24 @@ fig, axes = plt.subplots(1, 2, figsize=(13, 5.5), constrained_layout=True)
 _plot_panel(axes[0], S_b, R_b, "Blood Compartment", 1e6)
 _plot_panel(axes[1], S_res, R_res, "Reservoir Compartment", 1e7)
 
-verdict = ("Reservoir resistant strain PERSISTS — never clears after linezolid ends"
-           if not reservoir_cleared else "Reservoir fully cleared of both strains")
+if reservoir_cleared:
+    verdict = "Reservoir fully cleared of both strains"
+elif final["R_res"] >= LOD:
+    verdict = "Reservoir resistant strain persists at the endpoint"
+else:
+    verdict = "Resistant reservoir cleared; sensitive reservoir remains above LOD"
 fig.suptitle(
     f"Baseline Model — Is the Reservoir Cleared of Infection?\n{verdict}",
     fontsize=21, fontweight="bold",
 )
 
+r_res_annotation = ("above LOD at endpoint" if final["R_res"] >= LOD
+                    else "below LOD at endpoint")
+r_res_plot_y = max(final["R_res"], LOD * 0.2)
 axes[1].annotate(
-    f"Final $R_{{res}}$ = {final['R_res']:.2e} CFU/mL\n(never drops below LOD after day ~25)",
-    xy=(t_days[-1] * 0.98, final["R_res"]), xytext=(t_days[-1] * 0.30, final["R_res"] * 3.0),
+    f"Final $R_{{res}}$ = {final['R_res']:.2e} CFU/mL\n({r_res_annotation})",
+    xy=(t_days[-1] * 0.98, r_res_plot_y),
+    xytext=(t_days[-1] * 0.30, max(r_res_plot_y * 3.0, LOD * 2.0)),
     fontsize=16, color=R_COLOR, fontweight="bold",
     arrowprops=dict(arrowstyle="->", color=R_COLOR, lw=1.2),
 )

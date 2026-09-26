@@ -1,0 +1,650 @@
+% Canonical standalone description of the computational analyses.
+% Consolidates and supersedes the five focused notes named in Section 1.
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+
+\title{Consolidated Computational Analysis:\
+Dual-Compartment Bacteremia Model, Monte Carlo Procedure,\
+and Deterministic Switch Localization}
+\author{}
+\date{4 September 2026}
+
+\newcommand{\EC}{EC_{50,L}}
+\newcommand{\EM}{E_{\max,L}}
+\newcommand{\KI}{k_{\mathrm{immune}}}
+\newcommand{\LOD}{L_{\mathrm{OD}}}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+\section{Purpose and scope}
+
+This document is the canonical, standalone explanation of analyses previously
+divided among five focused notes, which were removed after consolidation:
+\begin{itemize}
+\item \path{EC50_lzd_analysis.tex};
+\item \path{ec50_threshold_comparison_summary.tex};
+\item \path{MC_immune_response_procedure.tex};
+\item \path{MC_scripts_comparison.tex}; and
+\item \path{vancomycin_sensitive_clearance.tex}.
+\end{itemize}
+Obsolete descriptions from those notes are not carried forward. In
+particular, the current model uses
+\texttt{solve\_ivp}, not \texttt{odeint}; uses the current centralized growth
+rates; and treats the limit of detection as a hard extinction/reactivation
+boundary.
+
+Three one-parameter Monte Carlo analyses are included:
+\begin{enumerate}
+\item linezolid half-maximal concentration, $\EC$;
+\item linezolid maximum killing effect, $\EM$; and
+\item host immune-clearance rate, $\KI$.
+\end{enumerate}
+Each analysis varies only the named parameter. It is therefore a univariate
+sensitivity/variability analysis, not a joint population model in which all
+parameters vary simultaneously. Initial conditions are fixed and are not an
+analysis variable.
+
+\section{Model and treatment protocol}
+
+\subsection{State variables}
+
+The state vector is
+\begin{equation}
+\mathbf{Y}(t)=\bigl[S_b(t),R_b(t),S_{\mathrm{res}}(t),R_{\mathrm{res}}(t)\bigr],
+\end{equation}
+where $S$ and $R$ denote vancomycin-sensitive and vancomycin-resistant
+bacteria, and the subscripts denote blood and the bone reservoir. The fixed
+starting state is
+\begin{equation}
+\mathbf{Y}(0)=[0,0,100,100]\ \mathrm{CFU/mL}.
+\end{equation}
+This starting state is required to run the model but is not sampled in the
+present analyses.
+
+The simulation lasts 1944~h (81~days): 21~days before treatment, 4~days of
+vancomycin, 42~days of linezolid, and 14~days of post-linezolid follow-up.
+
+\subsection{Drug-effect functions}
+
+With Hill coefficients equal to one, the blood-compartment effects are
+\begin{align}
+E_V(t)&=\frac{E_{\max,V}V(t)}{EC_{50,V}+V(t)},\\
+E_L(t)&=\frac{\EM L(t)}{\EC+L(t)}.
+\end{align}
+Larger $\EC$ means weaker linezolid potency at the same concentration,
+whereas larger $\EM$ means a larger maximum killing capacity. Reservoir drug
+concentrations are the corresponding blood concentrations multiplied by the
+centralized tissue-penetration fractions. In the reservoir the linezolid
+ceiling is further reduced by an independent efficacy factor,
+$E_{\max,L}^{\mathrm{res}}=\alpha\,\EM$ with $\alpha=0.41$, representing
+reduced activity against slow-growing biofilm and small-colony-variant
+bacteria in bone; $\alpha$ is calibrated and is not derived from the growth
+rates.
+
+\subsection{Centralized configuration}
+
+All scripts obtain the fixed configuration from \texttt{parameters.py}.
+Values are shown to two significant figures.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+Quantity & Value & Interpretation \\
+\midrule
+$\rho_S$ & $1.1~\mathrm{h}^{-1}$ & sensitive growth, blood \\
+$\rho_R$ & $0.99~\mathrm{h}^{-1}$ & resistant growth, blood \\
+$\rho_{\mathrm{res},S}$ & $0.50~\mathrm{h}^{-1}$ & sensitive growth, reservoir \\
+$\rho_{\mathrm{res},R}$ & $0.45~\mathrm{h}^{-1}$ & resistant growth, reservoir \\
+$E_{\max,V}$ & $1.7~\mathrm{h}^{-1}$ & maximum vancomycin effect \\
+$EC_{50,V}$ & $0.25~\mathrm{mg/L}$ & vancomycin half-maximal concentration \\
+$\EM$ & $1.65~\mathrm{h}^{-1}$ & linezolid maximum effect (Schmidt et al.) \\
+$\EC$ & $1.13~\mathrm{mg/L}$ & linezolid half-maximal concentration (Schmidt et al.) \\
+$B_{\max,b}$ & $6.0\times10^3~\mathrm{CFU/mL}$ & blood carrying capacity \\
+$B_{\max,\mathrm{res}}$ & $1.0\times10^7~\mathrm{CFU/mL}$ & reservoir carrying capacity \\
+$\phi_V$ & $0.15$ & reservoir vancomycin penetration \\
+$\phi_L$ & $0.40$ & reservoir linezolid penetration \\
+$\alpha$ & $0.41$ & reservoir linezolid efficacy factor \\
+$k_{r\to b}$ & $1.0\times10^{-7}~\mathrm{h}^{-1}$ & reservoir-to-blood transfer \\
+$\KI$ & $0.10~\mathrm{h}^{-1}$ & baseline immune clearance \\
+$\epsilon_{\mathrm{res}}$ & $0.50$ & reservoir immune multiplier \\
+$\LOD$ & $10~\mathrm{CFU/mL}$ & hard detection boundary \\
+\bottomrule
+\end{tabular}
+\caption{Current shared configuration. The resistant-strain fitness cost is
+10\% in both blood and the reservoir. Exchange is one-way, reservoir to
+blood; there is no blood-to-reservoir term.}
+\label{tab:parameters}
+\end{table}
+
+\section{Vancomycin-sensitive-strain clearance}
+
+Vancomycin acts directly on $S_b$ and $S_{\mathrm{res}}$ but not on the
+resistant populations. At low blood burden and saturating vancomycin, the
+approximate per-capita sensitive-blood rate is
+\begin{equation}
+\rho_S-\KI-E_{\max,V}=1.1-0.10-1.7=-0.70~\mathrm{h}^{-1}.
+\end{equation}
+The negative value explains the rapid decline of the sensitive strain after
+vancomycin begins. Removal of sensitive bacteria also releases shared carrying
+capacity, allowing resistant bacteria to expand during vancomycin treatment.
+
+The current baseline hybrid simulation gives the following values. A zero is
+an exact model state produced by the hard-LOD rule, not an arbitrarily small
+positive value rounded for display.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Time & $S_b$ & $R_b$ & $S_{\mathrm{res}}$ & $R_{\mathrm{res}}$ \\
+\midrule
+Vancomycin start & $4.7\times10^3$ & $0$ & $7.8\times10^6$ & $2.3\times10^5$ \\
+$+24$ h & $0$ & $5.6\times10^2$ & $0$ & $8.9\times10^6$ \\
+$+48$ h & $0$ & $5.4\times10^3$ & $0$ & $8.9\times10^6$ \\
+$+72$ h & $0$ & $5.4\times10^3$ & $0$ & $8.9\times10^6$ \\
+Vancomycin end & $0$ & $4.8\times10^3$ & $0$ & $8.6\times10^6$ \\
+\bottomrule
+\end{tabular}
+\caption{Current baseline burdens during the four-day vancomycin course,
+in CFU/mL.}
+\label{tab:vancomycin-course}
+\end{table}
+
+Thus vancomycin clears both sensitive compartments within the first day of
+treatment under the current calibration. Resistant blood bacteria are
+undetectable before treatment and become detectable once vancomycin frees
+the shared carrying capacity. Subsequent linezolid treatment is
+responsible for control of the resistant populations.
+
+\section{Numerical integration and the hard LOD}
+
+All current analyses call \texttt{solver.integrate\_model}, which wraps
+\texttt{scipy.integrate.solve\_ivp}. The configured method is LSODA, with
+relative tolerance $10^{-6}$, absolute tolerance $10^{-8}$ CFU/mL, and
+maximum internal step 4.0~h. The canonical output grid starts from 1450
+evenly spaced values and inserts the three treatment boundaries, producing
+1453 output times.
+
+The solver is hybrid because it combines continuous ODE integration with
+discrete state changes:
+\begin{enumerate}
+\item While a population is detectable, it follows the continuous ODE.
+\item A downward event at $\LOD=10$ sets that population to exactly zero.
+\item At zero, the population has no autonomous growth, drug killing, immune
+clearance, or outgoing transfer.
+\item Positive incoming transfer from a detectable paired compartment is
+allowed to accumulate.
+\item When accumulated arrivals reach the LOD, an upward event reactivates
+the population and continuous dynamics resume.
+\end{enumerate}
+This construction prevents a fractional sub-LOD remnant from manufacturing a
+relapse while still permitting a persistent reservoir to reseed blood.
+
+\section{Two related but distinct analyses}
+
+The deterministic and Monte Carlo calculations answer different questions.
+
+\begin{description}
+\item[Deterministic switch analysis.] If every value except one parameter is
+fixed, where does the model change between final reservoir clearance and
+final reservoir persistence?
+\item[Monte Carlo analysis.] If that parameter differs among 1000 virtual
+patients according to a specified distribution, what fraction experiences
+bacteremia relapse, persistent bacteremia, or resolution?
+\end{description}
+
+The deterministic switch helps explain the Monte Carlo percentage, but it
+does not assign the clinical outcome. Clinical outcomes are calculated from
+each patient's complete blood trajectory.
+
+\section{Deterministic switch localization with \texttt{brentq}}
+
+\subsection{The quantity being localized}
+
+Let $\theta$ be the parameter being varied and let $t_f$ be the end of the
+81-day simulation. Define
+\begin{equation}
+F(\theta)=R_{\mathrm{res}}(t_f;\theta)-\LOD.
+\label{eq:brent-objective}
+\end{equation}
+The sign is interpreted as
+\begin{align}
+F(\theta)<0 &\quad\Longrightarrow\quad \text{reservoir cleared},\\
+F(\theta)>0 &\quad\Longrightarrow\quad \text{reservoir detectable}.
+\end{align}
+Because the hybrid solver returns zero rather than a positive sub-LOD value,
+the clearance side generally has $F=-10$ rather than a value approaching
+zero smoothly.
+
+\subsection{What the sign does---and does not---mean}
+\label{sec:sign-meaning}
+
+The function $F$ contains the \emph{reservoir} burden at the final observation,
+not the blood burden after linezolid. Its sign must therefore be read only as
+follows:
+\begin{center}
+\fbox{\begin{minipage}{0.88\textwidth}
+\begin{align*}
+F(\theta)<0
+&\quad\Longrightarrow\quad
+R_{\mathrm{res}}(t_f)<10
+\quad\text{(reservoir cleared at day 81)},\\
+F(\theta)>0
+&\quad\Longrightarrow\quad
+R_{\mathrm{res}}(t_f)>10
+\quad\text{(reservoir persists at day 81)}.
+\end{align*}
+Neither statement, by itself, says whether bacteremia occurred after
+linezolid. In particular, a negative value of $F$ does \textbf{not} mean that
+post-linezolid bacteremia occurred. A positive value of $F$ also does
+\textbf{not} automatically mean relapse.
+\end{minipage}}
+\end{center}
+
+Two times and two compartments are involved:
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Quantity & Time & Question answered \\
+\midrule
+$R_{\mathrm{res}}(t_f)$ & day 81, end of follow-up & Is the reservoir still detectable? \\
+$R_b(t_L)$ and $R_b(t>t_L)$ & day 67 and follow-up & Did bacteremia clear and then return? \\
+\bottomrule
+\end{tabular}
+\end{center}
+Here $t_L$ is linezolid completion and $t_f$ is the end of the 14-day
+follow-up. If one wished to describe only whether blood became detectable
+during follow-up, a separate quantity would be
+\begin{equation}
+H(\theta)=\max_{t_L<t\leq t_f}R_b(t;\theta)-\LOD.
+\label{eq:blood-followup}
+\end{equation}
+Then $H(\theta)\geq0$ means that bacteremia was detectable at least once
+during follow-up. Even this is not sufficient by itself to define relapse:
+relapse additionally requires $R_b(t_L)<\LOD$, so that blood was cleared when
+linezolid ended before becoming detectable again.
+
+\subsection{How the bracket is found}
+
+A deterministic grid is evaluated first. Adjacent values $a<b$ are selected
+when their classifications differ, equivalently when
+\begin{equation}
+F(a)F(b)<0.
+\label{eq:sign-bracket}
+\end{equation}
+This establishes that the switch lies somewhere inside $[a,b]$, provided the
+classification changes only once within that interval. The grid is therefore
+used to establish direction, monotonicity, and a safe bracket; its midpoint
+is not accepted as the final switch estimate.
+
+\subsection{What Brent's algorithm does}
+
+The bracket is passed to SciPy's
+\texttt{scipy.optimize.brentq} implementation \cite{scipyBrentq}. Brent's
+method combines three ideas \cite{brent1973}:
+\begin{enumerate}
+\item \textbf{Bisection} tries the midpoint of the bracket. It is slow but
+reliable because it always reduces a valid sign-changing interval.
+\item \textbf{Secant interpolation} uses the two endpoint values to estimate
+where a zero would lie and is often faster than bisection.
+\item \textbf{Inverse quadratic interpolation} uses three recent evaluations
+to make an even faster estimate when their geometry is suitable.
+\end{enumerate}
+At each iteration, the algorithm accepts an interpolation step only when it
+is judged safe; otherwise it falls back to bisection. After evaluating the
+new point, it discards the half of the interval that does not contain the sign
+change. Repetition contracts the bracket until its width satisfies the
+requested absolute parameter tolerance.
+
+The dedicated deterministic scripts use an absolute tolerance of $10^{-3}$
+in the corresponding parameter units. The immune Monte Carlo script uses a
+tighter $10^{-6}~\mathrm{h}^{-1}$ tolerance for its displayed switch. These
+differences are smaller than the two-significant-figure precision used to
+report the transitions.
+
+\subsection{Important limitation: this is a discontinuous boundary}
+
+The SciPy documentation specifies continuity as an assumption for
+\texttt{brentq} \cite{scipyBrentq}. Equation~\eqref{eq:brent-objective} is
+not continuous under the hard-LOD rule: terminal burden can jump from zero to
+thousands of CFU/mL without ever taking the value 10~CFU/mL. Consequently,
+the usual theorem that Brent's method converges to a root satisfying
+$F(\theta)=0$ does not apply here.
+
+In this analysis, \texttt{brentq} is used as a bracket-contraction procedure
+that numerically localizes a binary clearance--persistence change. The result
+should be called a \emph{classification boundary}, \emph{regime switch}, or
+\emph{persistence threshold}; it should not be described as a conventional
+continuous root.
+
+Nor has the switch been demonstrated to be a transcritical bifurcation. A
+transcritical bifurcation requires two equilibrium branches to meet and
+exchange stability. Establishing that claim would require equilibrium
+continuation and a Jacobian/eigenvalue stability analysis of the underlying
+continuous ODE. The present calculation instead uses a finite treatment
+course, a finite observation time, and discrete LOD events.
+
+\subsection{Current deterministic switches}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{@{}lllll@{}}
+\toprule
+Parameter & Grid & Points & Persistence side & Reported switch \\
+\midrule
+$\EC$ & $0.05$--$3.3~\mathrm{mg/L}$ & 131 & above & $1.3~\mathrm{mg/L}$ \\
+$\EM$ & $0.70$--$2.2~\mathrm{h}^{-1}$ & 111 & below & $1.5~\mathrm{h}^{-1}$ \\
+$\KI$ & $0.02$--$0.65~\mathrm{h}^{-1}$ & 127 & below & $0.047~\mathrm{h}^{-1}$ \\
+\bottomrule
+\end{tabular}
+\caption{Current resistant-reservoir classification boundaries. The unrounded
+computational values, rather than the displayed values, are used in subsequent
+probability calculations.}
+\label{tab:switches}
+\end{table}
+
+\section{Monte Carlo procedure}
+
+\subsection{Meaning of a Monte Carlo iteration}
+
+One iteration represents one virtual patient. The patient receives one random
+value of the parameter under study, while the treatment protocol, starting
+state, solver settings, and every other biological parameter remain fixed.
+The model is then integrated for the entire 81-day course. Repeating this
+procedure 1000 times produces a distribution of complete patient trajectories
+and outcomes.
+
+This is parameter-variability propagation: the random number does not add
+noise to the ODE at each time step. Once a patient's parameter value is drawn,
+that value remains constant for the patient's entire simulation.
+
+\subsection{Why a mean-corrected log-normal distribution is used}
+
+All three sampled parameters must be positive. They are drawn from log-normal
+distributions. If $X$ has required arithmetic mean $m$ and coefficient of
+variation $CV$, the code calculates
+\begin{align}
+\sigma_{\ln}&=\sqrt{\ln(1+CV^2)},\\
+\mu_{\ln}&=\ln(m)-\frac{1}{2}\sigma_{\ln}^2,\\
+X&\sim\operatorname{LogNormal}(\mu_{\ln},\sigma_{\ln}^2).
+\label{eq:lognormal}
+\end{align}
+The subtraction of $\sigma_{\ln}^2/2$ is the mean correction. It ensures
+\begin{equation}
+\mathbb{E}[X]=\exp\!\left(\mu_{\ln}+\frac{\sigma_{\ln}^2}{2}\right)=m.
+\end{equation}
+Without this correction, entering $\ln(m)$ as the log-scale location would
+make $m$ the median, not the mean, and the Monte Carlo calibration would no
+longer match the fixed baseline.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{@{}llll@{}}
+\toprule
+Analysis & Arithmetic mean & CV & Random seed \\
+\midrule
+$\EC$ & $1.13~\mathrm{mg/L}$ & $0.60$ & 44 \\
+$\EM$ & $1.65~\mathrm{h}^{-1}$ & $0.080$ & 44 \\
+$\KI$ & $0.10~\mathrm{h}^{-1}$ & $0.80$ & 42 \\
+\bottomrule
+\end{tabular}
+\caption{Centralized Monte Carlo distributions. Each analysis contains 1000
+draws and varies only the listed parameter.}
+\label{tab:mc-distributions}
+\end{table}
+
+\subsection{Exact computational sequence}
+
+Each Monte Carlo script follows the same essential sequence:
+\begin{enumerate}
+\item Load the model, centralized parameters, canonical time grid, hybrid
+solver, and outcome-classification function.
+\item Construct the vancomycin and linezolid concentration functions once.
+\item Read the selected parameter's arithmetic mean, CV, and random seed from
+\texttt{parameters.py}.
+\item Convert the mean and CV to $\mu_{\ln}$ and $\sigma_{\ln}$ using
+Eq.~\eqref{eq:lognormal}.
+\item Initialize a dedicated NumPy random-number generator and draw all 1000
+parameter values. Drawing them once makes the cohort reproducible.
+\item Pre-allocate four arrays with 1000 rows and 1453 columns, one array for
+each bacterial state. Row $i$ will contain virtual patient $i$'s trajectory.
+\item For patient $i$, copy the fixed baseline and override only the sampled
+parameter. For the immune analysis, construct a new
+\texttt{ImmuneResponse} object containing the sampled $\KI$.
+\item Integrate the complete four-state model over all 1453 reporting times.
+The hybrid solver has already applied extinction and reactivation events.
+\item Store all four trajectories, then repeat until all 1000 patients are
+complete.
+\item Apply the same trajectory-based outcome definitions to every patient's
+resistant-blood history.
+\item Summarize counts, percentages, distributions, and time courses, and
+write the figures with parameter-provenance metadata.
+\end{enumerate}
+
+\subsection{Clinical outcome definitions}
+
+Let $t_L$ denote linezolid completion and let the subsequent interval be the
+14-day follow-up. The three outcomes are mutually exclusive:
+\begin{align}
+\text{relapse}:\quad &R_b(t_L)<\LOD
+\quad\text{and}\quad \max_{t>t_L}R_b(t)\geq\LOD,\\
+\text{persistent failure}:\quad &R_b(t_L)\geq\LOD,\\
+\text{resolution}:\quad &R_b(t_L)<\LOD
+\quad\text{and}\quad R_b(t)<\LOD\ \text{for every }t>t_L.
+\end{align}
+A detectable reservoir without a post-treatment return of bacteremia is not
+called relapse. Conversely, a reservoir can cause relapse by remaining
+detectable through treatment and reseeding blood after linezolid ends.
+
+The switch threshold is not used to force an outcome label. Every label is
+calculated from that patient's simulated blood trajectory. This distinction
+is important near the switch and whenever blood remains detectable at the end
+of treatment. Section~\ref{sec:sign-meaning} explains why the sign of the
+reservoir-based Brent objective cannot be interpreted directly as the presence
+or absence of post-linezolid bacteremia.
+
+\subsection{Trajectory plots and missing-value display convention}
+
+The model stores extinct populations as exact zeros. A logarithmic axis cannot
+display zero, so plotting code replaces zeros with \texttt{NaN} only for
+display and NaN-aware summaries. This does not change the simulation or the
+outcome classification.
+
+For the EC50 and E-max kinetics figures, the median and 5th--95th percentile
+band are calculated within the patients who relapsed, making the reseeding
+trajectory visible. The immune-response figure calculates NaN-aware summaries
+over all patients; at each time these are conditional on the compartment being
+detectable. These conditional summaries must not be interpreted as
+unconditional cohort quantiles in which extinct patients have a small positive
+burden.
+
+\section{From switch distance to relapse probability}
+
+\subsection{Why the raw distance is insufficient}
+
+The simple difference $T-m$ is not comparable across parameters because the
+parameters have different units and different CVs. A difference of 0.10 is
+large for a narrow distribution and small for a broad distribution. Because
+the sampling distributions are log-normal, distance is measured after taking
+natural logarithms and is divided by the log-scale standard deviation.
+
+For an unrounded deterministic switch $T$, define
+\begin{equation}
+z_T=\frac{\ln(T)-\mu_{\ln}}{\sigma_{\ln}}.
+\label{eq:z}
+\end{equation}
+The z-value answers: ``How many log-scale standard deviations is the switch
+from the center of the sampling distribution?'' The standard normal
+cumulative distribution function
+\begin{equation}
+\Phi(z)=P(Z\leq z),\qquad Z\sim N(0,1),
+\end{equation}
+converts that standardized distance into an area under the distribution.
+
+\subsection{Choosing the correct tail}
+
+For $\EC$, high values weaken linezolid, so persistence is the upper tail:
+\begin{equation}
+P(\text{persistence side})=P(\EC>T)=1-\Phi(z_T).
+\end{equation}
+For $\EM$ and $\KI$, low values weaken killing or host clearance, so
+persistence is the lower tail:
+\begin{equation}
+P(\text{persistence side})=P(X<T)=\Phi(z_T).
+\end{equation}
+
+For example, the immune switch has $z=-0.74$. Approximately 23.1\% of a
+standard normal distribution lies to the left of $-0.74$. Therefore about
+23.1\% of the configured immune distribution is expected to lie in the weak-
+immunity persistence regime. The seeded finite cohort placed 240 of 1000
+patients (24.0\%) on that side; a finite random sample need not equal the
+theoretical percentage exactly.
+
+\subsection{Current distance and outcome calculations}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Parameter & $z_T$ & Theoretical tail & Sampled side & Relapse & Persistent \\
+\midrule
+$\EC$ & $0.60$ & 27.5\% & 300 (30.0\%) & 289 (28.9\%) & 11 (1.1\%) \\
+$\EM$ & $-0.75$ & 22.6\% & 220 (22.0\%) & 220 (22.0\%) & 0 (0.0\%) \\
+$\KI$ & $-0.74$ & 23.1\% & 240 (24.0\%) & 240 (24.0\%) & 0 (0.0\%) \\
+\bottomrule
+\end{tabular}
+\caption{Relationship between the deterministic switch, probability mass on
+the persistence side, and trajectory-defined clinical outcomes. The z-values
+use unrounded computational switches.}
+\label{tab:z-outcomes}
+\end{table}
+
+For each analysis in Table~\ref{tab:z-outcomes}, the number on the persistence
+side equals relapse plus persistent treatment failure. Thus the switch-tail
+area estimates the \emph{relapse-prone} fraction, not necessarily the relapse
+rate itself. A persistence-side patient is counted as relapse only if blood is
+below the LOD when linezolid ends and later becomes detectable. If blood is
+already detectable when linezolid ends, the outcome is persistent treatment
+failure.
+
+This explains why persistence-side fractions and relapse percentages can
+differ. In the immune analysis all 240 persistence-side patients, and in the
+E-max analysis all 220, first cleared blood and then relapsed. In the EC50
+analysis, 11 of the 300 persistence-side patients never cleared blood by
+treatment completion.
+
+\section{Analysis-specific interpretation and verified results}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Analysis & Relapse & Persistent failure & Resolution \\
+\midrule
+$\EC$ & 289 (28.9\%) & 11 (1.1\%) & 700 (70.0\%) \\
+$\EM$ & 220 (22.0\%) & 0 (0.0\%) & 780 (78.0\%) \\
+$\KI$ & 240 (24.0\%) & 0 (0.0\%) & 760 (76.0\%) \\
+\bottomrule
+\end{tabular}
+\caption{Verified mutually exclusive outcomes for 1000 virtual patients per
+analysis. Each row sums to 1000.}
+\label{tab:outcomes}
+\end{table}
+
+\paragraph{Linezolid EC50.}\mbox{}\par
+Increasing $\EC$ reduces potency. The clearance--persistence switch is
+$1.3~\mathrm{mg/L}$, and the sampling distribution has arithmetic mean
+$1.13~\mathrm{mg/L}$ and CV 0.60. The high-EC50 upper tail is therefore the
+persistence-prone group.
+
+\paragraph{Linezolid E-max.}\mbox{}\par
+Decreasing $\EM$ lowers the maximum killing capacity. The reported switch is
+$1.5~\mathrm{h}^{-1}$, and the sampling distribution has arithmetic mean
+$1.65~\mathrm{h}^{-1}$ and CV 0.080. Because this distribution is narrow, a
+small raw separation between the mean and switch can still correspond to a
+substantial standardized distance and tail probability.
+
+\paragraph{Immune response.}\mbox{}\par
+Decreasing $\KI$ weakens host clearance. The switch is
+$0.047~\mathrm{h}^{-1}$, while the distribution mean is
+$0.10~\mathrm{h}^{-1}$ with CV 0.80. This broad distribution places a
+clinically important lower tail below the switch even though the arithmetic
+mean is more than twice the reported switch.
+
+All three relapse percentages fall within the prespecified 20--30\%
+calibration range. They are outcomes of the chosen means, CVs, other fixed
+parameters, hard-LOD logic, and relapse definition; they should not be
+interpreted as independently validated clinical predictions.
+
+\section{Reproducibility map}
+
+\begin{longtable}{@{}p{0.28\textwidth}p{0.66\textwidth}@{}}
+\toprule
+File & Role \\
+\midrule
+\endhead
+\path{parameters.py} & Centralized parameters, sampling distributions,
+seeds, time grid, outcome definitions, and solver configuration. \\
+\path{model_Bacteremia.py} & Pharmacokinetics, immune-response object, and
+four-state ODE right-hand side. \\
+\path{solver.py} & LSODA integration with hard-LOD extinction and
+transfer-driven reactivation events. \\
+\path{EC50_lzd_threshold_sweep.py} & Deterministic EC50 switch. \\
+\path{Emax_lzd_threshold_sweep.py} & Deterministic E-max switch. \\
+\path{ImmuneResponse_threshold_sweep.py} & Deterministic immune switch. \\
+\path{MC_ec50_lzd.py} & EC50 Monte Carlo analysis and figures. \\
+\path{MC_emax_lzd.py} & E-max Monte Carlo analysis and figures. \\
+\path{MC_immune_response.py} & Immune-response Monte Carlo analysis and
+figures. \\
+\bottomrule
+\end{longtable}
+
+The principal figures are:
+\begin{itemize}
+\item \path{mc_ec50_lzd_sweep_kinetics.png},
+      \path{mc_emax_lzd_sweep_kinetics.png}, and
+      \path{mc_immune_response.png};
+\item the three corresponding switch/population figures; and
+\item \path{distribution_to_switch.png}, \path{stacked_outcomes.png}, and
+      \path{relapse_time_curve.png}.
+\end{itemize}
+
+\section{Interpretive cautions}
+
+\begin{enumerate}
+\item The three Monte Carlo analyses are one-at-a-time analyses. They do not
+represent correlations or simultaneous variability among EC50, E-max, and
+immune response.
+\item The CVs are outcome-calibrated inputs. They are not claimed to be
+population estimates obtained from an independent clinical dataset.
+\item A deterministic reservoir switch is mechanistic context, not the
+clinical relapse definition.
+\item The hard LOD is a modeling rule. It changes the mathematics from a
+fully continuous ODE to a hybrid dynamical system.
+\item Brent's continuity-based root guarantee does not apply to the
+hard-LOD objective. The returned value localizes a classification change.
+\item Calling the switch a transcritical bifurcation would require a separate
+equilibrium and stability analysis that has not been performed.
+\item Displayed parameters and thresholds are rounded, but probability
+calculations use unrounded computational values. This is especially important
+for the narrow E-max distribution.
+\end{enumerate}
+
+\bibliographystyle{ieeetr}
+\bibliography{references}
+
+\end{document}

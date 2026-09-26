@@ -1,8 +1,9 @@
 \documentclass[11pt]{article}
 \usepackage[margin=1in]{geometry}
 \usepackage{amsmath,amssymb}
-\usepackage{hyperref}
 \usepackage{float}
+\usepackage{tabularx}
+\usepackage{hyperref}
 
 \title{Function and Parameter Reference: \texttt{model\_Bacteremia.py}}
 \author{}
@@ -41,8 +42,9 @@ converts it into a free-drug concentration profile over time.
 \textbf{What it does:} Sets fixed dosing and pharmacokinetic constants for
 both drugs as instance attributes (dose, dosing interval, course duration,
 volume of distribution, free/unbound fraction, and clearance). These
-values are not arguments -- they are hard-coded defaults representing the
-project's standard treatment regimen (Table~\ref{tab:pk}).
+values are imported from the centralized \texttt{PK\_PARAMS} mapping in
+\texttt{parameters.py} and assigned as instance attributes
+(Table~\ref{tab:pk}).
 
 \subsection{\texttt{concentration\_function(self, drug\_type, total\_time\_h, start\_h=0)}}
 
@@ -68,11 +70,11 @@ any query time \texttt{t}. This returned function is what gets passed into
 
 \begin{table}[H]
 \centering
-\large
-\renewcommand{\arraystretch}{1.35}
+\small
+\renewcommand{\arraystretch}{1.15}
 \caption{Fixed values set by \texttt{PharmacokineticModel.\_\_init\_\_}.}
 \vspace{0.5cm}
-\begin{tabular}{l l l l}
+\begin{tabularx}{\textwidth}{l l l X}
 \hline
 \textbf{Parameter} & \textbf{Vancomycin} & \textbf{Linezolid} & \textbf{Meaning} \\
 \hline
@@ -83,7 +85,7 @@ $V_d$ & 50 L & 45 L & volume of distribution \\
 $f_u$ & 0.50 & 0.70 & free (unbound, active) fraction \\
 Clearance & 5.0 L/h & 6.0 L/h & total body clearance \\
 \hline
-\end{tabular}
+\end{tabularx}
 \label{tab:pk}
 \end{table}
 
@@ -92,19 +94,20 @@ Clearance & 5.0 L/h & 6.0 L/h & total body clearance \\
 Represents the host's bacterial clearance capacity as a constant rate,
 independently scaled per compartment.
 
-\subsection{\texttt{\_\_init\_\_(self, k\_immune=0.12, eff\_blood=1.0, eff\_res=0.1)}}
+\subsection{\texttt{\_\_init\_\_(self, k\_immune=K\_IMMUNE\_DEFAULT, eff\_blood=1.0, eff\_res=0.5)}}
 
 \textbf{Arguments:}
 \begin{itemize}
-\item \texttt{k\_immune} (\texttt{float}, default \texttt{0.12}) -- the
+\item \texttt{k\_immune} (\texttt{float}, default
+\texttt{K\_IMMUNE\_DEFAULT} $=0.10$ from \texttt{parameters.py}) -- the
 baseline host immune clearance rate, in h$^{-1}$.
 \item \texttt{eff\_blood} (\texttt{float}, default \texttt{1.0}) -- a
 multiplier scaling how effectively the immune response clears bacteria in
 the blood compartment.
-\item \texttt{eff\_res} (\texttt{float}, default \texttt{0.1}) -- the
-equivalent multiplier for the bone reservoir compartment. Set an order of
-magnitude below \texttt{eff\_blood} to represent reduced immune access to a
-deep-seated focus of infection.
+\item \texttt{eff\_res} (\texttt{float}, default \texttt{0.5}) -- the
+equivalent multiplier for the bone reservoir compartment. Set to one-half
+of \texttt{eff\_blood} to represent reduced immune access to a deep-seated
+focus of infection.
 \end{itemize}
 
 \textbf{What it does:} Stores these three values as instance attributes for
@@ -124,7 +127,8 @@ current immune response does not actually vary with time.
 \section{Function: \texttt{dual\_reservoir\_model(y, t, params, van\_func, lzd\_func, immune\_model)}}
 
 The right-hand side of the ordinary differential equation (ODE) system,
-written in the form required by \texttt{scipy.integrate.odeint}.
+written in the form consumed by the project's shared
+\texttt{integrate\_model} solver.
 
 \textbf{Arguments:}
 \begin{itemize}
@@ -136,9 +140,9 @@ aureus} counts (CFU/mL) in blood ($b$) and the bone reservoir ($res$).
 so that time-dependent drug exposure (and, if ever implemented, a
 time-dependent immune response) can be evaluated at this instant.
 \item \texttt{params} -- a dictionary of growth, drug-effect, capacity, and
-exchange-rate values (Table~\ref{tab:params}). Every script in the project
-builds its own \texttt{params} dictionary and passes it in here; nothing in
-this function itself is hard-coded.
+exchange-rate values (Table~\ref{tab:params}). Analysis scripts copy the
+shared \texttt{BASE\_PARAMS} mapping and override only the parameter under
+study.
 \item \texttt{van\_func}, \texttt{lzd\_func} -- callables returning free
 vancomycin/linezolid concentration at time \texttt{t}, normally produced by
 \texttt{PharmacokineticModel.concentration\_function}.
@@ -151,14 +155,43 @@ subpopulations -- combining logistic growth toward a compartment-specific
 carrying capacity, drug-driven killing (vancomycin against sensitive
 strains only; linezolid against both strains, at a discounted effect in the
 reservoir), immune-driven killing (at a discounted rate in the reservoir),
-and first-order exchange of bacteria between blood and the reservoir in
-both directions. Non-physical negative populations are clamped to zero, and
-a smooth low-density floor is applied to each growth term so that
-populations run down to true extinction rather than stalling at a small
-positive value.
+and one-way first-order seeding of bacteria from the reservoir into blood
+(there is no blood-to-reservoir return term). Non-physical negative populations are clamped to zero.
+Reservoir linezolid exposure is multiplied by
+\texttt{lzd\_res\_fraction}; its reservoir maximum effect is additionally
+multiplied by the independent efficacy factor \texttt{lzd\_res\_efficacy}
+($\alpha$), so $E_{max,L}^{res} = \alpha\,E_{max,L}$. The factor is not
+derived from the growth rates (it replaced the former $\rho_{res,S}/\rho_S$
+scaling). This function is the only place $\alpha$ is used; every analysis
+script applies it through \texttt{BASE\_PARAMS}, and none varies it. Growth otherwise follows the ordinary
+logistic term for active states, allowing a detectable reservoir population
+to reseed blood.
+
+The numerical integration applies a hard limit of detection (LOD) of
+$10$~CFU/mL: a compartment that falls below the LOD is set to exactly zero.
+Thus, sub-LOD fractional populations cannot subsequently regrow, although a
+nonzero reservoir can still reseed a cleared blood compartment through the
+exchange term.
 
 \textbf{Returns:} a length-4 list, $[\dot S_b,\ \dot R_b,\ \dot S_{res},\
-\dot R_{res}]$, the derivatives \texttt{odeint} integrates forward in time.
+\dot R_{res}]$, the derivatives the shared solver integrates forward in time.
+
+\section{Shared numerical solver}
+
+The model right-hand side does not call SciPy directly. Analysis scripts pass
+it to \texttt{solver.integrate\_model}, which uses
+\texttt{scipy.integrate.solve\_ivp} with LSODA. The centralized numerical
+configuration is relative tolerance $10^{-6}$, absolute tolerance $10^{-8}$
+CFU/mL, and maximum internal step 4.0~h. The standard output grid contains
+1453 points and includes all treatment boundaries exactly.
+
+The solver implements extinction and reactivation as hybrid events. A state
+crossing downward through the 10-CFU/mL LOD is set to zero and is hidden from
+autonomous growth and outgoing-transfer terms. Incoming transfer from an
+active paired compartment may accumulate until an upward crossing reaches the
+LOD, at which point that state is reactivated. Every returned burden is either
+zero or at least 10 CFU/mL. Solver failure, warnings, non-finite output, or
+negative states raise an explicit integration error.
 
 \section{Script execution (\texttt{if \_\_name\_\_ == "\_\_main\_\_"})}
 
@@ -168,7 +201,8 @@ imported). It builds one \texttt{PharmacokineticModel} and one
 \texttt{ImmuneResponse}, defines a single baseline \texttt{params}
 dictionary and initial condition $Y_0 = [0,\,0,\,100,\,100]$, integrates
 \texttt{dual\_reservoir\_model} once over a 1944-hour (81-day) course with
-\texttt{scipy.integrate.odeint}, and prints two sanity-check values: the net
+the shared \texttt{integrate\_model} routine, and prints two sanity-check
+values: the net
 pre-treatment blood growth rate (asserted positive, to catch an
 accidentally unrepresentative parameter set in which the untreated host
 would clear infection on its own) and the peak sensitive-strain blood count
@@ -183,82 +217,76 @@ where noted).
 
 \begin{table}[H]
 \centering
-\large
-\renewcommand{\arraystretch}{1.35}
+\small
+\renewcommand{\arraystretch}{1.15}
 \caption{\texttt{params} dictionary keys used by \texttt{dual\_reservoir\_model}.}
 \vspace{0.5cm}
-\begin{tabular}{l l l}
+\begin{tabularx}{\textwidth}{l l X}
 \hline
 \textbf{Key} & \textbf{Baseline value} & \textbf{Meaning} \\
 \hline
-\texttt{rho\_S} & 0.72 h$^{-1}$ & blood sensitive-strain growth rate \\
-\texttt{rho\_R} & 0.649 h$^{-1}$ & blood resistant-strain growth rate ($\sim$10\% fitness cost relative to \texttt{rho\_S}; exactly 9.9\%) \\
-\texttt{rho\_res\_S} & 0.19415 h$^{-1}$ & reservoir sensitive-strain growth rate \\
-\texttt{rho\_res\_R} & 0.1765 h$^{-1}$ & reservoir resistant-strain growth rate ($\sim$10\% fitness \emph{cost} relative to \texttt{rho\_res\_S}) \\
+\texttt{rho\_S} & 1.1 h$^{-1}$ & blood sensitive-strain growth rate \\
+\texttt{rho\_R} & 0.99 h$^{-1}$ & blood resistant-strain growth rate (10\% fitness cost relative to \texttt{rho\_S}) \\
+\texttt{rho\_res\_S} & 0.50 h$^{-1}$ & reservoir sensitive-strain growth rate \\
+\texttt{rho\_res\_R} & 0.45 h$^{-1}$ & reservoir resistant-strain growth rate (10\% fitness cost relative to \texttt{rho\_res\_S}) \\
 \texttt{Emax\_v} & 1.7 h$^{-1}$ & vancomycin maximum kill rate \\
 \texttt{EC50\_V} & 0.25 mg/L & vancomycin half-maximal effective concentration \\
-\texttt{Emax\_l} & 0.8 h$^{-1}$ & linezolid maximum kill rate \\
-\texttt{EC50\_L} & 0.6 mg/L & linezolid half-maximal effective concentration \\
-\texttt{B\_max\_blood} & 6000 CFU/mL & blood carrying capacity (shared by $S_b+R_b$) \\
-\texttt{B\_max\_reservoir} & $1\times10^4$ CFU/mL & reservoir carrying capacity (shared by $S_{res}+R_{res}$) \\
+\texttt{Emax\_l} & 1.65 h$^{-1}$ & linezolid maximum kill rate (Schmidt et al.) \\
+\texttt{EC50\_L} & 1.13 mg/L & linezolid half-maximal effective concentration (Schmidt et al.) \\
+\texttt{B\_max\_blood} & $6.0\times10^3$ CFU/mL & blood carrying capacity (shared by $S_b+R_b$) \\
+\texttt{B\_max\_reservoir} & $1.0\times10^7$ CFU/mL & reservoir carrying capacity (shared by $S_{res}+R_{res}$) \\
 \texttt{van\_res\_fraction} & 0.15 & vancomycin reservoir tissue-penetration fraction \\
-\texttt{lzd\_res\_fraction} & 0.30 & linezolid reservoir tissue-penetration fraction \\
-\texttt{f\_r\_b} & $5\times10^{-5}$ h$^{-1}$ & reservoir $\to$ blood exchange rate \\
-\texttt{f\_b\_r} & $1\times10^{-5}$ h$^{-1}$ & blood $\to$ reservoir exchange rate \\
+\texttt{lzd\_res\_fraction} & 0.40 & linezolid bone-penetration fraction, lower end of the reported 0.40--0.60 range \\
+\texttt{lzd\_res\_efficacy} & 0.41 & reservoir linezolid efficacy factor $\alpha$ ($E_{max,L}^{res} = \alpha\,E_{max,L}$); calibrated \\
+\texttt{k\_r\_b} & $1.0\times10^{-7}$ h$^{-1}$ & reservoir $\to$ blood exchange rate \\
 \hline
-\end{tabular}
+\end{tabularx}
 \label{tab:params}
 \end{table}
 
 \section{Parameters varied with a coefficient of variation}
 
 \texttt{model\_Bacteremia.py} itself defines only fixed baseline values --
-it contains no random sampling. Four quantities are instead varied
-elsewhere in the project, in separate Monte Carlo scripts that import
+it contains no random sampling. Three quantities are varied in the current
+analysis by separate Monte Carlo scripts that import
 \texttt{dual\_reservoir\_model} and call it $n=1000$ times per script, each
-call using one freshly sampled value drawn from a log-normal distribution.
-In every case the log-scale sampling parameters are chosen so that the
-distribution's \emph{mean} (not its median) equals the baseline value shown
-in Table~\ref{tab:params}, and every other parameter is held fixed at
+call using one freshly sampled value. Log-normal distributions are
+mean-corrected so their \emph{mean} (not their median) equals the baseline
+value shown in Table~\ref{tab:params}. The $E_{max,L}$ analysis uses the same
+mean-corrected log-normal parameterization, so its baseline value is likewise
+the distribution's arithmetic mean. Every other parameter is held fixed at
 baseline. Table~\ref{tab:cv} lists each sampled quantity's mean, CV, and
 source script.
 
 \begin{table}[H]
 \centering
-\large
-\renewcommand{\arraystretch}{1.35}
-\caption{Log-normal Monte Carlo sampling distributions used elsewhere in
-this project ($n=1000$ draws each, mean-corrected).}
+\small
+\renewcommand{\arraystretch}{1.15}
+\caption{Monte Carlo sampling distributions used elsewhere in this project
+($n=1000$ draws each, mean-corrected).}
 \vspace{0.5cm}
-\begin{tabular}{l l l l}
+\begin{tabularx}{\textwidth}{l l l X}
 \hline
 \textbf{Quantity} & \textbf{Mean} & \textbf{CV} & \textbf{Source script} \\
 \hline
-$EC_{50,L}$ & 0.6 mg/L & 1.1 & \texttt{MC\_ec50\_lzd.py} \\
-$E_{max,L}$ & 1.085 h$^{-1}$ & 0.307 & \texttt{MC\_emax\_lzd.py} \\
-$k_{immune}$ & 0.243 h$^{-1}$ & 0.25 & \texttt{MC\_immune\_response.py} \\
-$S_{res}(0)$ & 100 CFU/mL & 60.0 & \texttt{MC\_initial\_conditions.py} \\
-$R_{res}(0)$ & 100 CFU/mL & 60.0 & \texttt{MC\_initial\_conditions.py} \\
+$EC_{50,L}$ & 1.13 mg/L & 0.60 & \texttt{MC\_ec50\_lzd.py} \\
+$E_{max,L}$ & 1.65 h$^{-1}$ & 0.080 & \texttt{MC\_emax\_lzd.py}; mean-corrected log-normal \\
+$k_{immune}$ & 0.10 h$^{-1}$ & 0.80 & \texttt{MC\_immune\_response.py} \\
 \hline
-\end{tabular}
+\end{tabularx}
 \label{tab:cv}
 \end{table}
 
-Two notes on Table~\ref{tab:cv}: first, $k_{immune}$'s sampled mean
-(0.243 h$^{-1}$) differs from \texttt{ImmuneResponse}'s own hard-coded
-default (0.12 h$^{-1}$) -- the Monte Carlo script re-tunes the sampling
-mean upward so that a realistic fraction of simulated patients resolve
-their infection, rather than sampling around the class default. Second,
-$S_{res}(0)$ and $R_{res}(0)$ are not entries in the \texttt{params}
-dictionary at all -- they are the reservoir components of the initial
-condition vector $Y_0$ passed to \texttt{odeint} -- but are included here
-because they are the only other quantities in the project sampled with an
-explicit CV; their CV of 60.0 is deliberately extreme, chosen to
-illustrate genuine uncertainty in the founding reservoir bacterial burden
-rather than to represent a precisely estimated value. Every other entry in
-Table~\ref{tab:params} (growth rates, vancomycin PD parameters, carrying
-capacities, tissue-penetration fractions, and exchange rates) is held at a
-single fixed value in every script in this project and has no associated
-CV.
+The pharmacodynamic and immune CVs in Table~\ref{tab:cv} are
+outcome-calibrated model inputs, not independently estimated measures of
+population variability.
+
+The sampled means for $EC_{50,L}$, $E_{max,L}$, and $k_{immune}$ equal their
+fixed baseline values; in particular, \texttt{ImmuneResponse}'s default is
+$0.10$ h$^{-1}$. Initial-condition sampling is excluded from the current
+analysis. Within each one-factor Monte Carlo analysis, every non-target
+parameter remains fixed at baseline. Separate deterministic sensitivity
+scripts may deliberately sweep a named parameter, but those sweeps do not
+assign it a population CV. Inter-compartmental transfer rates are held fixed.
 
 \end{document}
