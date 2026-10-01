@@ -2,10 +2,10 @@
 # Deterministic EC50_L threshold sweep (0.05-3.3 mg/L).
 #
 # Every parameter except EC50_L comes from the shared BASE_PARAMS. The fixed
-# EC50_L baseline and the MC sampling mean are both 1.13 mg/L. Higher EC50_L
+# EC50_L baseline and the MC sampling mean are both 0.56 mg/L. Higher EC50_L
 # weakens linezolid potency and is the reservoir-persistence side of the
-# switch. The accepted final-R_res transition is 1.35 mg/L; the companion MC
-# analysis gives 28.9% bacteremia relapse (289/1000).
+# switch. The accepted final-R_res transition is 0.76 mg/L; the companion MC
+# analysis gives 22.0% bacteremia relapse (220/1000).
 #
 # What it does, step by step:
 #   1. Runs one fixed-parameter ODE simulation per EC50_L value on a 131-point
@@ -152,10 +152,11 @@ print(f"EC50_L values in [{EC50_MIN}, {EC50_MAX}] with final R_res > LOD: "
 # (imported at the top) contracts the sign-changing bracket to 0.001 mg/L.
 # Because hard extinction makes f discontinuous, the result localizes the
 # classification switch; final burden need not equal the LOD there.
-# It is called separately for R_b and R_res so the compartments can have
-# distinct crossings after a baseline change.
-##The f(EC50_MIN) > 0 or f(EC50_MAX) < 0 guard is brentq's precondition — it requires the function to have opposite signs at the two endpoints
-#(i.e., a genuine crossing exists in range) before bisecting, otherwise it returns None rather than raising.
+# Only the reservoir (R_res) switch is localized; relapse in blood is
+# classified from the R_b trajectory in MC_ec50_lzd.py.
+# The f(EC50_MIN) > 0 or f(EC50_MAX) < 0 guard checks brentq's precondition --
+# opposite signs at the two endpoints (a genuine crossing exists in range) --
+# and returns None instead of letting brentq raise.
 # ---------------------------------------------------------------------------
 def find_reservoir_threshold():
     """Localize the monotone final-R_res switch with Brent's method."""

@@ -105,11 +105,9 @@ ec50_l_samples = rng.lognormal(mu_ln, sigma_ln, NUM_ITERATIONS)
 # ---------------------------------------------------------------------------
 # Continuous deterministic switch curve + precise escape threshold.
 #
-# Replaces the earlier fixed threshold with a Brent-localized switch computed
-# from the current shared BASE_PARAMS, and
-# replaces the 5-bin categorical grouping (which only ever produced two flat
-# levels either side of one straddling bin) with a fine, continuous sweep --
-# the actual switch curve -- used by the combined figure below.
+# A fine, continuous sweep of final R_b / R_res vs EC50_L (the switch curve
+# used by the combined figure below). The final-R_res switch is bracketed on
+# the grid and then localized with Brent's method from the current BASE_PARAMS.
 # ---------------------------------------------------------------------------
 def _final_counts(ec50_l):
     """One deterministic run at a fixed EC50_L; returns (final R_b, final R_res)."""
@@ -122,8 +120,8 @@ def _final_counts(ec50_l):
     return sol[-1, 1], sol[-1, 3]
 
 
-SWEEP_MIN, SWEEP_MAX = 0.05, 3.3   # covers the configured mean=0.60, CV=0.60
-                                    # sampled population and its upper tail
+SWEEP_MIN, SWEEP_MAX = 0.05, 3.3   # covers the SAMPLING["EC50_L"] population
+                                    # (mean 0.56, CV 0.60) and its upper tail
 N_SWEEP = 131   # step ~0.025
 
 print(f"\nRunning deterministic switch-curve sweep across [{SWEEP_MIN}, {SWEEP_MAX}] "
@@ -253,13 +251,13 @@ for ax, hist, lc, mc, title, ylim in panels:
         tr = np.where(hist[j] == 0, np.nan, hist[j])
         ax.plot(t_days, tr, color=lc, alpha=0.12, lw=0.8)
 
-    # Summarise over the ESCAPED patients only. Taking the median over all 1000
+    # Summarise over the RELAPSED patients (escaped_mask) only. Taking the median over all 1000
     # rows makes the post-treatment relapse vanish from the plot: sub-LOD values
-    # are stored as 0, escape is a minority outcome, so the all-patient median is
-    # 0 (-> NaN) exactly where the relapse happens. Restricting to escaped rows
+    # are stored as 0, relapse is a minority outcome, so the all-patient median is
+    # 0 (-> NaN) exactly where the relapse happens. Restricting to relapsed rows
     # and using nanmedian keeps the relapse visible and states its n in the
     # legend. Sub-LOD points within that subset become NaN, so a gap here means
-    # "not detectable in any escaped patient", not "no data".
+    # "not detectable in any relapsed patient", not "no data".
     esc = np.where(hist[escaped_mask] == 0, np.nan, hist[escaped_mask])
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")   # all-NaN slices are expected on drug
@@ -378,7 +376,7 @@ print(f"\n--- Sweep: EC50_L varied (sampling mean={EC50_L_MEAN:.2f}) ---")
 print(f"  EC50_L sampled  median={np.median(ec50_l_samples):.2f}  "
       f"[5th={np.percentile(ec50_l_samples, 5):.2f}, "
       f"95th={np.percentile(ec50_l_samples, 95):.2f}]")
-# Outcome split -- quoted in supplement.tex (tab:zscore_summary) and in
+# Outcome split -- quoted in manuscript10.01.tex and in
 # threshold_changes_summary.txt, so print it rather than leaving it readable
 # only off the histogram legend in mc_ec50_lzd_switch.png.
 n_relapse = int(escaped_mask.sum())

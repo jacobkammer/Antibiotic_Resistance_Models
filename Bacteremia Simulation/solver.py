@@ -36,7 +36,7 @@ def integrate_model(model_rhs, y0, t_eval, args=(), *, method=None, config=None)
 
     Inactive states are hidden from the biological RHS, so they have no local
     growth, killing, immune clearance, or outgoing transfer. The RHS can still
-    supply their incoming transfer term from an active paired compartment. The
+    supply their incoming transfer term from an active paired compartment.
     The returned array has shape ``(len(t_eval), len(y0))``.
     """
     cfg = dict(SOLVER_CONFIG if config is None else config)

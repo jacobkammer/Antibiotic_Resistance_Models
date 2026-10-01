@@ -99,7 +99,7 @@ independently scaled per compartment.
 \textbf{Arguments:}
 \begin{itemize}
 \item \texttt{k\_immune} (\texttt{float}, default
-\texttt{K\_IMMUNE\_DEFAULT} $=0.10$ from \texttt{parameters.py}) -- the
+\texttt{K\_IMMUNE\_DEFAULT} $=0.18$ from \texttt{parameters.py}) -- the
 baseline host immune clearance rate, in h$^{-1}$.
 \item \texttt{eff\_blood} (\texttt{float}, default \texttt{1.0}) -- a
 multiplier scaling how effectively the immune response clears bacteria in
@@ -225,19 +225,19 @@ where noted).
 \hline
 \textbf{Key} & \textbf{Baseline value} & \textbf{Meaning} \\
 \hline
-\texttt{rho\_S} & 1.1 h$^{-1}$ & blood sensitive-strain growth rate \\
-\texttt{rho\_R} & 0.99 h$^{-1}$ & blood resistant-strain growth rate (10\% fitness cost relative to \texttt{rho\_S}) \\
-\texttt{rho\_res\_S} & 0.50 h$^{-1}$ & reservoir sensitive-strain growth rate \\
-\texttt{rho\_res\_R} & 0.45 h$^{-1}$ & reservoir resistant-strain growth rate (10\% fitness cost relative to \texttt{rho\_res\_S}) \\
+\texttt{rho\_S} & 1.47 h$^{-1}$ & blood sensitive-strain growth rate (Vera-Yunca et al., in vitro) \\
+\texttt{rho\_R} & 1.323 h$^{-1}$ & blood resistant-strain growth rate (10\% fitness cost relative to \texttt{rho\_S}) \\
+\texttt{rho\_res\_S} & 0.845 h$^{-1}$ & reservoir sensitive-strain growth rate (Vera-Yunca et al., in vivo) \\
+\texttt{rho\_res\_R} & 0.7605 h$^{-1}$ & reservoir resistant-strain growth rate (10\% fitness cost relative to \texttt{rho\_res\_S}) \\
 \texttt{Emax\_v} & 1.7 h$^{-1}$ & vancomycin maximum kill rate \\
 \texttt{EC50\_V} & 0.25 mg/L & vancomycin half-maximal effective concentration \\
-\texttt{Emax\_l} & 1.65 h$^{-1}$ & linezolid maximum kill rate (Schmidt et al.) \\
-\texttt{EC50\_L} & 1.13 mg/L & linezolid half-maximal effective concentration (Schmidt et al.) \\
+\texttt{Emax\_l} & 1.97 h$^{-1}$ & linezolid maximum kill rate (Vera-Yunca et al., in vitro) \\
+\texttt{EC50\_L} & 0.56 mg/L & linezolid half-maximal effective concentration (Vera-Yunca et al., in vitro) \\
 \texttt{B\_max\_blood} & $6.0\times10^3$ CFU/mL & blood carrying capacity (shared by $S_b+R_b$) \\
 \texttt{B\_max\_reservoir} & $1.0\times10^7$ CFU/mL & reservoir carrying capacity (shared by $S_{res}+R_{res}$) \\
 \texttt{van\_res\_fraction} & 0.15 & vancomycin reservoir tissue-penetration fraction \\
-\texttt{lzd\_res\_fraction} & 0.40 & linezolid bone-penetration fraction, lower end of the reported 0.40--0.60 range \\
-\texttt{lzd\_res\_efficacy} & 0.41 & reservoir linezolid efficacy factor $\alpha$ ($E_{max,L}^{res} = \alpha\,E_{max,L}$); calibrated \\
+\texttt{lzd\_res\_fraction} & 0.50 & linezolid bone-penetration fraction, midpoint of the reported 0.40--0.60 range \\
+\texttt{lzd\_res\_efficacy} & 0.45 & reservoir linezolid efficacy factor $\alpha$ ($E_{max,L}^{res} = \alpha\,E_{max,L}$); calibrated \\
 \texttt{k\_r\_b} & $1.0\times10^{-7}$ h$^{-1}$ & reservoir $\to$ blood exchange rate \\
 \hline
 \end{tabularx}
@@ -269,9 +269,9 @@ source script.
 \hline
 \textbf{Quantity} & \textbf{Mean} & \textbf{CV} & \textbf{Source script} \\
 \hline
-$EC_{50,L}$ & 1.13 mg/L & 0.60 & \texttt{MC\_ec50\_lzd.py} \\
-$E_{max,L}$ & 1.65 h$^{-1}$ & 0.080 & \texttt{MC\_emax\_lzd.py}; mean-corrected log-normal \\
-$k_{immune}$ & 0.10 h$^{-1}$ & 0.80 & \texttt{MC\_immune\_response.py} \\
+$EC_{50,L}$ & 0.56 mg/L & 0.60 & \texttt{MC\_ec50\_lzd.py} \\
+$E_{max,L}$ & 1.97 h$^{-1}$ & 0.080 & \texttt{MC\_emax\_lzd.py}; mean-corrected log-normal \\
+$k_{immune}$ & 0.18 h$^{-1}$ & 0.80 & \texttt{MC\_immune\_response.py} \\
 \hline
 \end{tabularx}
 \label{tab:cv}
@@ -283,7 +283,7 @@ population variability.
 
 The sampled means for $EC_{50,L}$, $E_{max,L}$, and $k_{immune}$ equal their
 fixed baseline values; in particular, \texttt{ImmuneResponse}'s default is
-$0.10$ h$^{-1}$. Initial-condition sampling is excluded from the current
+$0.18$ h$^{-1}$. Initial-condition sampling is excluded from the current
 analysis. Within each one-factor Monte Carlo analysis, every non-target
 parameter remains fixed at baseline. Separate deterministic sensitivity
 scripts may deliberately sweep a named parameter, but those sweeps do not

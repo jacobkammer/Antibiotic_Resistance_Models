@@ -31,12 +31,31 @@ Vancomycin has become the cornerstone of antibiotic treatment against MRSA infec
 
 Since the end of the 20th century newer antibiotics, such as linezolid have been developed to target the antibiotic resistant S. aureus.  Linezolid, an oxazolidinone antibiotic, has become one of the second line agents used in the treatment of vancomycin resistant MRSA endocarditis \cite{Cong2020}.  Beyond simply adding linezolid to treatment protocols an improved understanding of the factors that lead to clinical resolution (bacteremia resolved) or failure (persistent or relapsing bacteremia) is needed. Understanding how bacterial phenotypic variability, antibiotic combinations, and host factors interact will lead to improved outcomes in bacterial endocarditis.  
 
-Mikkaichi and colleagues \cite{Mikkaichi2019} developed a mathematical model to examine the interplay of phenotypic heterogeneity with host factors in the persistence of MRSA bacteremia.  Mikkaichi used ensemble modeling and other ML techniques to determine the key differences between resolving and persistent bacteremia \cite{Mikkaichi2019}. Two phenotypically distinct bacterial populations were used, one phenotypically normal, the other composed of persister cells.  Persister cells are defined as slower growing and are less susceptible to antibiotics \cite{Mikkaichi2019}.  Mikkaichi's model analyzed the interaction of vancomycin, host immune function and differences in bacterial phenotypic behavior to identify the key factors that lead to persistent bacteremia.  Using this ensemble modeling approach, Mikkaichi and colleagues identified decreased immune clearance rate of persister cells as the primary determinant of persistent bacteremia \cite{Mikkaichi2019}. 
+Mikkaichi and colleagues \cite{Mikkaichi2019} developed a mathematical model to examine the interplay of phenotypic heterogeneity
+with host factors in the persistence of MRSA bacteremia.  Mikkaichi used ensemble modeling and other ML techniques to determine
+the key differences between resolving and persistent bacteremia \cite{Mikkaichi2019}.
+Two phenotypically distinct bacterial populations were used, one phenotypically normal, the other composed of persister cells.  
+Persister cells are defined as slower growing and are less susceptible to antibiotics \cite{Mikkaichi2019}.
+Mikkaichi's model analyzed the interaction of vancomycin, host immune function and differences in bacterial phenotypic behavior to identify the key factors that lead to persistent bacteremia.  Using this ensemble modeling approach, Mikkaichi and colleagues identified decreased immune clearance rate of persister cells as the primary determinant of persistent bacteremia \cite{Mikkaichi2019}. 
 
-Complementing Mikkaichi's model with a host modeling framework, Vera-Yunca et al\cite{VeraYunca2025} developed a two state bacterial growth rate PKPD model.  The two bacterial populations were characterized as a growing drug susceptible and a non-growing, non-susceptible dormant state \cite{VeraYunca2025}.  The model was developed using in vitro time-kill experiments and in-vivo treatment studies in a mouse pneumonia model.  The model allowed for estimates of bacterial growth rates and maximum drug effect parameters in vivo\cite{VeraYunca2025}. A key finding was that the maximum bacterial killing rate in vivo was 70–75 percent lower than in vitro estimates for both agents\cite{VeraYunca2025}. 
+Vera-Yunca et al. developed a two-state semi-mechanistic PKPD model comprising a growing,
+drug-susceptible population and a non-growing, drug-insusceptible dormant state. The model was built on in vitro time–kill
+experiments with linezolid and vancomycin against MRSA and subsequently adjusted to data from a neutropenic mouse pneumonia model.
+The in vivo drug-effect parameters were obtained by re-estimating scaling
+ratios relative to the in vitro estimates rather than independently.
+Whereas Mikkaichi et al. incorporate host immune clearance explicitly, the neutropenic design of Vera-Yunca's model excluded it.
 
-The present study uses a dual-compartment mathematical Pharmacokinetic/pharmacodynamic model (PKPD) to examine the interplay of the factors that lead to persistence and relapse of bacteremia in the setting of bacterial endocarditis.  This type of model is used to connect drug exposure to drug response.  Linking time course of drug concentration to the time course of drug effect allows the model to simulate what happens during treatment.  Two MRSA populations are used across the two compartments.  One MRSA subpopulation is vancomycin resistant while the other is sensitive to vancomycin.  The host system is characterized by a clinical diagnosis of bacterial endocarditis with the initial bacteremia secondary to osteomyelitis of the right ankle. The model evaluates how these two phenotypically distant MRSA sub populations grow in the environment of antibiotic treatment, and immune response of in-silico patients. Using well understood population averages of clinical relapse in a specific clinical scenario, the techniques of Monte carlo sampling and non-linear dynamics are used to delineate what properties of the drug–host–reservoir system produce durable bacteremia clearance or post-treatment relapse.  By integrating bacterial dynamics, antibiotic pharmacology, and the host innate immune response within a single modeling framework, this approach provides a means of studying the interplay between these forces in a way that human clinical trials cannot.  
 
+The present study uses a dual-compartment mathematical Pharmacokinetic/pharmacodynamic model (PKPD)
+to examine the interplay of the factors that lead to resolution of bacteremia in the setting of osteomyelitis and bacterial endocarditis.
+This type of model is used to connect drug exposure to drug response.
+Linking time course of drug concentration to the time course of drug effect allows the model to simulate what happens during treatment.
+Two MRSA populations are used across the two compartments.  One MRSA subpopulation is vancomycin resistant
+while the other is sensitive to vancomycin.  The host system is characterized by a clinical diagnosis of bacterial
+endocarditis with the initial bacteremia secondary to osteomyelitis of the right ankle.
+The model evaluates how these two phenotypically distant MRSA sub populations grow in the environment of antibiotic treatment,
+and immune response of in-silico patients. Using well understood population averages of clinical relapse in a specific clinical scenario, the techniques of Monte carlo sampling and non-linear dynamics are used to delineate what properties of the drug–host–reservoir system produce durable bacteremia clearance or post-treatment relapse.  By integrating bacterial dynamics, antibiotic pharmacology, and the host innate immune response within a single modeling framework, this approach provides a means of studying the interplay between these forces in a way that human clinical trials cannot.  
+ 
 \maketitle
 \section{Methods}
 
@@ -50,7 +69,13 @@ Based on a presumptive diagnosis of staphylococcal endocarditis, blood cultures 
 To complete the treatment for MRSA endocarditis, the patient required a 6-week course of linezolid in accordance with Infectious Diseases Society of America (IDSA) guidelines. The primary clinical endpoint of this therapy is the complete resolution of bacteremia through the eradication of the primary infection source, which in this patient is the right ankle osteomyelitis. However, even with effective antibiotic therapy, 20\% to 30\% of patients experience a relapse of bacteremia because the infected bone continues to seed bacteria into the blood unless surgical intervention is performed to remove the source. The proposed dual-compartment pharmacokinetic/pharmacodynamic model simulates this exact dynamic.  It tracks how linezolid distributes through body tissues (pharmacokinetics) and suppresses bacterial growth (pharmacodynamics) in the presence of a persistent, seeding bone infection.
 
 \subsection{Bacterial System and ODE Model}
-The dynamical framework consists of four state variables, $S$, $R$, $S^r$, and $R^r$, each representing the four distinct subpopulation of MRSA in the two compartments.  Two of the subpopulation reside in the blood, vancomycin sensitive, $S$ and resistant, $R$ and the other two represent vancomycin sensitive and resistant MRSA in the reservoir, $S^r$ and $R^r$.  All four subpopulations are governed by a coupled system of four ordinary differential equations. Equations~\eqref{eq:dSdt} and \eqref{eq:dRdt} relate to processes in the vascular compartment, Equations~\eqref{eq:dSrdt} and \eqref{eq:dRrdt} to those in the reservoir compartment.  The natural death rate of bacteria was omitted from the model due to it's small size compared to the other variables.
+The dynamical framework consists of four state variables, $S$, $R$, $S^r$, and $R^r$, each representing the four distinct
+subpopulation of MRSA in the two compartments.  Two of the subpopulation reside in the blood, vancomycin sensitive, $S$ and
+resistant MRSA, $R$ and the other two represent vancomycin sensitive and resistant
+MRSA in the reservoir, $S^r$ and $R^r$.  All four subpopulations are governed by a coupled system of four ordinary differential equations.
+Equations~\eqref{eq:dSdt} and \eqref{eq:dRdt} relate to processes in the vascular compartment, Equations~\eqref{eq:dSrdt} and \eqref{eq:dRrdt} 
+relate to processes in the reservoir compartment.  The natural death rate of bacteria was omitted from the model due to it's small size
+compared to the other variables.
 
 
 \begin{equation}
@@ -109,53 +134,73 @@ E^{i}(C) = \frac{E_{\max}^{i}\, C}{EC_{50}^{i} + C},
 
 where $C_V$ and $C_L$ are the free vancomycin and linezolid
 concentrations in blood from Eq.~\eqref{eq:pk}, and the reservoir sees
-only the penetrated fractions $\phi_V C_V$ and $\phi_L C_L$. The reservoir
-linezolid ceiling is additionally reduced by an independent efficacy factor,
-$E_{\max}^{L,r} = \alpha\,E_{\max}^{L}$ with $\alpha = 0.41$, reflecting the
+only the penetrated fractions $\phi_V C_V$ and $\phi_L C_L$. The maximum rate of linezolid killing in the
+reservoir is reduced by an independent efficacy factor,
+$E_{\max}^{L,r} = \alpha\,E_{\max}^{L}$ with $\alpha = 0.45$.   This term reflects the
 reduced activity of linezolid against slow-growing, biofilm-embedded and
-small-colony-variant \textit{S.~aureus} in bone. The factor $\alpha$ is not
-tied to the reservoir growth rates and was estimated by calibration;
+small-colony-variant \textit{S.~aureus} in bone. The factor $\alpha$ is seperate
+from the reservoir growth rates and is an assumed value, estimated by calibration.
+It gives an effective reservoir maximum linezolid killing rate of
+$0.45 \times 1.97 \approx 0.89~\mathrm{h}^{-1}$. Vera-Yunca et al.\ estimated that linezolid
+$E_{\max}$ in a neutropenic mouse pneumonia model was 0.303 times its in vitro value (95\% CI
+0.269--0.330), an in vivo maximum of approximately $0.60~\mathrm{h}^{-1}$.   and attributed the
+reduction to factors other than drug exposure at the infection site \cite{VeraYunca2025}.
+Because the present model represents reduced bone exposure explicitly through the penetration
+fraction $\phi_L$, part of that attenuation is already accounted for, and $\alpha$ is
+correspondingly larger than 0.303; it lies within the 0.2--0.6 range over which that
+attenuation is uncertain.
 $E^{L,r}$ denotes the resulting effect term.
 
 Both compartments have distinct logistic growth dynamics and the carrying
-capacities of each compartment is shared between the sensitive and resistant species.  The logistic term depends on the combined density $S+R$ (blood) or $S^r+R^r$ (reservoir), so the strains compete directly for the same niche. Vancomycin acts on the sensitive strain only. The immune response in the reservoir is scaled to a fraction of the
+capacities of each compartment is shared between the sensitive and resistant species.
+The logistic term depends on the combined density $S+R$ (blood) or $S^r+R^r$ (reservoir), so the strains compete directly for the same niche.
+Vancomycin acts on the sensitive strain only.
+The immune response in the reservoir is scaled to a fraction of the
 blood compartment. As detailed previously, the reservoir acts as a seeding
 source for both sensitive and resistant populations entering the blood
-compartment. Exchange is one-way: bacteria move from the reservoir into the
-blood, and return movement from blood to reservoir is neglected.
+compartment. Return movement from blood to reservoir is neglected.
+
 
 
 \subsection{Model Calibration}
 The initial condition of the reservoir assumes inoculum of $100$ for sensitive and resistant bacterial species respectively.
-These values were chosen for the convenience of the experimenter.  The blood compartment at the beginning of the simulation
+The blood compartment at the beginning of the simulation
 is assumed to be free of pathological bacterial species $\mathit{S(0) = 0}$ and $\mathit{R(0) = 0}$, which is consistent
-with normal human physiology.  Pharmacodynamic values, $E_{max}$ and $EC_{50}$, for vancomycin were based on Yera-Yunca and colleagues.
-The linezolid values for $E_{max}$ and $EC_{50}$ were based on study by Schmidt and collaegues as detailed in \cref{tab:PKparams}.
-Reported values in the literature for these PD values are variable likely due to 
-methodicological differences between studies.  These two studies were selected to provide consistency in the analysis.
-The carrying capacity of the blood compartment was based on literature estimates.  Growth rates of both sensitive
-and resistant SA are based on value from the literature with the resistant bacteria given a cost of fitness consistent with generally
-accepted values in the literature.  The relapsing percentages are based on population averages \cite{garciadelpozo2018factors}.  
-The remaining model parameters, such as immune response, exchange rates between compartments were
-tuned based on the constraints on the other model parameters and outcomes. These are assumptions made by the study
+with normal human physiology.  Values for vancomycin and linezolid $EC_{50}$ and $E_{max}$ reported in the literature
+are variable and likely due to methodological differences between studies.  This limitation makes it more challenging
+to use all of the limited amount of data currently available.
+
+To provide internal consistency, growth rates and pharmacodynamic values ($E_{max}$ and $EC_{50}$)
+for both vancomycin and linezolid were taken from Vera-Yunca and colleagues \cite{VeraYunca2025}.
+The study used in vitro time-kill and in vivo neutropenic mouse lung data to fit growth rates
+and antibiotic PD parameters.  The in-vitro data was fit to the mouse data with a scaling factor.
+In our study we used the in-vitro data to represent the blood compartment and the in-vivo, the reservoir compartment.
+We used a scaling factor to adjust the growth rate of vancomycin sensitive MRSA in the reservoir and linezolid's $E_{max,L}$.
+No changes were made to the $EC_{50,L}$.  The scaling factor used was based on calibration and not the same value used by
+Vera-Yunca and colleagues.  The percentage of simulated cases where bacteremia is present by the end of the followup period
+are based on population averages \cite{garciadelpozo2018factors}.  
 
 \subsection{Blood Compartment}
 The blood compartment represents the circulatory system of an individual with blood moving rapidly between
 the organs and throughout the body.  There is no attenuation of bacterial killing by the immune system.
 Carrying capacity is shared between sensitive and resistant bacteria and represents the maximum bacterial load that can be sustained within
-the vascular compartment. The carrying capacity is based on literature estimates from \cite{schmidt2009oxazolidinone} \cite{VeraYunca2025} \cite{Mikkaichi2019}.  The growth rate of sensitive SA is assumed to be 1.1 $h^{-1}$ based on the study by Vera-Yunca and colleagues.  This value corresponds to a doubling time of 38 minutes.  The resistant SA growth rate is scaled by a 10\% fitness cost to 0.99 $h^{-1}$, doubling time of 42 minutes. The microbiological parameters are detailed in \cref{tab:Comparsms}.
+the vascular compartment. The carrying capacity is based on literature estimates from \cite{nieman2022bacterial}.
+The growth rate of sensitive SA is set to 1.47 $h^{-1}$, the in vitro estimate for MRSA reported by
+Vera-Yunca and colleagues \cite{VeraYunca2025}, treating well-mixed, nutrient-replete blood as in-vitro-like.
+This value corresponds to a doubling time of 28 minutes.  The resistant SA growth rate is scaled by a 10\% fitness cost to 1.323 $h^{-1}$, doubling time of 31 minutes.
+The microbiological parameters are detailed in \cref{tab:Comparsms}.
 
 
 \begin{figure}
     \centering
     \includegraphics[width=1.0\linewidth]{graph.png}
-    \caption{Two Compartment Model}
+    \caption{Two Compartment Model} 
     \label{fig:graph.png}
 \end{figure}
 
 
 \subsection{Reservoir Compartment}
-The reservoir compartment models the osseous environment as the primary infection source.
+The reservoir compartment models the osseous environment and it the initial source of infection after having spread from the ankle wound to the long bone.
 Infected bone undergoes localized inflammation and creates sequestrum (necrotic bone surrounded by infected granulation tissue)
 with poor immune cell access and restricted antibiotic diffusion \cite{MomoduSavaliya2023}. Staph aureus forms biofilms that adhere
 to the sequestrum forming an organized structure with the bacteria surrounded by a matrix.  Biofilm can release planktonic microbes from their
@@ -164,18 +209,18 @@ Staph aureus forms Small Colony variants (SVC) that can reside inside osteoblast
 from antibiotics and the immune system\cite{Kahl2016SCV}. SCVs are slow-growing phenotypic variants that can form colonies and have been isolated
 from infections such as osteomyelitis and endocarditis \cite{Kahl2016SCV}.  These factors lead to slower growth and lower metabolic activity
 in bone driving a state of chronic persistence.  The mathematical model takes these physiological and microbiological characteristics
-into consideration by assuming lower growth rates between the two compartments. The growth rate for sensitive bacteria is 1.1
-in blood, doubling time of 39 minutes, vs 0.5 in reservoir, doubling time of 83 minutes.  Resistent bacteria in both compartment have
-a 10\% fitness cost.  The current values for senstive growth rates are based on the assumption that SA in bone grows slower
-than in blood.  Unfortunately there is no data measuring growth rates in bone.  The current values are taken from Vera-Yunca
-and collagues \cite{VeraYunca2025}.
+into consideration by assuming lower growth rates between the two compartments. The growth rate for sensitive bacteria is 0.845 $h^{-1}$ in the
+reservoir, corresponding to a doubling time of 49 minutes; the resistant strain carries the same 10\% fitness cost as in blood
+(0.761 $h^{-1}$, 55 minutes).  The lack of data on bone growth rates requires the use of a surrgoate value to
+represent bone.  The reservoir value is the in vivo maximum growth rate that Vera-Yunca and colleagues estimated
+in a mouse lung model, 42\% lower than their in vitro rate of 1.47 $h^{-1}$ \cite{VeraYunca2025}. Its use for bone
+assumes that the in vivo reduction in growth applies similarly to poorly perfused, biofilm-associated bone.
 Exchange between compartments is assumed to be one-way and governed by a first-order rate constant $k_{r \to b}$ (reservoir to blood).
-Return movement of bacteria from blood into the reservoir is neglected, on the assumption that seeding of a deep bone focus from the
-circulation is negligible compared with shedding from the established focus into the blood. There are no known human
-experimental measurements to quantify either rate. Similarly to the blood compartment, the reservoir carry capacity is shared
+Return movement of bacteria from blood into the reservoir is negligible compared with shedding from the established bone focus into the blood.
+This is an assumed value due to the lack of human experimental measurements.  Similarly to the blood compartment, the reservoir carry capacity is shared
 between sensitive and resistant bacteria, however, unlike the blood compartment it is assumed to be higher.
 This assumption is based on the assumed presence of greater nutrient sources in necrotic bone and values
-reported in the literature \cite{VeraYunca2025} \cite{Mikkaichi2019} \cite{schmidt2009oxazolidinone}.
+reported in the literature \cite{VeraYunca2025}.
 
 
 
@@ -201,14 +246,12 @@ R^{r} + S^{r}
 \hline
 \textbf{Parameter} & \textbf{Units} & \textbf{Nominal Value} & \textbf{Reference} \\
 \hline
-$\rho_s^{b}$ & $h^{-1}$ & 1.1 & \cite{schmidt2009oxazolidinone} \cite{VeraYunca2025} \cite{Mikkaichi2019}\\
-$\rho_r^{b}$ & $h^{-1}$ & $0.99$ &  10\% fitness cost  \\
+$\rho_s^{b}$ & $h^{-1}$ & 1.47 & \cite{VeraYunca2025}\\
+$\rho_r^{b}$ & $h^{-1}$ & $1.323$ &  10\% fitness cost  \\
+$\rho_{s}^{r}$         & $\text{h}^{-1}$     & $0.845$             & \cite{VeraYunca2025} \\
+$\rho_{r}^{r}$         & $\text{h}^{-1}$     & $0.761$             & 10\% fitness cost\\
 $B_{\max}^{b}$ & CFU/mL & $6 \times 10^3$ & \cite{nieman2022bacterial} \\
-$\rho_{s}^{r}$         & $\text{h}^{-1}$     & $0.50$              & estimated \\
-$\rho_{r}^{r}$         & $\text{h}^{-1}$     & $0.45$              & 10\% fitness cost\\
-
-
-$B_{\max}^{r}$         & CFU/mL              & $1 \times 10^{7}$   & \cite{VeraYunca2025} \cite{schmidt2009oxazolidinone} \cite{Mikkaichi2019}\\
+$B_{\max}^{r}$         & CFU/mL              & $1 \times 10^{7}$   & \cite{VeraYunca2025}\\
 $k_{r \to b}$          & $\text{h}^{-1}$     & $1 \times 10^{-7}$ & \cite{Kostakioti2013} \\
 \hline
 \end{tabular}
@@ -227,19 +270,23 @@ system to infected tissues.
 Host immune clearance is represented as a constant, first-order killing
 term. All four bacterial subpopulations in both blood and
 reservoir are cleared at a rate proportional to their own density and to
-a single rate constant, $k_{immune}$ (baseline $0.10~\mathrm{h^{-1}}$).
+a single rate constant, $k_{immune}$ (baseline $0.18~\mathrm{h^{-1}}$).
 The reservoir immune response is scaled to 0.5 of the response in blood. This
-reduction models biofilm exclusion of immune cells and the intracellular protected state of MRSA.  The values for 
-immune killing and reduced immune response in the reservoir are assumed only due to the lack of experimental data.
-The human immune is highly complex and depends on a multitude of factors making modeling challenging. 
-These assumptions were made to control for the computational demands of the analysis.
+reduction models biofilm exclusion of immune cells and the intracellular protected state of MRSA.
+The model for immune response is an assumed and simple representation
+of a highly complex biological process that depends on a multitude of factors.
 
 
 \subsection{Antibiotic Pharmacokinetics}
-A standard protocol for the treatment of infectious endocarditis is used, based on the recommendations of the Infectious Disease Society of America (\cite{Minter2023}).
-Vancomycin is the first line agent and linezolid secondarily once vancomycin resistance was been recognized.  Vancomycin, a weakly bactericidal agent, inhibits bacterial cell wall synthesis and linezolid, a bacteriostatic agent, inhibits protein synthesis. Studies have shown that linezolid possesses both intracellular and extracellular activity, against Staphylococcus\cite{sandberg2010intra}.  During simulation, guideline doses, $\mathrm{Dose}_{i}$, and dosage time intervals, $\tau_{i}$, for vancomycin and linezolid are used \cite{vancopk_review}.  Total drug administration time is parameterized by Duration. 
+A standard protocol for the treatment of infectious endocarditis is used, based on the recommendations
+of the Infectious Disease Society of America (\cite{Minter2023}).
+Vancomycin is the first line agent and linezolid secondarily once vancomycin resistance was been recognized.
+Vancomycin, a weakly bactericidal agent, inhibits bacterial cell wall synthesis and linezolid, a bacteriostatic agent,
+inhibits protein synthesis. Studies have shown that linezolid possesses both intracellular and extracellular activity, against Staphylococcus\cite{sandberg2010intra}.
+During simulation, guideline doses, $\mathrm{Dose}_{i}$, and dosage time intervals, $\tau_{i}$, for vancomycin and linezolid are used \cite{vancopk_review}.  Total drug administration time is parameterized by Duration. 
 
-Serum drug concentrations are simulated with a one-compartment PK model for both Vancomycin and Linezolid.  Vancomycin is approximately 50\% protein-bound in plasma, whereas linezolid is more modestly protein-bound ($\sim$30\%, i.e., $\sim$70\% free fraction), a difference the model accounts for via each drug's free-fraction parameter ($f_u$ = 0.50 for vancomycin, 0.70 for linezolid) when converting total plasma concentration to $C_{i}$, the active free-drug concentration.  Antibiotic clearance, $CL_{i}$ is consistent with normal kidney function. Population averages are used for the apparent volume (liters) of distribution, $V_{d}$. 
+Serum drug concentrations are simulated with a one-compartment PK model for both Vancomycin and Linezolid.
+Vancomycin is approximately 50\% protein-bound in plasma, whereas linezolid is more modestly protein-bound ($\sim$30\%, i.e., $\sim$70\% free fraction), a difference the model accounts for via each drug's free-fraction parameter ($f_u$ = 0.50 for vancomycin, 0.70 for linezolid) when converting total plasma concentration to $C_{i}$, the active free-drug concentration.  Antibiotic clearance, $CL_{i}$ is consistent with normal kidney function. Population averages are used for the apparent volume (liters) of distribution, $V_{d}$. 
 
 
 Between doses, $\mathrm{Dose}_{i}$, the concentration decays via first-order kinetics with elimination rate $k_{e,i} = CL_i / V_{d,i}$. At each dosing time $t_k = k\,\tau_i$ the concentration steps up by $\mathrm{Dose}_i / V_{d,i}$ and then decays again,
@@ -277,24 +324,29 @@ $f_{u,i}$ gives the free-drug concentration that drives pharmacological effect.
 \textbf{Parameter} & \textbf{Units} & \textbf{Nominal Value} & \textbf{Reference} \\
 \hline
 $E_{\max}^{V}$ & $\mathrm{h^{-1}}$ & 1.7 & \cite{VeraYunca2025}\\
-$E_{\max}^{L}$ & $\mathrm{h^{-1}}$ & 1.65 & \cite{schmidt2009oxazolidinone}\\
+$E_{\max}^{L}$ & $\mathrm{h^{-1}}$ & 1.97 & \cite{VeraYunca2025}\\
 $EC_{50}^{V}$ & mg/L & 0.25 & \cite{VeraYunca2025}\\
-$EC_{50}^{L}$ & mg/L & 1.13 & \cite{schmidt2009oxazolidinone}\\
+$EC_{50}^{L}$ & mg/L & 0.56 & \cite{VeraYunca2025}\\
 $V_d^{V}$ & Liters & 50 & \cite{Matzke1986} \\
 $V_d^{L}$ & Liters & 45  &  \cite{dryden2011linezolid} \\
 $CL_{V}$ & ml/min & 83 (5.0 L/h) & \cite{Matzke1986} \\
 $CL_{L}$ & ml/min & 100 (6.0 L/h) & \cite{dryden2011linezolid} \\
-$\phi_{LZD}$           & --                  & $0.40$              & \cite{dryden2011linezolid} \\
-$\alpha$               & --                  & $0.41$              & estimated \\
+$\phi_{LZD}$           & --                  & $0.50$              & \cite{dryden2011linezolid} \cite{kutschalissberg2003linezolid} \\
 $\phi_{VAN}$           & --                  & $0.15$              & \cite{MomoduSavaliya2023} \cite{spellberg2012systemic} \\
+$\alpha$               & --                  & $0.45$              & \cite{VeraYunca2025} \\
 \hline
 \end{tabular}
 \end{table}
 
 
-Bone penetration population averages were used to scale antimicrobial penetration of the reservoir compartment.
-Linezolid bone penetration was set to 40\%, the lower end of the reported 40--60\% range, and vancomycin bone penetration was set to 15\%.
-Therapeutic bone concentrations of antibiotics were attained in the reservoir/bone compartment., based on population averages.
+
+There is significant variability reported in the literature on the degree of bone penetration of linezolid,
+although clinicians generally view it's bone penetration as favorable and significantly greater than vancomycin.
+Linezolid bone penetration was set to 50\% creating free linezolid concentration from 1.2 to 5.9 mg/L, averaging 2.9 mg/L.
+This estimate compares favorably
+to data reported by \cite{kutschalissberg2003linezolid} using the same dosing regimen.  That study reported a mean bone
+concentration of 3.9 mg/L (range: 1.2 - 8.3 mg/L).
+Vancomycin bone penetration was set to 15\%.
 
 
 During simulation the steady state peak Vancomycin concentration reached 36.3~mg/L and a trough concentration of 16.3~mg/L.  The total-drug
@@ -304,12 +356,16 @@ independent of volume of distribution or half-life. This falls at the upper
 edge of the standard clinical target of 400--600~mg$\cdot$h/L for MRSA
 bacteremia and endocarditis\cite{rybak2020therapeutic}. Accounting for the drug's free fraction
 ($f_u = 0.50$), the corresponding free-drug exposure driving bacterial kill
-in the model is $\mathrm{AUC}_{24,\mathrm{ss}}^{\text{free}} = 300~\mathrm{mg\cdot h/L}$.  Linezolid steady-state total-drug trough concentration was calculated at 3.4~mg/L, which is within the recommended range of 2 to 8 mg/L if the MIC is less than 2 mg/L\cite{alsultan2019determining}. 
+in the model is $\mathrm{AUC}_{24,\mathrm{ss}}^{\text{free}} = 300~\mathrm{mg\cdot h/L}$.
+Linezolid steady-state total-drug trough concentration was calculated at 3.4~mg/L,
+which is within the recommended range of 2 to 8 mg/L if the MIC is less than 2 mg/L\cite{alsultan2019determining}. 
 
 
 \subsection{Definition of treatment Failure and Success}
 
-Laboratory testing is unable to detect the presence of bacteria below a pre-defined level.  The model uses the Level of Detection (LOD) to represent this fact.  When the concentration of MRSA drops below this level the model sets it's value to zero.  The limit of detection (LOD) was set at $10~\mathrm{CFU/mL}$ and implemented as an extinction boundary where any bacterial subpopulation that fell below the LOD are set to zero. MRSA cannot grow back from a fractional leftover remnant. 
+Treatment failure is defined as a bacteremia state at the end of the simulation and success as resolution of the bacteremia. 
+Laboratory testing is unable to detect the presence of bacteria below a pre-defined level.
+The model uses the Level of Detection (LOD) to represent this fact.  When the concentration of MRSA drops below this level the model sets it's value to zero.  The limit of detection (LOD) was set at $10~\mathrm{CFU/mL}$ and implemented as an extinction boundary where any bacterial subpopulation that fell below the LOD are set to zero. MRSA cannot grow back from a fractional leftover remnant. 
 
 An extinct blood subpopulation can be re-established if continued transfer from a detectable reservoir accumulated to the LOD. Treatment failure is evaluated by two endpoints, persistent
 bacteremia and a relapsing bacteremia.  Persistent bacteremia is defined as detectable levels of MRSA in the blood at the end of the linezolid course and a relapsing bacteremia is defined as a the absence of MRSA in the blood at the end of treatment, but a return to detectable levels of MRSA at the end of the simulation.  This results is due to a reseeding of the blood compartment from the reservoir. Let $R_B(t)$ denote the MRSA
@@ -364,15 +420,24 @@ bracket and taking a bisection step otherwise. Each accepted evaluation
 replaces the endpoint of matching sign, so the boundary remains enclosed
 throughout the search. An absolute parameter tolerance of $10^{-3}$ in the
 corresponding parameter units was used, and transition values are reported to
-two significant figures.
+two significant figures, except for $E_{max,L}$, reported to three because its narrow
+sampling distribution makes the difference between 1.85 and 1.9 material.
 
-Brent's root-finding method assumes a continuous objective, whereas the
-hard LOD rule deliberately makes Eq.~\eqref{eq:brent-objective}
-discontinuous.  Any trajectory crossing below the LOD is reset to zero and
+Brent's root-finding method can be used for both continuous and discontinuous functions \cite{brent1973}.  The
+hard LOD rule that was established makes Eq.~\eqref{eq:brent-objective}
+discontinuous. Brent \cite{Brent1971} does not require the function to be continuous
+over the bracketing interval. For discontinuous differential systems, an event can first be
+detected within an integration step and subsequently localized using
+a bracketed root-finding procedure. Brent-type methods combine
+interpolation with bisection to refine the event location, while
+retaining a bracket around the event \cite{Brent1971,WolframEventDetection}. When the function is discontinuous, a
+sign-changing interval may contain no true zero; consequently, the
+algorithm instead seeks a sufficiently small interval in which the
+function takes both non-negative and non-positive values.Any trajectory crossing below the LOD is reset to zero and
 cannot regrow autonomously.  As a consequence of the LOD the terminal burden can jump from zero to a large concentration of bacteria (CFU/mL) without attaining the exact LOD. ($10~\mathrm{CFU/mL}$). For
 $EC_{50,L}$, simulations immediately below and above the located boundary
 produced terminal burdens $(R_b, R_{res})$ of $(0,0)$ and approximately
-$(5.4 \times 10^{3},\, 8.9 \times 10^{6})~\mathrm{CFU/mL}$, respectively,
+$(5.2 \times 10^{3},\, 8.8 \times 10^{6})~\mathrm{CFU/mL}$, respectively,
 confirming that $F$ does not pass continuously through zero. For each of the threshold evaluations the returned value represents the boundary where the sign of the function changes.  It is not interpreted as a parameter satisfying $F(\theta) = 0$.
 Bacteremia lies above this boundary for $EC_{50,L}$ and below it for $E_{\max,L}$ and $k_{immune}$.
 
@@ -409,18 +474,32 @@ Changes in the distribution used to model the parameter value will alter the dis
 \maketitle
 \section{Results}
 
+\subsection{Pre-Treatment Period}
+Prior to initiation of vancomycin, bacterial populations developed in the reservoir and seeded the blood compartment. The vancomycin-sensitive \textit{S. aureus} strain in blood had growth rate $\rho_s = 1.47\text{ h}^{-1}$ while the resistant strain had $\rho_r = 1.323\text{ h}^{-1}$, a 10\% fitness cost. In the bone reservoir, replication rates were reduced to $\rho_s^r = 0.845\text{ h}^{-1}$ for the sensitive strain and $\rho_r^r = 0.761\text{ h}^{-1}$ for the resistant strain, the same 10\% cost.
+At the start of vancomycin the baseline reservoir held about $8\times10^{6}$~CFU/mL of the
+sensitive strain and $3\times10^{4}$~CFU/mL of the resistant strain.
+Once vancomycin has eradicated the senstive strain the resistant population grows up to the carrying capacity of the compartment.
 
+The simulation represents progression from osteomyelitis, with associated wound of the ankle, to secondary bloodstream infection and subsequent development of bacterial endocarditis. Vancomycin administration (1000~mg every 8 hours) models clinically recommended steady-state peak and trough plasma concentrations and drives rapid killing of susceptible \textit{S. aureus} subpopulations ($S_b$ and $S_{\text{res}}$). Vancomycin exerted no growth inhibition on resistant strains ($R_b$ and $R_{\text{res}}$).
 
+\subsection{Vancomycin Treatment Period}
+
+The 4-day vancomycin course (\texttt{van\_duration} $= 96$ h, starting at \texttt{vanco\_start} $=
+504$ h) drives the vancomycin-sensitive strain to extinction in
+both blood ($S_b$) and reservoir ($S_{res}$) compartments before
+the initiation of linezolid.
+Following laboratory confirmation of vancomycin-resistant MRSA, therapy was switched to Linezolid (600~mg every 12 hours),
+yielding recommended steady-state serum concentrations. Linezolid administration drove a reduction in resistant bacterial
+counts across both compartments. However, clearance
+from the reservoir lagged significantly behind vascular clearance.
 
 
 \subsection{Linezolid Potency}
-
-
 To assess how variation in linezolid potency affects predicted
 \textit{Staph aureus} bacterial kinetics, $EC_{50,L}$ was sampled from
-a log-normal distribution with mean $1.13~\mathrm{mg/L}$ and coefficient
+a log-normal distribution with mean $0.56~\mathrm{mg/L}$ and coefficient
 of variation $\mathrm{CV} = 0.60$ \cite{limpert2001lognormal}. The mean was taken from the linezolid pharmacodynamic
-estimate of Schmidt et al.\ \cite{schmidt2009oxazolidinone}. All other parameters were held at baseline. Each of the $n = 1000$
+estimate of Vera-Yunca et al.\ ($0.56~\mathrm{mg/L}$) \cite{VeraYunca2025}. All other parameters were held at baseline. Each of the $n = 1000$
 independently sampled $EC_{50,L}$ values were propagated through the model from blood-sterile, reservoir-seeded
 initial conditions ($S_b(0){=}R_b(0){=}0$, $S_{res}(0){=}R_{res}(0){=}100$
 CFU/mL) to create a distribution of simulated trajectories \cref{fig:ec50_kinetics}.
@@ -439,7 +518,7 @@ of the bacteremia.
     \label{fig:ec50_kinetics}
 \end{figure}
 
-Increasing $EC_{50,L}$ represents decreasing linezolid potency and a greater probability of a lack of bacteremia resolution.  Bacteremia relapse occurred in 29\% of simulated cases, persistent bacteremia in 1\%, and complete resolution in 70\%. The $EC_{50,L}$ value that is the transition point between clinical resolution from failure is reported as $EC_{50,L}=1.3~\mathrm{mg/L}$ \cref{fig:ec50_switch_population}.  The upper panel shows the bacterial load for each compartment at the termination of each simulation, given the value of $EC_{50,L}$. The lower panel illustrates the distribution of $EC_{50,L}$ values from the given distribution.  As illustrated in \cref{fig:ec50_switch_population} the majority of $EC_{50,L}$ probability mass is localized to the side of the transition that favors clinical resolution.
+Increasing $EC_{50,L}$ represents decreasing linezolid potency and a greater probability of a lack of bacteremia resolution.  Bacteremia relapse occurred in 22\% of simulated cases, persistent bacteremia in 0.2\% (two patients), and complete resolution in 78\%. The $EC_{50,L}$ value that is the transition point between clinical resolution from failure is reported as $EC_{50,L}=0.76~\mathrm{mg/L}$ \cref{fig:ec50_switch_population}.  The upper panel shows the bacterial load for each compartment at the termination of each simulation, given the value of $EC_{50,L}$. The lower panel illustrates the distribution of $EC_{50,L}$ values from the given distribution.  As illustrated in \cref{fig:ec50_switch_population} the majority of $EC_{50,L}$ probability mass is localized to the side of the transition that favors clinical resolution.
 
 
 \begin{figure}[H]
@@ -459,8 +538,8 @@ The methodology for the calculation of the transition point is detained in secti
 To assess how variation in linezolid maximum killing capacity affects
 predicted \textit{Staph aureus} bacterial kinetics, $E_{max,L}$ was sampled
 from a mean-corrected log-normal distribution with arithmetic mean
-$1.65~\mathrm{h}^{-1}$ and coefficient of variation $\mathrm{CV} = 0.080$.
-Published $E_{max,L}$ linezolid estimates span two distinct ranges: $0.735$--$0.754~\mathrm{h}^{-1}$ in Sandberg et al.\ \cite{sandberg2010intra} and $1.77$--$2.22~\mathrm{h}^{-1}$ in Scheerans et al.\ \cite{Scheerans2014}. The present analysis uses the estimate of Schmidt et al.\ ($E_{max,L} = 1.65~\mathrm{h}^{-1}$, $EC_{50,L} = 1.13~\mathrm{mg/L}$) \cite{schmidt2009oxazolidinone}. Each of $n = 1000$ independently sampled $E_{max,L}$ values was propagated through the model over the complete 81-day treatment and
+$1.97~\mathrm{h}^{-1}$ and coefficient of variation $\mathrm{CV} = 0.080$.
+Published $E_{max,L}$ linezolid estimates span two distinct ranges: $0.735$--$0.754~\mathrm{h}^{-1}$ in Sandberg et al.\ \cite{sandberg2010intra} and $1.77$--$2.22~\mathrm{h}^{-1}$ in Scheerans et al.\ \cite{Scheerans2014}. The present analysis uses the in vitro estimate of Vera-Yunca et al.\ ($E_{max,L} = 1.97~\mathrm{h}^{-1}$, $EC_{50,L} = 0.56~\mathrm{mg/L}$) \cite{VeraYunca2025}. Each of $n = 1000$ independently sampled $E_{max,L}$ values was propagated through the model over the complete 81-day treatment and
 follow-up course \cref{fig:emax_kinetics}.  
 
 \begin{figure}[H]
@@ -470,7 +549,7 @@ follow-up course \cref{fig:emax_kinetics}.
     \label{fig:emax_kinetics}
 \end{figure}
 
-Lower $E_{max,L}$ values represent weaker antibiotic effect and shift the outcomes to clinical relapse and persistence.  Bacteremia resolution occurred in 78\% of simulated patients, relapse in 22\% and no persistent bacteremia \cref{fig:emax_switch_population}.  The transition point between treatment response and failure was reported at $1.5~\mathrm{h}^{-1}$ as illustrated by the upper panel of \cref{fig:emax_switch_population}.  The lower panel shows the majority of $E_{max,L}$ probability mass is located above the $1.5~\mathrm{h}^{-1}$ transition point, favoring clinical resolution.   
+Lower $E_{max,L}$ values represent weaker antibiotic effect and shift the outcomes to clinical relapse and persistence.  Bacteremia resolution occurred in 77\% of simulated patients, relapse in 23\% and no persistent bacteremia \cref{fig:emax_switch_population}.  The transition point between treatment response and failure was reported at $1.85~\mathrm{h}^{-1}$ as illustrated by the upper panel of \cref{fig:emax_switch_population}.  The lower panel shows the majority of $E_{max,L}$ probability mass is located above the $1.85~\mathrm{h}^{-1}$ transition point, favoring clinical resolution.   
 
 \begin{figure}[H]
     \centering
@@ -486,7 +565,7 @@ Methodology for transition point calculation is described in section D.
 
 \subsection{Host Immune Response}
 
-The immune response was modeled with a constant linear function ($k_{immune}$) with a value of $0.10~\mathrm{h}^{-1}$, which served as the mean of a log-normal distribution.  A coefficient of
+The immune response was modeled with a constant linear function ($k_{immune}$) with a value of $0.18~\mathrm{h}^{-1}$, which served as the mean of a log-normal distribution.  A coefficient of
 variation $\mathrm{CV} = 0.80$ was used to provide a measure of biological variability.  Although unlikely to be a true representation of a highly complex system, it does provide a simple method to incorporate the innate immune response into this model. The value of $k_{immune}$ was arrived at by using the population average outcome for this specific clinical scenario and back calculating what value would be needed to obtain the expected clinical outcome based on population averages of 20-30\%.  This value is a calibration result and is not an independent prediction.  All remaining parameters were held at baseline. For each of
 $n = 1000$ independently sampled $k_{immune}$ values were propagated through the
 dual-reservoir model over the complete 81-day treatment and
@@ -503,7 +582,7 @@ bacterial subpopulations \cref{fig:immune_kinetics}.
     \label{fig:immune_kinetics}
 \end{figure}
 
-Higher values of $k_{immune}$ bias the outcomes toward clinical resolution of the bacteremia.  Bacteremia resolution occurred in 76\% of simulated patients, relapse in 24\% and no persistent bacteremia.  The transition point between clinical resolution from failure is reported as $k_{immune}=0.047~\mathrm{h}^{-1}$ \cref{fig:immune_switch_population}.  The upper panel shows the bacterial load for each compartment at the termination of each simulation, given the value of $k_{immune}$. The lower panel illustrates the distribution of $k_{immune}$ values from the given distribution.
+Higher values of $k_{immune}$ bias the outcomes toward clinical resolution of the bacteremia.  Bacteremia resolution occurred in 72\% of simulated patients, relapse in 28\% and no persistent bacteremia.  The transition point between clinical resolution from failure is reported as $k_{immune}=0.093~\mathrm{h}^{-1}$ \cref{fig:immune_switch_population}.  The upper panel shows the bacterial load for each compartment at the termination of each simulation, given the value of $k_{immune}$. The lower panel illustrates the distribution of $k_{immune}$ values from the given distribution.
 
 
 \begin{figure}[H]
@@ -517,106 +596,63 @@ Higher values of $k_{immune}$ bias the outcomes toward clinical resolution of th
 
 
 %---------------------------------------------------------
+\subsection{Clinical Response Determinants}
 
+Each parameter $E_{max}$, $EC_{50,L}$ and $k_{immune}$ has a transition boundary separating bacteremia resolution from no resolution.
+The $EC_{50,L}$ transition point is 0.76 mg/L, $E_{max}$ is $1.85~\mathrm{h}^{-1}$ and immune clearance is  $0.093~\mathrm{h}^{-1}$.
+Individual Cases will vary around a mean value.  Each parameter is spread across 1000 virtual cases with a log-normal distribution.  The share
+of patients on either side of the transition boundary will depend on how far the mean is from the specific boundary and the width of
+the spread as determined by the coefficient of variation.  In this study the majority of individual cases land on the side where the bacteremia clears.
 
-\section{Results}
-\subsection{Pre-Treatment Period}
-Prior to initiation of vancomycin, bacterial populations developed in the reservoir and seeded the blood compartment. The vancomycin-sensitive \textit{S. aureus} strain in blood had growth rate $\rho_s = 1.1\text{ h}^{-1}$ while the resistant strain had $\rho_r = 0.99\text{ h}^{-1}$, a 10\% fitness cost. In the bone reservoir, local tissue conditions reduced bacterial replication rates to $\rho_s^r = 0.50\text{ h}^{-1}$ for the sensitive strain and $\rho_r^r = 0.45\text{ h}^{-1}$ for the resistant strain, a 10\% cost.
+The share of patients that clear the bacteremia can be calculated directly.  The z-value is a measurement of how many standard deviations the boundary lies 
+from the center of the distribution (on a log scale).
+The normal distribution converts z into the expected share of patients that fall on one side of the transition point.
 
-The simulation represents progression from osteomyelitis to secondary bloodstream infection and subsequent development of bacterial endocarditis. Vancomycin administration (1000~mg every 8 hours) models clinically recommended steady-state peak and trough plasma concentrations and drives rapid killing of susceptible \textit{S. aureus} subpopulations ($S_b$ and $S_{\text{res}}$). Vancomycin exerted no growth inhibition on resistant strains ($R_b$ and $R_{\text{res}}$).
-
-\subsection{Vancomycin Treatment Period}
-
-The 4-day vancomycin course (\texttt{van\_duration} $= 96$ h, starting at \texttt{vanco\_start} $=
-504$ h) drives the vancomycin-sensitive strain to extinction in
-both blood ($S_b$) and reservoir ($S_{res}$) compartments before
-the initiation of linezolid.
-
-Numerically integrating \texttt{dual\_reservoir\_model} with the unified baseline
-parameters ($\rho_S = 1.1$, $\rho_R = 0.99$, $\rho_{res,S} = 0.50$,
-$\rho_{res,R} = 0.45$, $E_{max,V} = 1.7$, $EC_{50,V} = 0.25$,
-$E_{max,L}=1.65$, $EC_{50,L}=1.13$, $\phi_L = 0.40$, $\alpha = 0.41$, $k_{immune}=0.10$,
-$B_{max,blood} = 6000$, $B_{max,res} = 10^7$, $k_{r\to b} = 1\times10^{-7}$,
-$Y_0 = [0,0,100,100]$) gives the baseline
-time courses in \Cref{fig:baseline_reservoir_clearance}. The figure shows
-eradication of sensitive staph aureus from blood and reservoir compartments under the fixed baseline
-trajectory.
-
-
-
-
-Following laboratory confirmation of vancomycin-resistant MRSA, therapy was switched to Linezolid (600~mg every 12 hours),
-yielding recommended steady-state serum concentrations. Linezolid administration drove a reduction in resistant bacterial
-counts across both compartments. However, due to reduced local immune efficacy and the presence of biofilms MRSA, clearance
-from the reservoir lagged significantly behind vascular clearance.
-
-Separate Monte Carlo simulations varied $EC_{50,L}$, $E_{max,L}$, and
-$k_{immune}$. Separate coefficients
-of variation quantified uncertainty around the unified baselines. Each sample
-was propagated through the full 81-day dual-reservoir model. Inter-compartmental
-transfer rates were held fixed at baseline.
-
-
-
-
-
-
-
-
-
-
-
-
-
-\paragraph{Relationship between calibration and relapse frequency.}
-The relevant separation between a calibrated mean and its deterministic switch
-is distributional and not a difference in their reported units.
-For fixed distribution shape and variability, the mean's position relative to
-the switch determines how much probability mass falls on the persistence side:
-the upper tail for $EC_{50,L}$ and the lower tails for $E_{max,L}$ and
-$k_{immune}$. The CV and distribution shape determine how rapidly that tail
-probability changes with the separation. Equations~\eqref{eq:lognormal-switch-z}--
-\eqref{eq:lognormal-bacteremia-tail}, evaluated at the unrounded computational
-switches, gave
+Equations~\eqref{eq:lognormal-switch-z}--
+\eqref{eq:lognormal-bacteremia-tail}, evaluated at the 
+transition points, gave
 \begin{equation}
 \begin{aligned}
-z_{EC_{50}} &= 0.60,  & p_{persist} &= 1-\Phi(z_{EC_{50}})=27.5\%,\\
-z_{immune} &= -0.74, & p_{persist} &= \Phi(z_{immune})=23.1\%,\\
-z_{E_{max}} &= -0.75, &
-p_{persist} &= \Phi(z_{E_{max}})=22.6\%.
+z_{EC_{50}} &= 0.83,  & p_{persist} &= 1-\Phi(z_{EC_{50}})=20.2\%,\\
+z_{immune} &= -0.59, & p_{persist} &= \Phi(z_{immune})=27.9\%,\\
+z_{E_{max}} &= -0.74, &
+p_{persist} &= \Phi(z_{E_{max}})=23.1\%.
 \end{aligned}
 \label{eq:evaluated-persistence-tails}
 \end{equation}
-For $E_{max,L}$, the mean-corrected log-scale parameters were
-$\mu_{\ln}=0.50$ and $\sigma_{\ln}=0.080$ after rounding. Using the unrounded
-numerical boundaries internally (while reporting them above to two significant figures),
-300 $EC_{50,L}$ samples (30.0\%), 220 $E_{max,L}$ samples (22.0\%), and 240
-$k_{immune}$ samples (24.0\%) fell on their respective persistence sides.
-These counts matched relapse plus persistent treatment failure: $289+11$,
-$220+0$, and $240+0$, respectively. Thus, persistence-side probability mass
-sets the relapse-prone fraction, but does not alone equal the clinical relapse
-rate. A persistence-side trajectory is counted as relapse only if blood is
-below the LOD at linezolid completion and is subsequently reseeded; otherwise,
-detectable blood at treatment completion is classified as persistent treatment
-failure.
+
+For each parameter, the standardized log-space distance between the transition point and the centre of the
+sampling distribution, $z_T = (\ln T - \mu_{\ln})/\sigma_{\ln}$, was converted through the standard normal
+cumulative distribution function into the expected fraction of patients on the persistence side of the transition,
+giving predicted fractions of 20.2\% for $EC_{50,L}$ ($z = 0.83$), 23.1\% for $E_{max,L}$ ($z = -0.74$), and
+27.9\% for $k_{immune}$ ($z = -0.59$). These predictions agreed closely with the 1,000-patient Monte Carlo
+cohorts, in which 222 $EC_{50,L}$ samples (22.2\%), 226 $E_{max,L}$ samples (22.6\%), and 278 $k_{immune}$
+samples (27.8\%) fell on the persistence side. The largest discrepancy, 2.0 percentage points for $EC_{50,L}$,
+is within the finite-sample variation expected for a cohort of this size (standard error about 1.3 percentage points).
+These counts equal relapse plus persistent treatment failure ($220+2$, $226+0$, and $278+0$, respectively).
+The transition point determines whether a patient fails, while the blood burden at linezolid completion determines
+whether that failure is a relapse or persistent bacteremia.
+
+
 
 \begin{table}[H]
     \centering
     \small
     \begin{tabular}{@{}lccccc@{}}
         \toprule
-        Parameter & Mean & CV & Transition & Relapse & Persistent / resolved \\
+        Parameter & Mean & CV & Transition & Relapse & Persistent / Clinical Resolution \\
         \midrule
-        $EC_{50,L}$ & 1.13 & 0.60 & 1.3 & 28.9\% & 1.1\% / 70.0\% \\
-        $E_{max,L}$ & 1.65 & 0.080 & 1.5 & 22.0\% & 0.0\% / 78.0\% \\
-        $k_{immune}$ & 0.10 & 0.80 & 0.047 & 24.0\% & 0.0\% / 76.0\% \\
+        $EC_{50,L}$ & 0.56 & 0.60 & 0.76 & 22.0\% & 0.2\% / 77.8\% \\
+        $E_{max,L}$ & 1.97 & 0.080 & 1.85 & 22.6\% & 0.0\% / 77.4\% \\
+        $k_{immune}$ & 0.18 & 0.80 & 0.093 & 27.8\% & 0.0\% / 72.2\% \\
         \bottomrule
     \end{tabular}
-    \caption{Unified sampling inputs, deterministic reservoir-persistence
+    \caption{Unified sampling inputs, reservoir-persistence
     transitions, and verified Monte Carlo outcomes. Units are mg/L for
     $EC_{50,L}$ and h$^{-1}$ for $E_{max,L}$ and $k_{immune}$.}
     \label{tab:current_summary}
 \end{table}
+
 Table~\ref{tab:current_summary} provides the cross-parameter comparison of
 the calibrated inputs, persistence transitions, and simulated outcomes.
 
@@ -630,9 +666,9 @@ shown together so that finite-sample variation is visible.
 \begin{figure}[H]
     \centering
     \resizebox{1.2\textwidth}{!}{\includegraphics{figures/distribution_to_switch.png}}
-    \caption{Calibrated parameter distributions relative to their
-    deterministic persistence switches. Histograms show the realized Monte
-    Carlo samples, solid curves show the calibrated probability densities,
+    \caption{Parameter distributions relative to their
+    transition points. Histograms show the realized Monte
+    Carlo samples, solid curves show the probability densities,
     and red shading identifies the persistence-side tail. The panels report
     the log-space $z$ value and corresponding normal-CDF tail probability for
     each mean-corrected log-normal distribution.}
@@ -640,10 +676,9 @@ shown together so that finite-sample variation is visible.
 \end{figure}
 
 The three-way clinical classification is compared directly in
-\Cref{fig:stacked_outcomes}. The similar relapse percentages conceal a small
-difference in treatment-course behavior: only the $EC_{50,L}$ analysis
-includes persistent treatment failures (1.1\%), whereas every non-resolved
-$E_{max,L}$ and immune-response trajectory first cleared blood and
+\Cref{fig:stacked_outcomes}. Persistent treatment failure was essentially absent:
+two $EC_{50,L}$ patients (0.2\%) still had detectable blood at linezolid completion,
+and every other non-resolved trajectory first cleared blood during linezolid and
 subsequently relapsed.
 
 \begin{figure}[H]
@@ -657,8 +692,8 @@ subsequently relapsed.
 \end{figure}
 
 The cumulative incidence curves in \Cref{fig:relapse_time_curve} show that
-the relapses classified during the 14-day follow-up occur early: all three
-curves reach their final cohort relapse percentages within approximately two
+the clinical relapses classified during the 14-day follow-up occur early in the post treatment phase of the simulation.
+All three curves reach their final cohort relapse percentages within approximately two
 days after linezolid completion. The denominator is the full 1,000-patient
 cohort for each curve, not only patients who relapsed.
 
@@ -675,6 +710,11 @@ cohort for each curve, not only patients who relapsed.
 
 
 
+
+
+
+
+
 \section{Discussion}
 
 This study constructed a dual-compartment computational PKPD model to examine
@@ -683,13 +723,13 @@ parameters. The current calibration targets a 20--30\% bacteremia
 relapse band. Bacteremia relapse is defined in this context as the concentration of microbes to
 be below the LOD at completion of linezolid treatment and to return to or above the LOD during follow-up.
 Terminal reservoir persistence is considered as a separate endpoint. The $EC_{50,L}$ analysis
-produced 289 relapses (28.9\%), 11 persistent treatment failures (1.1\%), and
-700 resolutions (70.0\%), with a deterministic reservoir-persistence
-transition point at $1.3~\mathrm{mg/L}$. The $E_{max,L}$ analysis produced 220
-relapses (22.0\%), 0 persistent failures (0.0\%), and 780 resolutions
-(78.0\%), with a transition point at $1.5~\mathrm{h}^{-1}$. The immune analysis
-produced 240 relapses (24.0\%), 0 persistent failures (0.0\%), and 760 resolutions
-(76.0\%), with a transition point at $0.047~\mathrm{h}^{-1}$.
+produced 220 relapses (22.0\%), 2 persistent treatment failures (0.2\%), and
+778 resolutions (77.8\%), with a deterministic reservoir-persistence
+transition point at $0.76~\mathrm{mg/L}$. The $E_{max,L}$ analysis produced 226
+relapses (22.6\%), 0 persistent failures (0.0\%), and 774 resolutions
+(77.4\%), with a transition point at $1.85~\mathrm{h}^{-1}$. The immune analysis
+produced 278 relapses (27.8\%), 0 persistent failures (0.0\%), and 722 resolutions
+(72.2\%), with a transition point at $0.093~\mathrm{h}^{-1}$.
 
 The proximity of each distributional mean to its switch point influences what percentage of each cohort relapses.  The probability mass beyond
 each switch point influences how many members of the cohort respond to Linezolid treatment. Moving
@@ -700,12 +740,12 @@ Moving the distributions in the opposite directions would decrease the fraction 
 relationship is not one-to-one with observed relapse because the trajectory
 definition separates patients whose blood never clears during linezolid as
 persistent treatment failures. In the present simulations, persistence-side
-fractions were 30.0\%, 22.0\%, and 24.0\% for $EC_{50,L}$, $E_{max,L}$, and
-$k_{immune}$, respectively; removal of 1.1\%, 0.0\%, and 0.0\% persistent
-treatment failures yielded relapse rates of 28.9\%, 22.0\%, and 24.0\%.
-The distribution equations predict persistence-side probabilities of 27.5\%,
-22.6\%, and 23.1\%, respectively. Their differences from the realized
-30.0\%, 22.0\%, and 24.0\% fractions are expected finite-sample variation in
+fractions were 22.2\%, 22.6\%, and 27.8\% for $EC_{50,L}$, $E_{max,L}$, and
+$k_{immune}$, respectively; removal of 0.2\%, 0.0\%, and 0.0\% persistent
+treatment failures yielded relapse rates of 22.0\%, 22.6\%, and 27.8\%.
+The distribution equations predict persistence-side probabilities of 20.2\%,
+23.1\%, and 27.9\%, respectively. Their differences from the realized
+22.2\%, 22.6\%, and 27.8\% fractions are expected finite-sample variation in
 cohorts of 1000 random draws.  The theoretical probabilities describe the
 calibrated distributions, whereas the realized fractions describe this seeded
 Monte Carlo cohort.
@@ -762,21 +802,23 @@ pharmacokinetic component, which may not match the basis of every $EC_{50}$
 value drawn from the literature.
 
 Fifth, the resistant strain carries a fitness cost in both compartments
---- 10\% in blood ($\rho_r = 0.99$ versus
-$\rho_s = 1.1~\mathrm{h}^{-1}$) and 10\% in the reservoir
-($\rho_r^r = 0.45$ versus $\rho_s^r = 0.50~\mathrm{h}^{-1}$) --- but
-the reservoir values are fixed by calibration rather than by measurement.
+--- 10\% in both blood ($\rho_r = 1.323$ versus
+$\rho_s = 1.47~\mathrm{h}^{-1}$) and the reservoir
+($\rho_r^r = 0.761$ versus $\rho_s^r = 0.845~\mathrm{h}^{-1}$) --- but
+the cost is assumed rather than measured. The sensitive growth rates are taken
+from a single study \cite{VeraYunca2025}: the in vitro rate for blood and the in vivo
+mouse-lung rate for bone, neither of which was measured in bone.
 The reservoir growth rates should therefore
 be read as calibrated quantities chosen to reproduce the clinical
 scenario, not as independently measured biological values. The reservoir
-linezolid efficacy factor ($\alpha = 0.41$) is likewise a calibrated
+linezolid efficacy factor ($\alpha = 0.45$) is likewise a calibrated
 quantity rather than a measured one, and the outcomes are sensitive to it:
 small changes in $\alpha$ shift the relapse fraction of every analysis
 substantially.
 
 A further limitation is that the unified fixed baselines and Monte Carlo
-means ($EC_{50,L}=1.13~\mathrm{mg/L}$, $E_{max,L}=1.65~\mathrm{h}^{-1}$, and
-$k_{immune}=0.10~\mathrm{h}^{-1}$) have not been externally validated as a
+means ($EC_{50,L}=0.56~\mathrm{mg/L}$, $E_{max,L}=1.97~\mathrm{h}^{-1}$, and
+$k_{immune}=0.18~\mathrm{h}^{-1}$) have not been externally validated as a
 joint parameter set. Any Monte Carlo percentages are conditional on this
 parameterization and the specified distributions. The coefficients of
 variation ($0.60$ for $EC_{50,L}$, $0.080$ for $E_{max,L}$, and $0.80$ for

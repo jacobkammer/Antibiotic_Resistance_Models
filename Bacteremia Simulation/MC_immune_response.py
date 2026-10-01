@@ -244,9 +244,9 @@ out_file = os.path.join(FIGURES_DIR, "mc_immune_response.png")
 save_figure(fig, out_file, __file__)
 print(f"\nSaved: {out_file}")
 
-# ── Relapse/escape rate: fraction of runs where R_b or R_res is still above
-#    the LOD at end-of-simulation (i.e. resistant infection persists/relapses
-#    rather than resolving) ────────────────────────────────────────────────
+# ── Outcome classification from the resistant blood trajectory: relapse is
+#    R_b below the LOD at linezolid completion and detectable in follow-up;
+#    persistent failure is R_b still detectable at completion ───────────────
 final_R_b   = np.nan_to_num(R_b_hist[:, -1],   nan=0.0)
 final_R_res = np.nan_to_num(R_res_hist[:, -1], nan=0.0)
 relapsed, persistent_bacteremia, resolved = bacteremia_outcome_masks(
@@ -277,10 +277,10 @@ frac_escape        = escaped_mask.mean()
 escaped_k_immune   = k_immune_samples[escaped_mask]
 suppressed_k_immune = k_immune_samples[~escaped_mask]
 
-# Escape/suppressed split -- quoted in supplement.tex (tab:zscore_summary), so
-# print it rather than leaving it readable only off the histogram legend below,
-# which rounds to whole percent. The endpoint is final resistant bacteremia,
-# matching the relapse definition used in the other Monte Carlo analyses.
+# Outcome split -- quoted in manuscript10.01.tex and in
+# threshold_changes_summary.txt, so print it rather than leaving it readable
+# only off the histogram legend below. The endpoint is bacteremia relapse,
+# matching the definition used in the other Monte Carlo analyses.
 n_escape = int(escaped_mask.sum())
 n_total  = int(escaped_mask.size)
 if np.isnan(ESCAPE_THRESH):
@@ -293,12 +293,14 @@ print(f"  Persistent failure {persistent_bacteremia.mean() * 100:5.1f}%  "
 print(f"  Resolution         {resolved.mean() * 100:5.1f}%  "
       f"({resolved.sum()}/{n_total})")
 
-# Displayed switch window.  The deterministic sweep still spans [0.02, 0.65]
-# h^-1, but the whole transition lives near the low end, so plotting the full
-# sweep pins every feature against the left spine.  0--0.10 h^-1 centres the
-# switch and the sampled mode in the frame while keeping ~88% of the sampled
-# patients in view (the remaining right tail is flat, suppressed cases).
-PLOT_KIM_MIN, PLOT_KIM_MAX = 0.0, 0.10
+# Displayed switch window.  The deterministic sweep spans [0.02, 0.65] h^-1,
+# but plotting all of it pins the transition against the left spine.  The
+# window is derived from the switch (0 to twice the switch, rounded up to
+# 0.01 h^-1) so the transition stays centred after any recalibration; the
+# sampled patients beyond it are the flat, resolved right tail.
+PLOT_KIM_MIN = 0.0
+PLOT_KIM_MAX = (np.ceil(2 * ESCAPE_THRESH / 0.01) * 0.01
+                if not np.isnan(ESCAPE_THRESH) else SWEEP_MAX)
 
 fig2, (ax_top, ax_hist) = plt.subplots(
     2, 1, figsize=(11, 8.5), sharex=True,

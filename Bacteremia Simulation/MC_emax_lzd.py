@@ -97,12 +97,10 @@ emax_l_samples = rng.lognormal(mu_ln, sigma_ln, NUM_ITERATIONS)
 # ---------------------------------------------------------------------------
 # Continuous deterministic switch curve + precise escape threshold.
 #
-# Mirrors MC_ec50_lzd.py's own fine sweep + bisection, but direction-flipped:
-# for Emax_l, LOW values are the escape zone (a weaker drug ceiling can't
-# hold resistant growth in check), the opposite of EC50_L. A value bisected
-# directly from the current baseline replaces any fixed threshold, and
-# replaces the 4-bin categorical grouping with a fine, continuous sweep used
-# by the combined switch/population figure below.
+# Mirrors MC_ec50_lzd.py's fine sweep + Brent localization, but
+# direction-flipped: for Emax_l, LOW values are the escape zone (a weaker drug
+# ceiling can't hold resistant growth in check), the opposite of EC50_L. The
+# sweep feeds the combined switch/population figure below.
 # ---------------------------------------------------------------------------
 def _final_counts(emax_l):
     """One deterministic run at a fixed Emax_l; returns (final R_b, final R_res)."""
@@ -116,7 +114,7 @@ def _final_counts(emax_l):
 
 
 SWEEP_MIN, SWEEP_MAX = EMAX_L_BOUNDS
-N_SWEEP = 111   # step = 0.02
+N_SWEEP = 111   # step ~0.0136 across EMAX_L_BOUNDS
 
 print(f"\nRunning deterministic switch-curve sweep across [{SWEEP_MIN}, {SWEEP_MAX}] "
       f"({N_SWEEP} points)...", flush=True)
@@ -189,8 +187,10 @@ for i in range(NUM_ITERATIONS):
 print("Simulations complete. Generating figures...", flush=True)
 
 # ---------------------------------------------------------------------------
-# Escape classification, computed here because the kinetics figure below needs
-# it: each patient is escaped iff their own final R_res is above the LOD.
+# Outcome classification, computed here because the kinetics figure below needs
+# it. Relapse (escaped_mask) is resistant blood below the LOD at linezolid
+# completion followed by detectable R_b in follow-up; reservoir persistence
+# (final R_res >= LOD) is tracked separately.
 # ---------------------------------------------------------------------------
 final_R_b    = np.nan_to_num(R_b_hist[:, -1], nan=0.0)
 final_R_res  = np.nan_to_num(R_res_hist[:, -1], nan=0.0)
@@ -247,13 +247,13 @@ for ax, hist, lc, mc, title, ylim in panels:
         tr = np.where(hist[j] == 0, np.nan, hist[j])
         ax.plot(t_days, tr, color=lc, alpha=0.12, lw=0.8)
 
-    # Summarise over the ESCAPED patients only. Taking the median over all 1000
+    # Summarise over the RELAPSED patients (escaped_mask) only. Taking the median over all 1000
     # rows makes the post-treatment relapse vanish from the plot: sub-LOD values
-    # are stored as 0, escape is a minority outcome, so the all-patient median is
-    # 0 (-> NaN) exactly where the relapse happens. Restricting to escaped rows
+    # are stored as 0, relapse is a minority outcome, so the all-patient median is
+    # 0 (-> NaN) exactly where the relapse happens. Restricting to relapsed rows
     # and using nanmedian keeps the relapse visible and states its n in the
     # legend. Sub-LOD points within that subset become NaN, so a gap here means
-    # "not detectable in any escaped patient", not "no data".
+    # "not detectable in any relapsed patient", not "no data".
     esc = np.where(hist[escaped_mask] == 0, np.nan, hist[escaped_mask])
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")   # all-NaN slices are expected on drug
@@ -303,7 +303,7 @@ ax_top.axvspan(SWEEP_MIN, ESCAPE_THRESH, color=REGIME_COLORS["escape"],     alph
 ax_top.axvspan(ESCAPE_THRESH, SWEEP_MAX, color=REGIME_COLORS["suppressed"], alpha=0.10)
 ax_top.axhline(LOD, color="black", ls=":", lw=1.0, alpha=0.7, label=f"LOD ({int(LOD)} CFU/mL)")
 ax_top.axvline(ESCAPE_THRESH, color="black", ls="--", lw=1.4,
-               label=fr"Switch ($Emax_L$ = {ESCAPE_THRESH:.2g})")
+               label=fr"Switch ($Emax_L$ = {ESCAPE_THRESH:.3g})")
 
 ax_top.plot(sweep_emax, disp_sweep_R_res, color="indianred", lw=2.2,
             label="Final $R_{res}$ (reservoir)")
@@ -353,7 +353,7 @@ print(f"\n--- Sweep: Emax_l varied (sampling mean={EMAX_L_MEAN:.3f}) ---")
 print(f"  Emax_l sampled  median={np.median(emax_l_samples):.3f}  "
       f"[5th={np.percentile(emax_l_samples, 5):.3f}, "
       f"95th={np.percentile(emax_l_samples, 95):.3f}]")
-# Outcome split -- quoted in supplement.tex (tab:zscore_summary) and in
+# Outcome split -- quoted in manuscript10.01.tex and in
 # threshold_changes_summary.txt, so print it rather than leaving it readable
 # only off the histogram legend in mc_emax_lzd_switch.png. Note the sense is
 # inverted relative to EC50_L: here relapse is Emax_l BELOW the threshold.

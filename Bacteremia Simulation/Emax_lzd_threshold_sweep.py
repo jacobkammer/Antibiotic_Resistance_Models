@@ -2,15 +2,15 @@
 # Deterministic Emax_L threshold sweep (0.70--2.2 h^-1)
 #
 # Every parameter except Emax_l comes from the shared BASE_PARAMS. The fixed
-# Emax_l baseline and the MC sampling mean are both 1.65 h^-1. Lower Emax_l is
+# Emax_l baseline and the MC sampling mean are both 1.97 h^-1. Lower Emax_l is
 # the reservoir-persistence side of the switch. The accepted final-R_res
-# crossing is 1.55 h^-1; the companion MC analysis gives 22.0% bacteremia
-# relapse (220/1000).
+# crossing is 1.85 h^-1; the companion MC analysis gives 22.6% bacteremia
+# relapse (226/1000).
 #
 # This script runs a fine, deterministic (non-Monte-Carlo) sweep of Emax_l
 # across the centralized literature bounds, records final R_b / R_res,
-# selects the Emax_l values that finish above the LOD, and locates the exact
-# crossing point for each compartment via root-finding.
+# selects the Emax_l values that finish above the LOD, and localizes the
+# final-R_res classification switch with Brent's method.
 # =============================================================================
 import importlib.util
 import os
@@ -99,7 +99,7 @@ def final_counts(emax_l):
 # Fine sweep across the centralized Emax_l bounds.
 # ---------------------------------------------------------------------------
 EMAX_MIN, EMAX_MAX = EMAX_L_BOUNDS
-N_POINTS = 111   # step = 0.02
+N_POINTS = 111   # step ~0.0136 across EMAX_L_BOUNDS
 
 emax_sweep  = np.linspace(EMAX_MIN, EMAX_MAX, N_POINTS)
 final_R_b   = np.zeros(N_POINTS)
@@ -159,7 +159,7 @@ fig, ax = plt.subplots(figsize=(11, 6.5))
 
 if threshold_R_res is not None:
     ax.axvspan(EMAX_MIN, threshold_R_res, color="lightcoral", alpha=0.15,
-               label=f"$R_{{res}}$ escapes ($Emax_L \\leq$ {threshold_R_res:.2g})")
+               label=f"$R_{{res}}$ escapes ($Emax_L \\leq$ {threshold_R_res:.3g})")
 
 ax.axhline(LOD, color="black", ls=":", lw=1.0, alpha=0.7, label=f"LOD ({int(LOD)} CFU/mL)")
 ax.axvline(EMAX_L_BASE, color="gray", ls="-.", lw=1.2, alpha=0.7,
@@ -216,7 +216,7 @@ ax2.axhline(LOD, color="gray", ls="--", lw=1.0, label=f"LOD ({int(LOD)} CFU/mL)"
 
 ax2.set_yscale("log")
 ax2.set_ylim(bar_floor, final_R_res.max() * 3)
-ax2.set_xlim(0.8, 1.6)   # zoomed on the persistence/suppression transition
+ax2.set_xlim(1.45, 2.27)   # centred on the persistence/suppression transition (~1.85): 3 bars each side
 ax2.set_xlabel(r"$Emax_L$ (h$^{-1}$)")
 ax2.set_ylabel("Terminal $R_{res}$ burden (CFU/mL)")
 ax2.set_title(r"Terminal Burden vs $Emax_L$", fontsize=18, fontweight="bold", pad=14)

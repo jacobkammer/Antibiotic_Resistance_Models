@@ -1,14 +1,14 @@
 Current accepted calibration, deterministic transitions, and outcomes
 
-Growth rates: rho_S = 1.1 h^-1; rho_R = 0.99 h^-1 (10% cost); rho_res_S = 0.50 h^-1; rho_res_R = 0.45 h^-1 (10% cost).
-Linezolid reservoir/bone penetration = 0.40, the lower end of the reported 0.40-0.60 range.
-Reservoir linezolid efficacy: Emax_L,res = 0.41 x Emax_L (independent factor; no longer scaled by rho_res_S/rho_S).
-Fixed baselines equal Monte Carlo means: EC50_L = 1.13 mg/L; Emax_L = 1.65 h^-1 (Schmidt et al.); k_immune = 0.10 h^-1.
+Growth rates (Vera-Yunca et al.): rho_S = 1.47 h^-1 (in vitro); rho_R = 1.323 h^-1 (10% cost); rho_res_S = 0.845 h^-1 (in vivo, mouse lung); rho_res_R = 0.7605 h^-1 (10% cost, same as blood).
+Linezolid reservoir/bone penetration = 0.50, the midpoint of the reported 0.40-0.60 range.
+Reservoir linezolid efficacy: Emax_L,res = 0.45 x Emax_L = 0.89 h^-1; calibrated, vs Vera-Yunca's in vivo/in vitro ratio 0.303 (independent factor; no longer scaled by rho_res_S/rho_S).
+Fixed baselines equal Monte Carlo means: EC50_L = 0.56 mg/L and Emax_L = 1.97 h^-1 (Vera-Yunca et al. in vitro; Hill coefficient kept at 1); k_immune = 0.18 h^-1.
 Reservoir carrying capacity B_max_reservoir = 1e7 CFU/mL; reservoir->blood transfer k_r_b = 1e-7 h^-1. Exchange is one-way; the blood->reservoir term (k_b_r) was removed from the model.
 Outcome-calibrated sampling distributions:
-- EC50_L: mean 1.13 mg/L, CV 0.60, mean-corrected log-normal.
-- Emax_L: mean 1.65 h^-1, CV 0.080, mean-corrected log-normal.
-- k_immune: mean 0.10 h^-1, CV 0.80, mean-corrected log-normal.
+- EC50_L: mean 0.56 mg/L, CV 0.60, mean-corrected log-normal.
+- Emax_L: mean 1.97 h^-1, CV 0.080, mean-corrected log-normal.
+- k_immune: mean 0.18 h^-1, CV 0.80, mean-corrected log-normal.
 
 The LOD is a hard extinction boundary at 10 CFU/mL. A subpopulation crossing below the LOD is set to exactly zero and cannot regrow autonomously. Transfer from a detectable reservoir can re-establish blood bacteria when accumulated arrivals reach the LOD.
 
@@ -16,11 +16,11 @@ Bacteremia relapse requires resistant blood below the LOD at linezolid completio
 
 Analysis                          | Current verified result
 --------------------------------------------------------------------------------------------------------------------------
-EC50_lzd_threshold_sweep.py       | deterministic reservoir-persistence transition 1.3 mg/L (1.349)
-MC_ec50_lzd.py                    | relapse 28.9% (289/1000); persistent failure 1.1% (11/1000); resolution 70.0% (700/1000)
-Emax_lzd_threshold_sweep.py       | deterministic reservoir-persistence transition 1.5 h^-1 (1.549)
-MC_emax_lzd.py                    | relapse 22.0% (220/1000); persistent failure 0.0% (0/1000); resolution 78.0% (780/1000)
-ImmuneResponse_threshold_sweep.py | deterministic reservoir-persistence transition 0.047 h^-1
-MC_immune_response.py             | relapse 24.0% (240/1000); persistent failure 0.0% (0/1000); resolution 76.0% (760/1000)
+EC50_lzd_threshold_sweep.py       | deterministic reservoir-persistence transition 0.76 mg/L (0.762)
+MC_ec50_lzd.py                    | relapse 22.0% (220/1000); persistent failure 0.2% (2/1000); resolution 77.8% (778/1000)
+Emax_lzd_threshold_sweep.py       | deterministic reservoir-persistence transition 1.9 h^-1 (1.852)
+MC_emax_lzd.py                    | relapse 22.6% (226/1000); persistent failure 0.0% (0/1000); resolution 77.4% (774/1000)
+ImmuneResponse_threshold_sweep.py | deterministic reservoir-persistence transition 0.093 h^-1
+MC_immune_response.py             | relapse 27.8% (278/1000); persistent failure 0.0% (0/1000); resolution 72.2% (722/1000)
 
 The deterministic values are Brent-localized hard-LOD classification boundaries and are reported to two significant figures; they are not continuous roots where terminal burden equals the LOD. Existing figures predating this calibration are legacy outputs and must be regenerated before quantitative use.

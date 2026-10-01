@@ -191,9 +191,12 @@ def _plot_distributions(samples, switches):
         ax.fill_between(x, 0, density, where=tail_mask, color=COLORS["tail"],
                         alpha=0.30, label="Persistence-side tail")
         ax.axvline(mean, color=COLORS["mean"], lw=2, ls="-.",
-                   label=f"Mean = {mean:.2g}")
+                   label=f"Mean = {mean:.3g}")
         ax.axvline(switch, color=COLORS["switch"], lw=2, ls="--",
-                   label=f"Switch = {switch:.2g}")
+                   # Same precision as the manuscript: two significant figures, except
+                   # three for Emax_l, whose narrow distribution makes 1.85 vs 1.9 material.
+                   label=f"Transition = {switch:.3g}" if parameter == "Emax_l"
+                   else f"Transition = {switch:.2g}")
         ax.text(0.97, 0.95,
                 f"{distance_text}\nTheoretical tail = {100*theoretical:.1f}%\n"
                 f"Realized tail = {100*realized:.1f}%",
@@ -204,7 +207,7 @@ def _plot_distributions(samples, switches):
         ax.grid(True, ls=":", alpha=0.35)
         ax.legend(fontsize=9, loc="best")
 
-    fig.suptitle("Calibrated Parameter Distributions Relative to Persistence Switches",
+    fig.suptitle("Calibrated Parameter Distributions Relative to Persistence Transitions",
                  fontsize=18, fontweight="bold")
     fig.tight_layout()
     output = os.path.join(FIGURES_DIR, "distribution_to_switch.png")

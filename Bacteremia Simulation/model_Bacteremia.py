@@ -17,7 +17,7 @@ from solver import integrate_model
 
 class PharmacokineticModel:
     """
-    Two-compartment PK model with fixed clearance values.
+    One-compartment PK model per drug, with fixed clearance values.
     Vancomycin: CL = 5.0 L/h, Vd = 50 L → ke = 0.10 h⁻¹, t½ = 6.9 h
     Linezolid:  CL = 6.0 L/h, Vd = 45 L → ke = 0.133 h⁻¹, t½ = 5.2 h
 

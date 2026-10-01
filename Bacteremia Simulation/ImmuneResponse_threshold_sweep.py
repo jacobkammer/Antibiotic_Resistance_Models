@@ -2,15 +2,15 @@
 # Deterministic k_immune threshold sweep (0.02-0.65 h^-1).
 #
 # The fixed immune baseline and the MC sampling mean come from parameters.py
-# and are both 0.10 h^-1. Every other parameter remains at BASE_PARAMS.
+# and are both 0.18 h^-1. Every other parameter remains at BASE_PARAMS.
 # At the accepted calibration, final R_res and final R_b both cross the LOD at
-# 0.047 h^-1. The companion MC analysis gives 24.0% bacteremia relapse
-# (240/1000), classified by the resistant blood trajectory rather than R_res.
+# 0.093 h^-1. The companion MC analysis gives 27.8% bacteremia relapse
+# (278/1000), classified by the resistant blood trajectory rather than R_res.
 #
 # This script runs a fine, deterministic (non-Monte-Carlo) sweep of k_immune,
 # records the FINAL R_b / R_res at the end of each run, selects the k_immune
-# values that finish above the LOD, and locates the exact crossing point for
-# each compartment via root-finding.
+# values that finish above the LOD, and localizes the final-count
+# classification switch for each compartment with Brent's method.
 # =============================================================================
 import importlib.util
 import os
@@ -21,7 +21,8 @@ import numpy as np
 from scipy.optimize import brentq
 
 from parameters import (
-    BASE_PARAMS, K_IMMUNE_DEFAULT, LOD, TOTAL_H, VANCO_START, Y0, save_figure,
+    BASE_PARAMS, K_IMMUNE_DEFAULT, LOD, TOTAL_H, VANCO_START, Y0,
+    canonical_time_grid, save_figure,
 )
 from solver import integrate_model
 
@@ -56,12 +57,12 @@ model_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model_mod)
 
 # ---------------------------------------------------------------------------
-# Simulation settings (matches MC_immune_response.py / model.py's own defaults)
+# Simulation settings (protocol and baseline from parameters.py)
 # ---------------------------------------------------------------------------
 
 total_h     = TOTAL_H
 vanco_start = VANCO_START
-t_eval      = np.linspace(0, total_h, 1450)  # matches MC_immune_response.py
+t_eval      = canonical_time_grid()   # matches MC_immune_response.py
 t_days      = t_eval / 24.0
 
 pk = model_mod.PharmacokineticModel()
@@ -91,7 +92,7 @@ def final_counts(k_immune):
 # Fine sweep across k_immune in [0.02, 0.65]
 # ---------------------------------------------------------------------------
 KIM_MIN, KIM_MAX = 0.02, 0.65
-N_POINTS = 127   # step = 0.005; includes the 0.10 h^-1 baseline
+N_POINTS = 127   # step = 0.005; includes the 0.18 h^-1 baseline
 
 kim_sweep   = np.linspace(KIM_MIN, KIM_MAX, N_POINTS)
 final_R_b   = np.zeros(N_POINTS)
@@ -132,7 +133,7 @@ def find_threshold(compartment_idx):
     lo_val, hi_val = f(KIM_MIN), f(KIM_MAX)
     if lo_val < 0 or hi_val > 0:
         return None   # no sign change in range -> no clean threshold to bisect
-    return brentq(f, KIM_MIN, KIM_MAX, xtol=1e-3)
+    return brentq(f, KIM_MIN, KIM_MAX, xtol=1e-6)   # same tolerance as MC_immune_response.py
 
 
 threshold_R_b   = find_threshold(1)
@@ -201,10 +202,12 @@ if threshold_R_b is not None:
     ax.axvline(threshold_R_b, color="darkred", ls="--", lw=1.2, alpha=0.8)
 
 ax.set_yscale("log")
-# The classification transition is near 0.024 h^-1.  Keep the full numerical
-# sweep above, but use a focused display window so the transition is centered
-# and remains visible alongside the baseline k_immune = 0.10 h^-1.
-PLOT_KIM_MIN, PLOT_KIM_MAX = 0.0, 0.06
+# Keep the full numerical sweep above, but use a focused display window derived
+# from the located switch so the transition stays centred after any
+# recalibration, widened if needed so the baseline k_immune is also visible.
+PLOT_KIM_MIN = 0.0
+_centre = threshold_R_res if threshold_R_res is not None else KIM_MAX / 2
+PLOT_KIM_MAX = min(KIM_MAX, np.ceil(max(2 * _centre, 1.1 * K_IMMUNE_BASE) / 0.01) * 0.01)
 ax.set_xlim(PLOT_KIM_MIN, PLOT_KIM_MAX)
 ax.set_ylim(FLOOR * 0.8, max(FLOOR * 20, final_R_b.max(), final_R_res.max()) * 2)
 ax.set_xlabel(r"$k_{immune}$ (h$^{-1}$)")

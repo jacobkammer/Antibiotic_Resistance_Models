@@ -55,16 +55,16 @@ Y0 = [0.0, 0.0, 1.0e2, 1.0e2]
 # ---------------------------------------------------------------------------
 BASE_PARAMS = {
     # --- growth rates (h^-1) ---
-    "rho_S":            1.1,      # sensitive, blood
-    "rho_R":            0.99,     # resistant, blood -- 10% fitness cost
-    "rho_res_S":        0.50,     # sensitive, reservoir
-    "rho_res_R":        0.45,     # resistant, reservoir -- 10% fitness cost
+    "rho_S":            1.47,     # sensitive, blood (Vera-Yunca et al. in vitro)
+    "rho_R":            1.323,    # resistant, blood -- 10% fitness cost (same as reservoir)
+    "rho_res_S":        0.845,    # sensitive, reservoir (Vera-Yunca et al. in vivo, mouse lung)
+    "rho_res_R":        0.7605,   # resistant, reservoir -- 10% fitness cost
 
     # --- pharmacodynamics ---
     "Emax_v":           1.7,      # maximal vancomycin effect (acts on the sensitive strain only)
     "EC50_V":           0.25,     # mg/L
-    "Emax_l":           1.65,     # maximal linezolid effect (Schmidt et al.); also the Monte Carlo mean
-    "EC50_L":           1.13,     # mg/L (Schmidt et al.). Single project-wide value: this is both the fixed
+    "Emax_l":           1.97,     # maximal linezolid effect (Vera-Yunca et al. in vitro); also the Monte Carlo mean
+    "EC50_L":           0.56,     # mg/L (Vera-Yunca et al. in vitro). Single project-wide value: this is both the fixed
                                    # baseline and MC_ec50_lzd.py's sampling mean.
 
     # --- carrying capacities (CFU/mL), shared by both strains within a compartment ---
@@ -73,7 +73,7 @@ BASE_PARAMS = {
 
     # --- reservoir tissue penetration (fraction of blood concentration) ---
     "van_res_fraction": 0.15,
-    "lzd_res_fraction": 0.40,    # lower end of the reported 0.40-0.60 bone penetration range
+    "lzd_res_fraction": 0.50,    # midpoint of the reported 0.40-0.60 bone penetration range
     # reservoir linezolid efficacy (alpha): Emax_l_res = Emax_l * lzd_res_efficacy,
     # reduced activity against slow-growing biofilm/SCV bacteria in bone. An
     # independent calibrated factor, NOT derived from the growth rates (it
@@ -83,7 +83,7 @@ BASE_PARAMS = {
     # analyses (Emax_lzd_threshold_sweep.py, MC_emax_lzd.py,
     # study_summary_figures.py) vary Emax_l, so the reservoir ceiling scales
     # with each sampled Emax_l at this fixed alpha.
-    "lzd_res_efficacy": 0.41,
+    "lzd_res_efficacy": 0.45,
 
     # --- inter-compartmental exchange (h^-1): one-way, reservoir -> blood only ---
     "k_r_b":            1.0e-7,   # reservoir -> blood; scaled with the 1e7 reservoir capacity
@@ -92,7 +92,7 @@ BASE_PARAMS = {
 # ---------------------------------------------------------------------------
 # Host immune response (lives on the ImmuneResponse object, not in BASE_PARAMS)
 # ---------------------------------------------------------------------------
-K_IMMUNE_DEFAULT = 0.10   # fixed baseline and Monte Carlo sampling mean
+K_IMMUNE_DEFAULT = 0.18   # fixed baseline and Monte Carlo sampling mean
 EFF_BLOOD        = 1.0    # immune efficacy multiplier, blood
 EFF_RES          = 0.50   # reservoir immune access, relative to blood
 
@@ -101,11 +101,9 @@ EFF_RES          = 0.50   # reservoir immune access, relative to blood
 # Log-normal, mean-corrected so E[X] equals the mean given here.
 # ---------------------------------------------------------------------------
 SAMPLING = {
-    "EC50_L":   (1.13,  0.60),    # MC_ec50_lzd.py -- equals the fixed baseline
-    "Emax_l":   (1.65,  0.080),   # log-normal; equals the fixed baseline
-    "k_immune": (0.10,  0.80),    # MC_immune_response.py -- equals the fixed baseline
-    "S_res_0":  (1.0e2, 6.0e1),   # MC_initial_conditions.py -- CV deliberately extreme
-    "R_res_0":  (1.0e2, 6.0e1),   # MC_initial_conditions.py
+    "EC50_L":   (0.56,  0.60),    # MC_ec50_lzd.py -- equals the fixed baseline
+    "Emax_l":   (1.97,  0.080),   # log-normal; equals the fixed baseline
+    "k_immune": (0.18,  0.80),    # MC_immune_response.py -- equals the fixed baseline
 }
 
 # Literature-supported range used for deterministic sweeps and root bracketing.
@@ -172,19 +170,20 @@ RNG_SEEDS = {
     "MC_emax_lzd": 44,
     "MC_immune_response": 42,
     "MC_immune_response_traces": 0,
-    "MC_initial_conditions": 42,
 }
 
 # ---------------------------------------------------------------------------
 # Reference values at the parameterisation above (regenerate after any change)
 #
 # Calibration candidate under full Monte Carlo validation:
-#   EC50_L transition   1.3 mg/L (1.349); validated relapse 29% (289/1000)
-#   Emax_l transition   1.5 h^-1 (1.549); validated relapse 22% (220/1000)
-#   k_immune transition 0.047 h^-1; validated relapse 24% (240/1000)
-# (Schmidt linezolid PD: Emax_l = 1.65, EC50_L = 1.13; bone penetration 0.40;
-#  independent reservoir efficacy lzd_res_efficacy = 0.41; k_immune = 0.10;
-#  B_max_reservoir = 1e7, k_r_b = 1e-7; rho_res_S = 0.50 / rho_res_R = 0.45.)
+#   EC50_L transition   0.76 mg/L (0.762); validated relapse 22% (220/1000)
+#   Emax_l transition   1.9 h^-1 (1.852); validated relapse 23% (226/1000)
+#   k_immune transition 0.093 h^-1; validated relapse 28% (278/1000)
+# (Vera-Yunca et al. only: rho_S = 1.47 (in vitro), rho_res_S = 0.845 (in vivo),
+#  Emax_l = 1.97, EC50_L = 0.56 (in vitro), linezolid Hill coefficient kept at 1;
+#  10% resistant fitness cost in both compartments; bone penetration 0.50;
+#  calibrated lzd_res_efficacy = 0.45 (reservoir Emax 0.89 vs Vera-Yunca's in vivo
+#  0.60) and k_immune = 0.18; B_max_reservoir = 1e7, k_r_b = 1e-7.)
 # Relapse requires R_b below LOD at linezolid completion and R_b >= LOD later
 # in follow-up. Reservoir persistence alone is reported separately.
 # ---------------------------------------------------------------------------
