@@ -3,7 +3,7 @@
 #
 # Every parameter except EC50_L comes from the shared BASE_PARAMS. The fixed
 # EC50_L baseline and the MC sampling mean are both 0.56 mg/L. Higher EC50_L
-# weakens linezolid potency and is the reservoir-persistence side of the
+# weakens linezolid potency and is the bacteremia relapse side of the
 # switch. The accepted final-R_res transition is 0.76 mg/L; the companion MC
 # analysis gives 22.0% bacteremia relapse (220/1000).
 #
@@ -19,13 +19,12 @@
 #      zone(s) above each threshold, and saves ec50_lzd_threshold_sweep.png.
 #
 # This is the deterministic companion to MC_ec50_lzd.py and independently
-# derives the threshold used to interpret its reservoir-persistence fraction.
+# derives the threshold used to interpret its bacteremia relapse fraction.
 # this file creates two figures:
 #   1. ec50_lzd_threshold_sweep.png - final R_b/R_res vs. EC50_L (log y-axis), shades the escape
 #      zone(s) above each threshold
 #   2. ec50_terminal_burden_vs_ec50.png - bar chart of terminal R_res burden vs. EC50_L at
-#      12 values subsampled from the same sweep: bars reach the LOD for runs that clear and
-#      the true final count for runs that persist. NOT a zoom of figure 1.
+#      12 values subsampled from the same sweep. NOT a zoom of figure 1.
 # =============================================================================
 import importlib.util
 import os

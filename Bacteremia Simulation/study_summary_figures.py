@@ -1,7 +1,7 @@
 """Generate cross-parameter figures for the manuscript Results section.
 
 The script reruns the three calibrated 1,000-patient cohorts so that the
-stacked outcomes and relapse-time curves use the same trajectory-based
+relapse-time curves use the same trajectory-based
 clearance/reseeding definition as the individual Monte Carlo analyses.
 """
 
@@ -36,9 +36,6 @@ from solver import integrate_model
 
 FIGURES_DIR = "figures"
 COLORS = {
-    "resolved": "#4c78a8",
-    "relapse": "#e45756",
-    "persistent": "#8f63b8",
     "density": "#263f6a",
     "tail": "#e45756",
     "mean": "#2a9d8f",
@@ -216,44 +213,6 @@ def _plot_distributions(samples, switches):
     print(f"Saved: {output}")
 
 
-def _plot_outcomes(results):
-    labels = [r"$EC_{50,L}$", r"$E_{max,L}$", r"$k_{immune}$"]
-    keys = ["EC50_L", "Emax_l", "k_immune"]
-    resolved = np.array([np.mean(results[key][0] == 0) for key in keys]) * 100
-    relapse = np.array([np.mean(results[key][0] == 1) for key in keys]) * 100
-    persistent = np.array([np.mean(results[key][0] == 2) for key in keys]) * 100
-
-    fig, ax = plt.subplots(figsize=(9.5, 6.5))
-    x = np.arange(len(keys))
-    layers = ((resolved, "Resolution", COLORS["resolved"]),
-              (relapse, "Relapse", COLORS["relapse"]),
-              (persistent, "Persistent treatment failure", COLORS["persistent"]))
-    bottom = np.zeros(len(keys))
-    for values, name, color in layers:
-        bars = ax.bar(x, values, bottom=bottom, color=color, width=0.62,
-                      edgecolor="white", label=name)
-        for bar, value, base in zip(bars, values, bottom):
-            if value > 0:
-                ax.text(bar.get_x() + bar.get_width()/2, base + value/2,
-                        f"{value:.1f}%", ha="center", va="center",
-                        color="white", fontsize=12, fontweight="bold")
-        bottom += values
-
-    ax.set_xticks(x, labels)
-    ax.set_ylabel("Virtual patients (%)")
-    ax.set_ylim(0, 100)
-    ax.set_title("Clinical Outcome Classification Across Monte Carlo Analyses",
-                 fontsize=17, fontweight="bold")
-    ax.grid(axis="y", ls=":", alpha=0.35)
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.10), ncol=3,
-              frameon=False)
-    fig.tight_layout()
-    output = os.path.join(FIGURES_DIR, "stacked_outcomes.png")
-    save_figure(fig, output, __file__)
-    plt.close(fig)
-    print(f"Saved: {output}")
-
-
 def _plot_relapse_times(results):
     fig, ax = plt.subplots(figsize=(10, 6.5))
     specifications = (
@@ -311,7 +270,6 @@ def main():
                   f"persistent={counts[2]}", flush=True)
 
     _plot_distributions(samples, switches)
-    _plot_outcomes(results)
     _plot_relapse_times(results)
 
 

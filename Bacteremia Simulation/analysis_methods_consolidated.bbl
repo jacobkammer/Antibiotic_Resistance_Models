@@ -1,0 +1,46 @@
+\begin{thebibliography}{1}
+
+\bibitem{Mollison1991}
+D.~Mollison, ``Dependence of epidemic and population velocities on basic
+  parameters,'' {\em Mathematical Biosciences}, vol.~107, no.~2, pp.~255--287,
+  1991.
+
+\bibitem{CampilloLobry2012}
+F.~Campillo and C.~Lobry, ``Effect of population size in a predator--prey
+  model,'' {\em Ecological Modelling}, vol.~246, pp.~1--10, 2012.
+
+\bibitem{2020SciPy-NMeth}
+P.~Virtanen, R.~Gommers, T.~E. Oliphant, M.~Haberland, T.~Reddy, D.~Cournapeau,
+  E.~Burovski, P.~Peterson, W.~Weckesser, J.~Bright, S.~J. {van der Walt},
+  M.~Brett, J.~Wilson, K.~J. Millman, N.~Mayorov, A.~R.~J. Nelson, E.~Jones,
+  R.~Kern, E.~Larson, C.~J. Carey, {\.{I}}.~Polat, Y.~Feng, A.~W. Moore,
+  J.~{VanderPlas}, D.~Laxalde, J.~Perktold, R.~Cimrman, I.~Henriksen, E.~A.
+  Quintero, C.~R. Harris, A.~M. Archibald, A.~H. Ribeiro, F.~Pedregosa, P.~{van
+  Mulbregt}, and {SciPy 1.0 Contributors}, ``{{SciPy} 1.0: Fundamental
+  Algorithms for Scientific Computing in Python},'' {\em Nature Methods},
+  vol.~17, pp.~261--272, 2020.
+
+\bibitem{Enright1988}
+W.~H. Enright, K.~R. Jackson, S.~P. N{\o}rsett, and P.~G. Thomsen, ``Effective
+  solution of discontinuous ivps using a runge--kutta formula pair with
+  interpolants,'' {\em Applied Mathematics and Computation}, vol.~27, no.~4,
+  pp.~313--335, 1988.
+
+\bibitem{ShampineThompson2000}
+L.~F. Shampine and S.~Thompson, ``Event location for ordinary differential
+  equations,'' {\em Computers \& Mathematics with Applications}, vol.~39,
+  pp.~43--54, 2000.
+
+\bibitem{scipyBrentq}
+{SciPy Developers}, ``scipy.optimize.brentq --- {SciPy} api reference.''
+\newblock Accessed 4 September 2026.
+
+\bibitem{brent1973}
+R.~P. Brent, {\em Algorithms for Minimization without Derivatives}.
+\newblock Englewood Cliffs, New Jersey: Prentice-Hall, 1973.
+
+\bibitem{Brent1971}
+R.~P. Brent, ``An algorithm with guaranteed convergence for finding a zero of a
+  function,'' {\em The Computer Journal}, vol.~14, no.~4, pp.~422--425, 1971.
+
+\end{thebibliography}

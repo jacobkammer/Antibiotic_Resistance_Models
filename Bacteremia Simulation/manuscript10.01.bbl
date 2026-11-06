@@ -1,0 +1,207 @@
+\begin{thebibliography}{10}
+
+\bibitem{Li2024}
+M.~Li, J.~B. Kim, B.~K.~S. Sastry, and M.~Chen, ``Infective endocarditis,''
+  {\em The Lancet}, vol.~404, pp.~377--392, 2024.
+\newblock Seminar.
+
+\bibitem{HammondHaley2023}
+M.~Hammond{-}Haley, A.~Hartley, B.~M. Al{-}Khayatt, A.~J. Delago, A.~Ghajar,
+  U.~Ojha, D.~C. Marshall, J.~D. Salciccioli, B.~D. Prendergast, and
+  J.~Shalhoub, ``Trends in the incidence and mortality of infective
+  endocarditis in high-income countries between 1990 and 2019,'' {\em
+  International Journal of Cardiology}, vol.~371, pp.~441--451, 2023.
+
+\bibitem{Taduru2023}
+S.~S. Taduru, ``30-year trends of incidence and mortality of infective
+  endocarditis in the united states---unveiling the age- and gender-related and
+  regional disparities,'' {\em The American Journal of Cardiology}, vol.~203,
+  pp.~421--422, 2023.
+
+\bibitem{murdoch2009infective}
+D.~R. Murdoch, G.~R. Corey, B.~Hoen, J.~M. Mir{\'o}, V.~G. Fowler, A.~S. Bayer,
+  A.~W. Karchmer, L.~Olaison, P.~A. Pappas, P.~Moreillon, S.~T. Chambers, V.~H.
+  Chu, V.~Falc{\'o}, D.~J. Holland, P.~Jones, J.~L. Klein, N.~J. Raymond, K.~M.
+  Read, M.~F. Tripodi, R.~Utili, A.~Wang, C.~W. Woods, and C.~H. Cabell,
+  ``Clinical presentation, etiology, and outcome of infective endocarditis in
+  the 21st century: The international collaboration on
+  endocarditis–prospective cohort study,'' {\em Archives of Internal
+  Medicine}, vol.~169, no.~5, pp.~463--473, 2009.
+
+\bibitem{Minter2023}
+D.~J. Minter, A.~Appa, H.~F. Chambers, and S.~B. Doernberg, ``Contemporary
+  management of \textit{Staphylococcus aureus} bacteremia---controversies in
+  clinical practice,'' {\em Clinical Infectious Diseases}, vol.~77, no.~11,
+  pp.~e57--e68, 2023.
+
+\bibitem{murray_glycopeptides_2019}
+B.~E. Murray, C.~A. Arias, and E.~C. Nannini, ``Glycopeptides (vancomycin and
+  teicoplanin) and lipoglycopeptides (telavancin, oritavancin, and
+  dalbavancin),'' in {\em Mandell, Douglas, and Bennett's Principles and
+  Practice of Infectious Diseases}, ch.~30, pp.~375--395.e4, Philadelphia:
+  Elsevier, 9~ed., 2019.
+
+\bibitem{mcguinness2017vancomycin}
+W.~A. McGuinness, N.~Ma{\l}achowa, and F.~R. DeLeo, ``Vancomycin resistance in
+  staphylococcus aureus,'' {\em The Yale Journal of Biology and Medicine},
+  vol.~90, no.~2, pp.~269--281, 2017.
+
+\bibitem{Kahl2016SCV}
+B.~C. Kahl, K.~Becker, and B.~L{\"o}ffler, ``Clinical significance and
+  pathogenesis of staphylococcal small colony variants in persistent
+  infections,'' {\em Clinical Microbiology Reviews}, vol.~29, pp.~401--427, apr
+  2016.
+
+\bibitem{Cong2020}
+Y.~Cong, S.~Yang, and X.~Rao, ``Vancomycin-resistant \textit{Staphylococcus
+  aureus} infections: a review of case updating and clinical features,'' {\em
+  Journal of Advanced Research}, vol.~21, pp.~169--176, 2020.
+
+\bibitem{Mikkaichi2019}
+T.~Mikkaichi, M.~R. Yeaman, A.~Hoffmann, and {MRSA Systems Immunobiology
+  Group}, ``Identifying determinants of persistent {MRSA} bacteremia using
+  mathematical modeling,'' {\em PLOS Computational Biology}, vol.~15,
+  p.~e1007087, July 2019.
+
+\bibitem{VeraYunca2025}
+D.~Vera{-}Yunca, C.~Matias, C.~V. Lundberg, and L.~E. Friberg, ``Model-based
+  translation of the pkpd-relationship for linezolid and vancomycin on
+  methicillin-resistant \textit{Staphylococcus aureus}: from in vitro
+  time--kill experiments to a mouse pneumonia model,'' {\em Journal of
+  Antimicrobial Chemotherapy}, vol.~80, no.~7, pp.~1860--1868, 2025.
+
+\bibitem{2020SciPy-NMeth}
+P.~Virtanen, R.~Gommers, T.~E. Oliphant, M.~Haberland, T.~Reddy, D.~Cournapeau,
+  E.~Burovski, P.~Peterson, W.~Weckesser, J.~Bright, S.~J. {van der Walt},
+  M.~Brett, J.~Wilson, K.~J. Millman, N.~Mayorov, A.~R.~J. Nelson, E.~Jones,
+  R.~Kern, E.~Larson, C.~J. Carey, {\.{I}}.~Polat, Y.~Feng, A.~W. Moore,
+  J.~{VanderPlas}, D.~Laxalde, J.~Perktold, R.~Cimrman, I.~Henriksen, E.~A.
+  Quintero, C.~R. Harris, A.~M. Archibald, A.~H. Ribeiro, F.~Pedregosa, P.~{van
+  Mulbregt}, and {SciPy 1.0 Contributors}, ``{{SciPy} 1.0: Fundamental
+  Algorithms for Scientific Computing in Python},'' {\em Nature Methods},
+  vol.~17, pp.~261--272, 2020.
+
+\bibitem{garciadelpozo2018factors}
+E.~Garcia~del Pozo, J.~Collazos, J.~A. Carton, D.~Camporro, and V.~Asensi,
+  ``Factors predictive of relapse in adult bacterial osteomyelitis of long
+  bones,'' {\em BMC Infectious Diseases}, vol.~18, no.~1, p.~635, 2018.
+
+\bibitem{nieman2022bacterial}
+A.-E. Nieman, W.~Rozemeijer, P.~H.~M. Savelkoul, and R.~P. Schade, ``Bacterial
+  dna load in staphylococcus aureus bacteremia is significantly higher in
+  intravascular infections,'' {\em PLoS ONE}, vol.~17, no.~4, p.~e0266869,
+  2022.
+
+\bibitem{MomoduSavaliya2023}
+I.~I. Momodu and V.~Savaliya, ``Osteomyelitis,'' in {\em StatPearls}, Treasure
+  Island, FL: StatPearls Publishing, 2025.
+\newblock Updated May 31, 2023.
+
+\bibitem{Kostakioti2013}
+M.~Kostakioti, M.~Hadjifrangiskou, and S.~J. Hultgren, ``Bacterial biofilms:
+  Development, dispersal, and therapeutic strategies in the dawn of the
+  postantibiotic era,'' {\em Cold Spring Harbor Perspectives in Medicine},
+  vol.~3, no.~4, p.~a010306, 2013.
+
+\bibitem{sandberg2010intra}
+A.~Sandberg, K.~S. Jensen, P.~Baudoux, F.~Van~Bambeke, P.~M. Tulkens, and
+  N.~Frimodt-Moller, ``Intra- and extracellular activity of linezolid against
+  {Staphylococcus aureus} in vivo and in vitro,'' {\em Journal of Antimicrobial
+  Chemotherapy}, vol.~65, no.~5, pp.~962--973, 2010.
+
+\bibitem{vancopk_review}
+N.~Feweks, ``Vanco {PK} review.''
+  \url{https://vancopk.com/vanco-kinetics-review/}, 2025.
+\newblock Accessed 29 November 2025.
+
+\bibitem{Matzke1986}
+G.~R. Matzke, G.~G. Zhanel, and D.~R.~P. Guay, ``Clinical pharmacokinetics of
+  vancomycin,'' {\em Clinical Pharmacokinetics}, vol.~11, no.~4, pp.~257--282,
+  1986.
+
+\bibitem{dryden2011linezolid}
+M.~S. Dryden, ``Linezolid pharmacokinetics and pharmacodynamics in clinical
+  treatment,'' {\em Journal of Antimicrobial Chemotherapy}, vol.~66, no.~Suppl
+  4, pp.~iv7--iv15, 2011.
+
+\bibitem{kutschalissberg2003linezolid}
+F.~Kutscha-Lissberg, U.~Hebler, G.~Muhr, and M.~K{\"o}ller, ``Linezolid
+  penetration into bone and joint tissues infected with methicillin-resistant
+  staphylococci,'' {\em Antimicrobial Agents and Chemotherapy}, vol.~47,
+  no.~12, pp.~3964--3966, 2003.
+
+\bibitem{spellberg2012systemic}
+B.~Spellberg and B.~A. Lipsky, ``Systemic antibiotic therapy for chronic
+  osteomyelitis in adults,'' {\em Clinical Infectious Diseases}, vol.~54,
+  no.~3, pp.~393--407, 2012.
+
+\bibitem{rybak2020therapeutic}
+M.~J. Rybak, J.~Le, T.~P. Lodise, D.~P. Levine, J.~S. Bradley, C.~Liu, B.~A.
+  Mueller, M.~P. Pai, A.~Wong-Beringer, J.~C. Rotschafer, K.~A. Rodvold, H.~D.
+  Maples, and B.~M. Lomaestro, ``Therapeutic monitoring of vancomycin for
+  serious methicillin-resistant staphylococcus aureus infections: A revised
+  consensus guideline and review by the american society of health-system
+  pharmacists, the infectious diseases society of america, the pediatric
+  infectious diseases society, and the society of infectious diseases
+  pharmacists,'' {\em American Journal of Health-System Pharmacy}, vol.~77,
+  no.~11, pp.~835--864, 2020.
+
+\bibitem{alsultan2019determining}
+A.~Alsultan, ``Determining therapeutic trough ranges for linezolid,'' {\em
+  Saudi Pharmaceutical Journal}, vol.~27, pp.~1061--1063, 2019.
+
+\bibitem{Mollison1991}
+D.~Mollison, ``Dependence of epidemic and population velocities on basic
+  parameters,'' {\em Mathematical Biosciences}, vol.~107, no.~2, pp.~255--287,
+  1991.
+
+\bibitem{CampilloLobry2012}
+F.~Campillo and C.~Lobry, ``Effect of population size in a predator--prey
+  model,'' {\em Ecological Modelling}, vol.~246, pp.~1--10, 2012.
+
+\bibitem{scipy_docs}
+{SciPy Development Team}, {\em SciPy Reference Guide}.
+\newblock Enthought, Inc. and SciPy Community, 2024.
+\newblock Accessed: 2026-03-25.
+
+\bibitem{WolframEventDetection}
+{Wolfram Research}, ``Events and discontinuities in differential equations.''
+  Wolfram Language Documentation.
+\newblock Accessed: 2026-09-29.
+
+\bibitem{Enright1988}
+W.~H. Enright, K.~R. Jackson, S.~P. N{\o}rsett, and P.~G. Thomsen, ``Effective
+  solution of discontinuous ivps using a runge--kutta formula pair with
+  interpolants,'' {\em Applied Mathematics and Computation}, vol.~27, no.~4,
+  pp.~313--335, 1988.
+
+\bibitem{ShampineThompson2000}
+L.~F. Shampine and S.~Thompson, ``Event location for ordinary differential
+  equations,'' {\em Computers \& Mathematics with Applications}, vol.~39,
+  pp.~43--54, 2000.
+
+\bibitem{Brent1971}
+R.~P. Brent, ``An algorithm with guaranteed convergence for finding a zero of a
+  function,'' {\em The Computer Journal}, vol.~14, no.~4, pp.~422--425, 1971.
+
+\bibitem{brent1973}
+R.~P. Brent, {\em Algorithms for Minimization without Derivatives}.
+\newblock Englewood Cliffs, New Jersey: Prentice-Hall, 1973.
+
+\bibitem{scipyBrentq}
+{SciPy Developers}, ``scipy.optimize.brentq --- {SciPy} api reference.''
+\newblock Accessed 4 September 2026.
+
+\bibitem{limpert2001lognormal}
+E.~Limpert, W.~A. Stahel, and M.~Abbt, ``Log-normal distributions across the
+  sciences: Keys and clues,'' {\em BioScience}, vol.~51, pp.~341--352, May
+  2001.
+
+\bibitem{Scheerans2014}
+C.~Scheerans, S.~G. Wicha, J.~Michael, H.~Derendorf, and C.~Kloft,
+  ``Concentration--response studies and modelling of the pharmacodynamics of
+  linezolid: \textit{Staphylococcus aureus} versus \textit{Enterococcus
+  faecium},'' {\em International Journal of Antimicrobial Agents}, vol.~45,
+  no.~1, pp.~54--60, 2015.
+
+\end{thebibliography}

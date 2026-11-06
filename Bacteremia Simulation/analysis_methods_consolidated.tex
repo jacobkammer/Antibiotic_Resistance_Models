@@ -190,6 +190,97 @@ the population and continuous dynamics resume.
 This construction prevents a fractional sub-LOD remnant from manufacturing a
 relapse while still permitting a persistent reservoir to reseed blood.
 
+Three consequences of these rules affect how the results are read:
+\begin{enumerate}
+\item \textbf{Initial state.} The rule is applied at time zero. Any population
+that starts below the LOD is set to zero and begins extinct. Blood starts
+sterile, so both blood populations begin extinct, and bacteremia first appears
+only when seeding from the reservoir has accumulated to $10~\mathrm{CFU/mL}$.
+\item \textbf{Reservoir extinction is permanent.} Transfer in the model is
+one-way, from reservoir to blood. Only a blood population can therefore be
+reactivated. An extinct reservoir population receives no incoming transfer
+and remains at zero for the rest of the simulation.
+\item \textbf{Carrying capacity.} An extinct population, including any
+arrivals it is accumulating, does not count toward the shared carrying
+capacity of its compartment.
+\end{enumerate}
+
+\subsection{The hard LOD is a modeling assumption}
+
+Using a cutoff at all addresses a known defect of deterministic population
+models, in which a burden far below one organism can decay and later regrow
+\cite{Mollison1991,CampilloLobry2012}.
+Three specific choices are assumptions of this model and are not taken from a
+cited source:
+\begin{enumerate}
+\item The cutoff is placed at the assay limit of detection,
+$10~\mathrm{CFU/mL}$, and not at one organism in the compartment volume.
+Populations below the cutoff are treated as eradicated, not merely
+unobserved.
+\item An extinct population returns only when transferred organisms
+accumulate to the LOD.
+\item While they accumulate, those transferred organisms are protected. They
+are not subject to antibiotic killing, immune clearance, or any other loss, so
+the accumulated amount can only increase, and it is retained even if the donor
+population later becomes extinct. This favors reseeding: arrivals that
+treatment or the immune response might have removed are all counted toward
+reactivation.
+\end{enumerate}
+
+\section{Event location at the limit of detection}
+\label{sec:event-location}
+
+Extinction and reactivation at the LOD are handled inside each simulation by
+event location. This procedure acts on \emph{time}, within a single
+simulation. It is separate from the determination of the transition points
+in Section~\ref{sec:transition}, which acts on a \emph{parameter}, across
+simulations.
+
+The crossings are found with the event detection built into
+\texttt{solve\_ivp} \cite{2020SciPy-NMeth}. Each of the four populations $y_i$
+is given an event function
+\begin{equation}
+g_i(t)=y_i(t)-\LOD.
+\label{eq:lod-event}
+\end{equation}
+\begin{enumerate}
+\item \textbf{Direction.} A detectable population is watched only for a
+downward crossing of $g_i$ (extinction). An extinct population is watched
+only for an upward crossing (reactivation).
+\item \textbf{Detection.} \texttt{solve\_ivp} compares the sign of $g_i$ at
+the two ends of every integration step. A crossing is noticed only when the
+sign differs between them.
+\item \textbf{Location in time.} When $g_i$ changes sign within an
+integration step, \texttt{solve\_ivp} applies \texttt{brentq} to $g_i$ over
+that step, evaluating the solution with the integrator's continuous
+interpolant. The tolerance is four units of machine precision (SciPy 1.17.1,
+\path{scipy/integrate/_ivp/ivp.py}, \texttt{solve\_event\_equation}).
+Because $g_i$ is continuous in time and changes sign over the step, a true
+root exists.
+\item \textbf{Reset and restart.} Every event is terminal. Integration stops
+at the crossing time; an extinct population is set to exactly zero and a
+reactivated one is restarted at $\LOD(1+10^{-6})$, a small offset that keeps
+it from re-triggering the event immediately. Integration then resumes from
+that time. The trajectory is therefore a sequence of continuous segments
+separated by discrete resets \cite{Enright1988,ShampineThompson2000}.
+\item \textbf{Safeguard.} More than 10\,000 events in one simulation raises an
+error instead of returning a trajectory.
+\end{enumerate}
+Only LOD crossings are events. Dose administration times and the change from
+vancomycin to linezolid are not; they are resolved by the 4.0~h maximum step.
+The event times themselves are not returned: the solver reports burdens on
+the output grid only, with every value below the LOD reported as zero. The
+arrivals accumulating in an extinct population are therefore invisible in the
+output until they reach the LOD.
+
+The solver does not return a trajectory it cannot vouch for. An integrator
+warning, a failed step, or a non-finite value raises an error, and an initial
+state that is negative or non-finite is rejected before integration begins.
+
+Event location therefore determines when, within one simulation, each
+population becomes extinct or is re-established. It does not determine the
+value of any parameter.
+
 \section{Two related but distinct analyses}
 
 The deterministic and Monte Carlo calculations answer different questions.
@@ -207,7 +298,11 @@ The deterministic switch helps explain the Monte Carlo percentage, but it
 does not assign the clinical outcome. Clinical outcomes are calculated from
 each patient's complete blood trajectory.
 
-\section{Deterministic switch localization with \texttt{brentq}}
+\section{Determination of transition points with Brent's method}
+\label{sec:transition}
+
+The manuscript calls the located values \emph{transition points}. This
+document also calls them \emph{switches}; the two terms mean the same thing.
 
 \subsection{The quantity being localized}
 
@@ -274,6 +369,13 @@ during follow-up. Even this is not sufficient by itself to define relapse:
 relapse additionally requires $R_b(t_L)<\LOD$, so that blood was cleared when
 linezolid ended before becoming detectable again.
 
+In the current grids the reservoir and blood classifications coincide at
+$t_f$: at every grid point of all three sweeps, the resistant blood burden at
+$t_f$ was detectable exactly when the reservoir burden was. This is an
+observed property of these runs, which is why $F$ separates resolution of the
+bacteremia from no resolution in practice. It is not part of the definition
+of $F$.
+
 \subsection{How the bracket is found}
 
 A deterministic grid is evaluated first. Adjacent values $a<b$ are selected
@@ -286,6 +388,14 @@ This establishes that the switch lies somewhere inside $[a,b]$, provided the
 classification changes only once within that interval. The grid is therefore
 used to establish direction, monotonicity, and a safe bracket; its midpoint
 is not accepted as the final switch estimate.
+
+The two groups of scripts bracket differently. The Monte Carlo scripts pass
+the adjacent grid pair to \texttt{brentq}, and only when the grid shows
+exactly one change. The dedicated deterministic sweep scripts check that the
+two ends of the grid have opposite classifications and pass the whole range.
+Both satisfy Eq.~\eqref{eq:sign-bracket}, and they return the same switch to
+within the tolerance (for example $0.76202$ and $0.76217~\mathrm{mg/L}$ for
+$\EC$).
 
 \subsection{What Brent's algorithm does}
 
@@ -306,20 +416,72 @@ new point, it discards the half of the interval that does not contain the sign
 change. Repetition contracts the bracket until its width satisfies the
 requested absolute parameter tolerance.
 
-The dedicated deterministic scripts use an absolute tolerance of $10^{-3}$
-in the corresponding parameter units. The immune Monte Carlo script uses a
-tighter $10^{-6}~\mathrm{h}^{-1}$ tolerance for its displayed switch. These
-differences are smaller than the two-significant-figure precision used to
-report the transitions.
+The absolute tolerance is $10^{-3}$ for $\EC$ (mg/L) and $\EM$
+($\mathrm{h}^{-1}$), and $10^{-6}~\mathrm{h}^{-1}$ for $\KI$, in both the
+deterministic sweep script and the Monte Carlo script for each parameter. The
+search stops when the width of the bracket falls below the tolerance, so the
+reported value lies within the tolerance of the switch. Transitions are
+reported to two significant figures, except $\EM$, which is reported to
+three ($1.85~\mathrm{h}^{-1}$) because its narrow sampling distribution makes
+the difference between 1.85 and 1.9 material.
+
+\subsection{How this differs from event location}
+
+Determining a transition point is distinct from the event location of
+Section~\ref{sec:event-location}; Table~\ref{tab:event-vs-transition}
+compares them. Event location finds a time within one simulation and is
+followed by a change of the equations and a restart of the integration. The
+transition search finds a parameter value across simulations: each evaluation
+of $F$ is one complete simulation, including all of its event locations, and
+nothing is switched or restarted.
+
+The two procedures share only the root-finding algorithm.
+\texttt{solve\_ivp} calls \texttt{brentq} on $g_i$ internally;
+\path{solver.py} never calls it. The analysis scripts call \texttt{brentq}
+on $F$ explicitly. They differ in what the algorithm can deliver: $g_i$ is
+continuous in time, so a root is found, whereas $F$ is discontinuous in
+$\theta$, so the search localizes a change of outcome and not a root. The two
+are connected in one direction only: the reset to zero at the LOD within each
+simulation is what makes $F$ discontinuous.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+ & Event location & Transition point \\
+\midrule
+Scope & Within one simulation & Across simulations \\
+Unknown & Time of an LOD crossing & Parameter value $\theta$ \\
+Function & $g_i(t)$, Eq.~\eqref{eq:lod-event} & $F(\theta)$, Eq.~\eqref{eq:brent-objective} \\
+Continuity & Continuous in $t$ & Discontinuous in $\theta$ \\
+Result & A root, $g_i=0$ & Location of a change of sign \\
+Action that follows & Equations switched, integration restarted & None; the value is reported \\
+Who calls \texttt{brentq} & \texttt{solve\_ivp}, internally & The analysis scripts \\
+\bottomrule
+\end{tabular}
+\caption{Event location at the limit of detection compared with the
+determination of a transition point. Both use Brent's method, but for
+different purposes.}
+\label{tab:event-vs-transition}
+\end{table}
 
 \subsection{Important limitation: this is a discontinuous boundary}
 
 The SciPy documentation specifies continuity as an assumption for
 \texttt{brentq} \cite{scipyBrentq}. Equation~\eqref{eq:brent-objective} is
-not continuous under the hard-LOD rule: terminal burden can jump from zero to
-thousands of CFU/mL without ever taking the value 10~CFU/mL. Consequently,
-the usual theorem that Brent's method converges to a root satisfying
-$F(\theta)=0$ does not apply here.
+not continuous under the hard-LOD rule. On the clearance side the reservoir
+burden at $t_f$ is exactly zero, so $F=-\LOD$; on the persistence side the
+reservoir has regrown toward its carrying capacity and $F$ is of order $10^{6}$
+to $10^{7}$~CFU/mL. $F$ takes no value in between, so no $\theta$ in the bracket
+satisfies $F(\theta)=0$. Consequently, the usual theorem that Brent's method
+converges to a root satisfying $F(\theta)=0$ does not apply here.
+
+The method is still applicable. Its termination does not depend on
+continuity: the bisection safeguard reduces the bracket to the requested
+width while $F$ keeps opposite signs at the two endpoints
+\cite{Brent1971,brent1973}. Continuity is needed only for the further
+conclusion that the final bracket contains a zero.
 
 In this analysis, \texttt{brentq} is used as a bracket-contraction procedure
 that numerically localizes a binary clearance--persistence change. The result
@@ -344,7 +506,7 @@ course, a finite observation time, and discrete LOD events.
 Parameter & Grid & Points & Persistence side & Reported switch \\
 \midrule
 $\EC$ & $0.05$--$3.3~\mathrm{mg/L}$ & 131 & above & $0.76~\mathrm{mg/L}$ \\
-$\EM$ & $0.70$--$2.2~\mathrm{h}^{-1}$ & 111 & below & $1.9~\mathrm{h}^{-1}$ \\
+$\EM$ & $0.70$--$2.2~\mathrm{h}^{-1}$ & 111 & below & $1.85~\mathrm{h}^{-1}$ \\
 $\KI$ & $0.02$--$0.65~\mathrm{h}^{-1}$ & 127 & below & $0.093~\mathrm{h}^{-1}$ \\
 \bottomrule
 \end{tabular}
@@ -573,7 +735,7 @@ persistence-prone group.
 
 \paragraph{Linezolid E-max.}\mbox{}\par
 Decreasing $\EM$ lowers the maximum killing capacity. The reported switch is
-$1.9~\mathrm{h}^{-1}$, and the sampling distribution has arithmetic mean
+$1.85~\mathrm{h}^{-1}$, and the sampling distribution has arithmetic mean
 $1.97~\mathrm{h}^{-1}$ and CV 0.080. Because this distribution is narrow, a
 small raw separation between the mean and switch can still correspond to a
 substantial standardized distance and tail probability.
@@ -619,8 +781,7 @@ The principal figures are:
       \path{mc_emax_lzd_sweep_kinetics.png}, and
       \path{mc_immune_response.png};
 \item the three corresponding switch/population figures; and
-\item \path{distribution_to_switch.png}, \path{stacked_outcomes.png}, and
-      \path{relapse_time_curve.png}.
+\item \path{distribution_to_switch.png} and \path{relapse_time_curve.png}.
 \end{itemize}
 
 \section{Interpretive cautions}

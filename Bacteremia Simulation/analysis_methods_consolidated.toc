@@ -1,0 +1,34 @@
+\contentsline {section}{\numberline {1}Purpose and scope}{2}{section.1}%
+\contentsline {section}{\numberline {2}Model and treatment protocol}{2}{section.2}%
+\contentsline {subsection}{\numberline {2.1}State variables}{2}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Drug-effect functions}{3}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}Centralized configuration}{3}{subsection.2.3}%
+\contentsline {section}{\numberline {3}Vancomycin-sensitive-strain clearance}{3}{section.3}%
+\contentsline {section}{\numberline {4}Numerical integration and the hard LOD}{4}{section.4}%
+\contentsline {subsection}{\numberline {4.1}The hard LOD is a modeling assumption}{5}{subsection.4.1}%
+\contentsline {section}{\numberline {5}Event location at the limit of detection}{5}{section.5}%
+\contentsline {section}{\numberline {6}Two related but distinct analyses}{6}{section.6}%
+\contentsline {section}{\numberline {7}Determination of transition points with Brent's method}{6}{section.7}%
+\contentsline {subsection}{\numberline {7.1}The quantity being localized}{6}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}What the sign does---and does not---mean}{6}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}How the bracket is found}{7}{subsection.7.3}%
+\contentsline {subsection}{\numberline {7.4}What Brent's algorithm does}{7}{subsection.7.4}%
+\contentsline {subsection}{\numberline {7.5}How this differs from event location}{8}{subsection.7.5}%
+\contentsline {subsection}{\numberline {7.6}Important limitation: this is a discontinuous boundary}{8}{subsection.7.6}%
+\contentsline {subsection}{\numberline {7.7}Current deterministic switches}{9}{subsection.7.7}%
+\contentsline {section}{\numberline {8}Monte Carlo procedure}{9}{section.8}%
+\contentsline {subsection}{\numberline {8.1}Meaning of a Monte Carlo iteration}{9}{subsection.8.1}%
+\contentsline {subsection}{\numberline {8.2}Why a mean-corrected log-normal distribution is used}{9}{subsection.8.2}%
+\contentsline {subsection}{\numberline {8.3}Exact computational sequence}{10}{subsection.8.3}%
+\contentsline {subsection}{\numberline {8.4}Clinical outcome definitions}{11}{subsection.8.4}%
+\contentsline {subsection}{\numberline {8.5}Trajectory plots and missing-value display convention}{11}{subsection.8.5}%
+\contentsline {section}{\numberline {9}From switch distance to relapse probability}{11}{section.9}%
+\contentsline {subsection}{\numberline {9.1}Why the raw distance is insufficient}{11}{subsection.9.1}%
+\contentsline {subsection}{\numberline {9.2}Choosing the correct tail}{12}{subsection.9.2}%
+\contentsline {subsection}{\numberline {9.3}Current distance and outcome calculations}{12}{subsection.9.3}%
+\contentsline {section}{\numberline {10}Analysis-specific interpretation and verified results}{12}{section.10}%
+\contentsline {paragraph}{Linezolid EC50.}{13}{section*.2}%
+\contentsline {paragraph}{Linezolid E-max.}{13}{section*.3}%
+\contentsline {paragraph}{Immune response.}{13}{section*.4}%
+\contentsline {section}{\numberline {11}Reproducibility map}{13}{section.11}%
+\contentsline {section}{\numberline {12}Interpretive cautions}{14}{section.12}%
