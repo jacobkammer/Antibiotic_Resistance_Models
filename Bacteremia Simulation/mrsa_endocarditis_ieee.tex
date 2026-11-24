@@ -15,6 +15,7 @@
 \usepackage{url}
 \usepackage{microtype}
 \usepackage{subcaption}
+\usepackage{placeins} % \FloatBarrier before the end sections
 \usepackage{hyperref}
 \usepackage{cleveref} % must load after hyperref
 \DeclareSIUnit{\CFU}{CFU}
@@ -845,6 +846,12 @@ used a single fixed treatment protocol throughout, with no exploration
 of missed doses, alternative dosing regimens, or source control (e.g.
 surgical debridement or hardware removal), all of which materially
 affect outcomes in real bone and endocarditis infections.
+
+% Flush any figures/tables still waiting so they come before the end sections
+% and references. Breaks the page only when floats are pending (a plain
+% \clearpage always did, leaving a gap); TeX Live versions differ, e.g.
+% Overleaf vs. local MiKTeX, so float placement differs between them.
+\FloatBarrier
 
 %%% ---------------- End sections (IEEE style) ----------------
 %%% Check the target journal's author guidelines; some IEEE journals do not
