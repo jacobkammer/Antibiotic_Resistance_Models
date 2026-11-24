@@ -37,8 +37,9 @@ FIGURES_DIR = "figures"
 os.makedirs(FIGURES_DIR, exist_ok=True)
 
 # FIGURES PRODUCED BY THIS SCRIPT
-#   mc_immune_response.png        -- MONTE CARLO. 4-panel kinetics over 1000
-#       sampled patients, median + 5th-95th percentile band.
+#   mc_immune_response.png        -- MONTE CARLO. 2 panels: Blood (S_b + R_b)
+#       and Reservoir (S_res + R_res) over 1000 sampled patients, median +
+#       5th-95th percentile band.
 #   mc_immune_response_switch.png -- MIXED, one source per panel:
 #       top    = DETERMINISTIC  (101-point fixed-parameter sweep + Brent switch)
 #       bottom = MONTE CARLO    (1000 sampled patients, coloured by outcome)
@@ -167,28 +168,18 @@ lzd_end_d     = (VANCO_START + pk.van_duration + pk.lzd_duration) / 24.0
 N_TRACES = 40   # individual trajectories to draw per panel
 
 
-def _draw_panel(ax, history, S_or_R, compartment, color_main, y_max):
+def _draw_series(ax, history, light_color, median_color, name):
     """
-    Render one MC panel: shaded treatment windows, individual traces,
-    5th–95th band, and median line.
+    Draw one population (S or R) on a panel: individual traces, 5th-95th band
+    and median. Statistics are over ALL sampled patients; sub-LOD points are
+    NaN, so each time point summarises the patients detectable at that time.
     """
-    # Treatment shading
-    ax.axvspan(vanco_start_d, lzd_start_d, color="steelblue", alpha=0.10,
-               label="Vancomycin")
-    ax.axvspan(lzd_start_d,  lzd_end_d,   color="gold",      alpha=0.15,
-               label="Linezolid")
-    ax.axvline(lzd_end_d, color="darkgoldenrod", ls="--", lw=1.0, alpha=0.7)
-
-    # LOD reference
-    ax.axhline(LOD, color="black", ls=":", lw=0.9, alpha=0.6,
-               label=f"LOD ({int(LOD)} CFU/mL)")
-
     # Individual trajectories (random subsample)
     rng_idx = np.random.default_rng(RNG_SEEDS["MC_immune_response_traces"]).choice(
         NUM_ITER, N_TRACES, replace=False
     )
     for i in rng_idx:
-        ax.plot(t_days, history[i, :], color=color_main, alpha=0.12, lw=0.7)
+        ax.plot(t_days, history[i, :], color=light_color, alpha=0.12, lw=0.7)
 
     # Percentile band + median (suppress all-NaN warnings)
     with warnings.catch_warnings():
@@ -197,31 +188,14 @@ def _draw_panel(ax, history, S_or_R, compartment, color_main, y_max):
         p05  = np.nanpercentile(history,  5, axis=0)
         p95  = np.nanpercentile(history, 95, axis=0)
 
-    ax.fill_between(t_days, p05, p95, color=color_main, alpha=0.22,
-                    label="5th–95th pctile")
-    ax.plot(t_days, p50, color=color_main, lw=2.2, label="Median")
-
-    # Axis formatting
-    loc_tag  = "Blood"     if compartment == "blood" else "Reservoir"
-    strain   = "Sensitive" if S_or_R == "S"           else "Resistant"
-    ylabel   = "Blood Burden (CFU/mL)" if compartment == "blood" else "Reservoir Burden (CFU/mL)"
-    var_sym  = f"$S_b$"     if (S_or_R == "S" and compartment == "blood")    else \
-               f"$R_b$"     if (S_or_R == "R" and compartment == "blood")    else \
-               f"$S_{{res}}$" if (S_or_R == "S" and compartment == "reservoir") else \
-               f"$R_{{res}}$"
-
-    ax.set_yscale("log")
-    ax.set_ylim(LOD * 0.8, y_max)
-    ax.set_xlim(0, t_days[-1])
-    ax.set_xlabel("Time (Days)", fontsize=17)
-    ax.set_ylabel(ylabel, fontsize=17)
-    ax.set_title(f"{strain} — {loc_tag}  ({var_sym})", fontsize=18, fontweight="bold")
-    ax.grid(True, which="both", ls=":", alpha=0.35)
-    ax.legend(fontsize=13, loc="upper left", framealpha=0.7)
+    ax.fill_between(t_days, p05, p95, color=light_color, alpha=0.18)
+    ax.plot(t_days, p50, color=median_color, lw=2, label=f"{name} median")
 
 
-# ── 4-panel figure ────────────────────────────────────────────────────────────
-fig, axes = plt.subplots(2, 2, figsize=(14, 10), constrained_layout=True)
+# ── 2-panel figure: Blood (S_b + R_b), Reservoir (S_res + R_res) ─────────────
+# Same layout, colours and window shading as mc_ec50_lzd_sweep_kinetics.png and
+# mc_emax_lzd_sweep_kinetics.png.
+fig, axes = plt.subplots(1, 2, figsize=(16, 7))
 
 # fig.suptitle(
 #     f"Monte Carlo — Immune Response Variability\n"
@@ -230,15 +204,40 @@ fig, axes = plt.subplots(2, 2, figsize=(14, 10), constrained_layout=True)
 #     fontsize=21, fontweight="bold",
 # )
 
-_draw_panel(axes[0, 0], S_b_hist,   S_or_R="S", compartment="blood",      color_main="royalblue", y_max=1e6)
-_draw_panel(axes[0, 1], R_b_hist,   S_or_R="R", compartment="blood",      color_main="crimson",   y_max=1e6)
-_draw_panel(axes[1, 0], S_res_hist, S_or_R="S", compartment="reservoir",  color_main="royalblue", y_max=2e7)
-_draw_panel(axes[1, 1], R_res_hist, S_or_R="R", compartment="reservoir",  color_main="crimson",   y_max=2e7)
+panels = [
+    (axes[0], "Blood", 1e6, [
+        (S_b_hist, "royalblue",  "blue", "$S_b$"),
+        (R_b_hist, "lightcoral", "red",  "$R_b$"),
+    ]),
+    (axes[1], "Reservoir", 2e7, [
+        (S_res_hist, "royalblue",  "blue", "$S_{res}$"),
+        (R_res_hist, "lightcoral", "red",  "$R_{res}$"),
+    ]),
+]
 
-# Panel labels
-for label, ax in zip(["A", "B", "C", "D"], axes.flat):
-    ax.text(0.02, 0.97, label, transform=ax.transAxes,
-            fontsize=22, fontweight="bold", va="top")
+for ax, title, y_max, series in panels:
+    ax.axvspan(vanco_start_d, lzd_start_d, color="gray", alpha=0.12, label="Vancomycin")
+    ax.axvspan(lzd_start_d,  lzd_end_d,    color="gold", alpha=0.12, label="Linezolid")
+    ax.axhline(LOD, color="black", ls=":", lw=0.9, alpha=0.6,
+               label=f"LOD ({int(LOD)} CFU/mL)")
+
+    for history, lc, mc, name in series:
+        _draw_series(ax, history, lc, mc, name)
+
+    ax.set_yscale("log")
+    ax.set_ylim(LOD * 0.5, y_max)
+    ax.set_xlim(0, t_days[-1])
+    ax.set_xlabel("Time (days)", fontsize=20)
+    ax.set_ylabel("CFU/mL", fontsize=20)
+    ax.set_title(title, fontsize=21)
+    ax.tick_params(labelsize=18)
+    ax.grid(True, which="both", ls=":", alpha=0.35)
+
+# Blood legend in the empty upper left; reservoir legend lower right, matching
+# the EC50 and Emax kinetics figures.
+axes[0].legend(loc="upper left", fontsize=13, ncol=2, framealpha=0.9)
+axes[1].legend(loc="lower right", fontsize=13, ncol=1, framealpha=0.9)
+fig.tight_layout()
 
 out_file = os.path.join(FIGURES_DIR, "mc_immune_response.png")
 save_figure(fig, out_file, __file__)
@@ -277,7 +276,7 @@ frac_escape        = escaped_mask.mean()
 escaped_k_immune   = k_immune_samples[escaped_mask]
 suppressed_k_immune = k_immune_samples[~escaped_mask]
 
-# Outcome split -- quoted in manuscript10.01.tex and in
+# Outcome split -- quoted in mrsa_endocarditis_ieee.tex and in
 # threshold_changes_summary.txt, so print it rather than leaving it readable
 # only off the histogram legend below. The endpoint is bacteremia relapse,
 # matching the definition used in the other Monte Carlo analyses.
@@ -303,8 +302,8 @@ PLOT_KIM_MAX = (np.ceil(2 * ESCAPE_THRESH / 0.01) * 0.01
                 if not np.isnan(ESCAPE_THRESH) else SWEEP_MAX)
 
 fig2, (ax_top, ax_hist) = plt.subplots(
-    2, 1, figsize=(11, 8.5), sharex=True,
-    gridspec_kw={"height_ratios": [3, 1.1], "hspace": 0.08},
+    2, 1, figsize=(11, 9.5), sharex=True,
+    gridspec_kw={"height_ratios": [2.6, 1.4], "hspace": 0.08},
 )
 
 # --- Top: continuous response curve ---
@@ -329,9 +328,9 @@ ax_top.plot(sweep_k_immune, disp_sweep_R_b, color="darkred", lw=2.2,
 
 ax_top.set_yscale("log")
 ax_top.set_ylim(FLOOR * 0.8, max(sweep_R_b.max(), sweep_R_res.max()) * 3)
-ax_top.set_ylabel("Final resistant count (CFU/mL)")
+ax_top.set_ylabel("Final resistant count (CFU/mL)", fontsize=20)
 ax_top.grid(True, which="both", ls=":", alpha=0.35)
-ax_top.legend(loc="upper right", fontsize=13, framealpha=0.9)
+ax_top.legend(loc="upper right", fontsize=16, framealpha=0.9)
 
 # --- Bottom: sampled patient population by actual bacteremia outcome ---
 bin_edges = np.linspace(PLOT_KIM_MIN, PLOT_KIM_MAX, 26)
@@ -355,10 +354,15 @@ if not np.isnan(ESCAPE_THRESH):
     ax_hist.axvline(ESCAPE_THRESH, color="black", ls="--", lw=1.4)
 
 ax_hist.set_xlim(PLOT_KIM_MIN, PLOT_KIM_MAX)
-ax_hist.set_xlabel(r"$k_{immune}$ (h$^{-1}$)")
-ax_hist.set_ylabel("Cases\n(n)")
+ax_hist.set_xlabel(r"$k_{immune}$ (h$^{-1}$)", fontsize=20)
+ax_hist.set_ylabel("Cases\n(n)", fontsize=20)
 ax_hist.grid(True, axis="y", ls=":", alpha=0.35)
-ax_hist.legend(loc="upper right", fontsize=12, framealpha=0.9)
+# Headroom above the tallest bar so the legend sits over empty space
+# instead of covering the resolved-patient bars.
+ax_hist.set_ylim(0, ax_hist.get_ylim()[1] * 1.9)
+ax_hist.legend(loc="upper right", fontsize=15, framealpha=0.9)
+for _ax in (ax_top, ax_hist):
+    _ax.tick_params(labelsize=18)
 
 out_file = os.path.join(FIGURES_DIR, "mc_immune_response_switch.png")
 save_figure(fig2, out_file, __file__)

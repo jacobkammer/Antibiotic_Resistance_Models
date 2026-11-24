@@ -160,14 +160,25 @@ def _run_cohort(parameter, values):
 
 
 def _plot_distributions(samples, switches):
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5.8))
+    """One single-panel figure per parameter, so each can be printed full
+    width with readable fonts (previously a cramped 1x3 panel)."""
+    # (parameter, x label, persistence-side tail, title, legend location,
+    #  output file). Legend locations sit in each panel's empty region; the
+    #  z/tail text box always occupies the upper right.
     specifications = (
-        ("EC50_L", r"$EC_{50,L}$ (mg/L)", "upper"),
-        ("Emax_l", r"$E_{max,L}$ (h$^{-1}$)", "lower"),
-        ("k_immune", r"$k_{immune}$ (h$^{-1}$)", "lower"),
+        ("EC50_L", r"$EC_{50,L}$ (mg/L)", "upper",
+         r"Linezolid $EC_{50,L}$ Distribution Relative to the Persistence Transition",
+         "center right", "distribution_to_switch_ec50.png"),
+        ("Emax_l", r"$E_{max,L}$ (h$^{-1}$)", "lower",
+         r"Linezolid $E_{max,L}$ Distribution Relative to the Persistence Transition",
+         "upper left", "distribution_to_switch_emax.png"),
+        ("k_immune", r"$k_{immune}$ (h$^{-1}$)", "lower",
+         r"$k_{immune}$ Distribution Relative to the Persistence Transition",
+         "center right", "distribution_to_switch_immune.png"),
     )
 
-    for ax, (parameter, xlabel, tail_direction) in zip(axes, specifications):
+    for parameter, xlabel, tail_direction, title, legend_loc, filename in specifications:
+        fig, ax = plt.subplots(figsize=(10, 6.5))
         values = samples[parameter]
         mean, cv = SAMPLING[parameter]
         switch = switches[parameter]
@@ -184,7 +195,7 @@ def _plot_distributions(samples, switches):
         ax.hist(values, bins=45, density=True, color="#9fbad0", alpha=0.52,
                 edgecolor="white", linewidth=0.4, label="Monte Carlo sample")
         ax.plot(x, density, color=COLORS["density"], lw=2.2,
-                label="Calibrated density")
+                label="Log-normal density")
         ax.fill_between(x, 0, density, where=tail_mask, color=COLORS["tail"],
                         alpha=0.30, label="Persistence-side tail")
         ax.axvline(mean, color=COLORS["mean"], lw=2, ls="-.",
@@ -197,20 +208,20 @@ def _plot_distributions(samples, switches):
         ax.text(0.97, 0.95,
                 f"{distance_text}\nTheoretical tail = {100*theoretical:.1f}%\n"
                 f"Realized tail = {100*realized:.1f}%",
-                transform=ax.transAxes, ha="right", va="top", fontsize=11,
+                transform=ax.transAxes, ha="right", va="top", fontsize=14,
                 bbox={"boxstyle": "round,pad=0.35", "facecolor": "white", "alpha": 0.9})
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel("Probability density")
+        ax.set_xlabel(xlabel, fontsize=16)
+        ax.set_ylabel("Probability density", fontsize=16)
+        ax.tick_params(labelsize=14)
+        ax.set_title(title, fontsize=16)
         ax.grid(True, ls=":", alpha=0.35)
-        ax.legend(fontsize=9, loc="best")
+        ax.legend(fontsize=13, loc=legend_loc, framealpha=0.9)
 
-    fig.suptitle("Calibrated Parameter Distributions Relative to Persistence Transitions",
-                 fontsize=18, fontweight="bold")
-    fig.tight_layout()
-    output = os.path.join(FIGURES_DIR, "distribution_to_switch.png")
-    save_figure(fig, output, __file__)
-    plt.close(fig)
-    print(f"Saved: {output}")
+        fig.tight_layout()
+        output = os.path.join(FIGURES_DIR, filename)
+        save_figure(fig, output, __file__)
+        plt.close(fig)
+        print(f"Saved: {output}")
 
 
 def _plot_relapse_times(results):
@@ -232,12 +243,12 @@ def _plot_relapse_times(results):
 
     ax.set_xlim(0, follow_up_days)
     ax.set_ylim(0, 35)
-    ax.set_xlabel("Days after linezolid completion")
-    ax.set_ylabel("Cumulative bacteremia relapse (%)")
-    ax.set_title("Timing of Post-Linezolid Bacteremia Relapse",
-                 fontsize=17, fontweight="bold")
+    ax.set_xlabel("Days after linezolid completion", fontsize=18)
+    ax.set_ylabel("Cumulative bacteremia relapse (%)", fontsize=18)
+    ax.tick_params(labelsize=16)
+    ax.set_title("Timing of Post-Linezolid Bacteremia Relapse", fontsize=19)
     ax.grid(True, ls=":", alpha=0.4)
-    ax.legend(loc="best")
+    ax.legend(loc="center right", fontsize=16, framealpha=0.9)
     fig.tight_layout()
     output = os.path.join(FIGURES_DIR, "relapse_time_curve.png")
     save_figure(fig, output, __file__)

@@ -36,8 +36,9 @@ FIGURES_DIR = "figures"
 os.makedirs(FIGURES_DIR, exist_ok=True)
 
 # FIGURES PRODUCED BY THIS SCRIPT
-#   mc_emax_lzd_sweep_kinetics.png -- MONTE CARLO. 4 panels (S_b, R_b, S_res,
-#       R_res); 1000 sampled patients, median + 5th-95th percentile band.
+#   mc_emax_lzd_sweep_kinetics.png -- MONTE CARLO. 2 panels: Blood (S_b + R_b)
+#       and Reservoir (S_res + R_res); 1000 sampled patients, median +
+#       5th-95th percentile band.
 #       Mirrors mc_ec50_lzd_sweep_kinetics.png for direct comparison.
 #   mc_emax_lzd_switch.png -- MIXED, one source per panel:
 #       top    = DETERMINISTIC  (111-point fixed-parameter sweep + brentq root)
@@ -214,58 +215,69 @@ def style_kinetic(ax, title, ylabel, ylim_top): # formats a kinetic (bacterial c
     ax.set_yscale("log")
     ax.set_ylim(LOD * 0.5, ylim_top)
     ax.set_xlim(0, t_days[-1])   # shared time axis, so all four panels align
-    ax.set_xlabel("Time (days)")
-    ax.set_ylabel(ylabel)
-    ax.set_title(title, fontsize=17)
+    ax.set_xlabel("Time (days)", fontsize=20)
+    ax.set_ylabel(ylabel, fontsize=20)
+    ax.set_title(title, fontsize=21)
+    ax.tick_params(labelsize=18)
     ax.grid(True, which="both", ls=":", alpha=0.35)
     ax.legend(loc="upper left", fontsize=13, ncol=2)
 
 
 # ---------------------------------------------------------------------------
-# FIGURE: 4-panel trajectory kinetics -- S_b, R_b, S_res, R_res.
-# Mirrors mc_ec50_lzd_sweep_kinetics.png exactly (same layout, colours, band
-# definition and sub-LOD handling), but over the Emax_l sample rather than
-# the EC50_L one, so the two are directly comparable side by side.
+# FIGURE: 2-panel trajectory kinetics -- Blood (S_b + R_b), Reservoir
+# (S_res + R_res). Mirrors mc_ec50_lzd_sweep_kinetics.png exactly (same layout,
+# colours, band definition and sub-LOD handling), but over the Emax_l sample
+# rather than the EC50_L one, so the two are directly comparable side by side.
 # ---------------------------------------------------------------------------
-fig0, axes0 = plt.subplots(2, 2, figsize=(14, 10))
+fig0, axes0 = plt.subplots(1, 2, figsize=(16, 7))
 #fig0.suptitle(r"Bacterial Kinetics — Monte Carlo sweep of $E_{max,L}$ (linezolid)",
               #fontsize=19, fontweight="bold")
 
+n_escaped = int(escaped_mask.sum())
 panels = [
-    (axes0[0, 0], S_b_hist,   "royalblue",  "blue", "Sensitive Blood ($S_b$)",         1e6),
-    (axes0[0, 1], R_b_hist,   "lightcoral", "red",  "Resistant Blood ($R_b$)",         1e6),
-    (axes0[1, 0], S_res_hist, "royalblue",  "blue", "Sensitive Reservoir ($S_{res}$)", 2e7),
-    (axes0[1, 1], R_res_hist, "lightcoral", "red",  "Resistant Reservoir ($R_{res}$)", 2e7),
+    (axes0[0], "Blood", 1e6, [
+        (S_b_hist, "royalblue",  "blue", "$S_b$"),
+        (R_b_hist, "lightcoral", "red",  "$R_b$"),
+    ]),
+    (axes0[1], "Reservoir", 2e7, [
+        (S_res_hist, "royalblue",  "blue", "$S_{res}$"),
+        (R_res_hist, "lightcoral", "red",  "$R_{res}$"),
+    ]),
 ]
 
-for ax, hist, lc, mc, title, ylim in panels:
+for ax, title, ylim, series in panels:
     annotate_windows(ax)
 
-    # sub-LOD values are stored as 0.0 by the MC loop above; map them to NaN so
-    # the log axis shows gaps rather than a floor line
-    for j in range(min(20, NUM_ITERATIONS)):
-        tr = np.where(hist[j] == 0, np.nan, hist[j])
-        ax.plot(t_days, tr, color=lc, alpha=0.12, lw=0.8)
+    for hist, lc, mc, name in series:
+        # sub-LOD values are stored as 0.0 by the MC loop above; map them to NaN so
+        # the log axis shows gaps rather than a floor line
+        for j in range(min(20, NUM_ITERATIONS)):
+            tr = np.where(hist[j] == 0, np.nan, hist[j])
+            ax.plot(t_days, tr, color=lc, alpha=0.12, lw=0.8)
 
-    # Summarise over the RELAPSED patients (escaped_mask) only. Taking the median over all 1000
-    # rows makes the post-treatment relapse vanish from the plot: sub-LOD values
-    # are stored as 0, relapse is a minority outcome, so the all-patient median is
-    # 0 (-> NaN) exactly where the relapse happens. Restricting to relapsed rows
-    # and using nanmedian keeps the relapse visible and states its n in the
-    # legend. Sub-LOD points within that subset become NaN, so a gap here means
-    # "not detectable in any relapsed patient", not "no data".
-    esc = np.where(hist[escaped_mask] == 0, np.nan, hist[escaped_mask])
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")   # all-NaN slices are expected on drug
-        med  = np.nanmedian(esc, axis=0)
-        lo5  = np.nanpercentile(esc,  5, axis=0)
-        hi95 = np.nanpercentile(esc, 95, axis=0)
+        # Summarise over the RELAPSED patients (escaped_mask) only. Taking the median over all 1000
+        # rows makes the post-treatment relapse vanish from the plot: sub-LOD values
+        # are stored as 0, relapse is a minority outcome, so the all-patient median is
+        # 0 (-> NaN) exactly where the relapse happens. Restricting to relapsed rows
+        # and using nanmedian keeps the relapse visible and states its n in the
+        # legend. Sub-LOD points within that subset become NaN, so a gap here means
+        # "not detectable in any relapsed patient", not "no data".
+        esc = np.where(hist[escaped_mask] == 0, np.nan, hist[escaped_mask])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")   # all-NaN slices are expected on drug
+            med  = np.nanmedian(esc, axis=0)
+            lo5  = np.nanpercentile(esc,  5, axis=0)
+            hi95 = np.nanpercentile(esc, 95, axis=0)
 
-    ax.fill_between(t_days, lo5, hi95, color=lc, alpha=0.18)
-    ax.plot(t_days, med, color=mc, lw=2,
-            label=f"Median of escaped (n={int(escaped_mask.sum())})")
+        ax.fill_between(t_days, lo5, hi95, color=lc, alpha=0.18)
+        ax.plot(t_days, med, color=mc, lw=2,
+                label=f"{name} median of escaped (n={n_escaped})")
 
     style_kinetic(ax, title, "CFU/mL", ylim)
+
+# Reservoir legend: lower right, smaller font.
+axes0[1].legend(loc="lower right", fontsize=13, ncol=1, framealpha=0.9)
+axes0[0].legend(loc="upper left",  fontsize=13, ncol=2, framealpha=0.9)  # match font size
 
 fig0.tight_layout()
 out_file = os.path.join(FIGURES_DIR, "mc_emax_lzd_sweep_kinetics.png")
@@ -292,8 +304,8 @@ relapse_emax    = emax_l_samples[escaped_mask]
 persistent_emax = emax_l_samples[persistent_bacteremia]
 
 fig1, (ax_top, ax_hist) = plt.subplots(
-    2, 1, figsize=(11, 8.5), sharex=True,
-    gridspec_kw={"height_ratios": [3, 1.1], "hspace": 0.08},
+    2, 1, figsize=(11, 9.5), sharex=True,
+    gridspec_kw={"height_ratios": [2.6, 1.4], "hspace": 0.08},
 )
 #fig1.suptitle(r"Resistant Bacteremia Outcomes vs $Emax_L$ (linezolid)",
               #fontsize=19, fontweight="bold")
@@ -303,7 +315,7 @@ ax_top.axvspan(SWEEP_MIN, ESCAPE_THRESH, color=REGIME_COLORS["escape"],     alph
 ax_top.axvspan(ESCAPE_THRESH, SWEEP_MAX, color=REGIME_COLORS["suppressed"], alpha=0.10)
 ax_top.axhline(LOD, color="black", ls=":", lw=1.0, alpha=0.7, label=f"LOD ({int(LOD)} CFU/mL)")
 ax_top.axvline(ESCAPE_THRESH, color="black", ls="--", lw=1.4,
-               label=fr"Switch ($Emax_L$ = {ESCAPE_THRESH:.3g})")
+               label=fr"Switch ($E_{{max,L}}$ = {ESCAPE_THRESH:.3g})")
 
 ax_top.plot(sweep_emax, disp_sweep_R_res, color="indianred", lw=2.2,
             label="Final $R_{res}$ (reservoir)")
@@ -312,9 +324,12 @@ ax_top.plot(sweep_emax, disp_sweep_R_b, color="darkred", lw=2.2,
 
 ax_top.set_yscale("log")
 ax_top.set_ylim(FLOOR * 0.8, max(sweep_R_b.max(), sweep_R_res.max()) * 3)
-ax_top.set_ylabel("Final resistant count (CFU/mL)")
+ax_top.set_ylabel("Final resistant count (CFU/mL)", fontsize=20)
 ax_top.grid(True, which="both", ls=":", alpha=0.35)
-ax_top.legend(loc="upper right", fontsize=13, framealpha=0.9)
+# Left side, tucked between the final-R_res plateau (~1e7) and the final-R_b
+# plateau (~5e3) so it covers neither curve nor the switch line on the right.
+ax_top.legend(loc="upper left", bbox_to_anchor=(0.01, 0.91), fontsize=16,
+              framealpha=0.9)
 
 # --- Bottom: where the sampled patient population falls, by actual outcome ---
 bin_edges = np.linspace(SWEEP_MIN, SWEEP_MAX, 31)
@@ -336,10 +351,12 @@ ax_hist.hist(
 ax_hist.axvline(ESCAPE_THRESH, color="black", ls="--", lw=1.4)
 
 ax_hist.set_xlim(SWEEP_MIN, SWEEP_MAX)
-ax_hist.set_xlabel(r"$Emax_L$ (h$^{-1}$)")
-ax_hist.set_ylabel("Cases\n(n)")
+ax_hist.set_xlabel(r"$E_{max,L}$ (h$^{-1}$)", fontsize=20)
+ax_hist.set_ylabel("Cases\n(n)", fontsize=20)
 ax_hist.grid(True, axis="y", ls=":", alpha=0.35)
-ax_hist.legend(loc="upper right", fontsize=12, framealpha=0.9)
+ax_hist.legend(loc="upper left", fontsize=15, framealpha=0.9)  # low-Emax side is empty
+for _ax in (ax_top, ax_hist):
+    _ax.tick_params(labelsize=18)
 
 out_file = os.path.join(FIGURES_DIR, "mc_emax_lzd_switch.png")
 save_figure(fig1, out_file, __file__)
@@ -353,7 +370,7 @@ print(f"\n--- Sweep: Emax_l varied (sampling mean={EMAX_L_MEAN:.3f}) ---")
 print(f"  Emax_l sampled  median={np.median(emax_l_samples):.3f}  "
       f"[5th={np.percentile(emax_l_samples, 5):.3f}, "
       f"95th={np.percentile(emax_l_samples, 95):.3f}]")
-# Outcome split -- quoted in manuscript10.01.tex and in
+# Outcome split -- quoted in mrsa_endocarditis_ieee.tex and in
 # threshold_changes_summary.txt, so print it rather than leaving it readable
 # only off the histogram legend in mc_emax_lzd_switch.png. Note the sense is
 # inverted relative to EC50_L: here relapse is Emax_l BELOW the threshold.
