@@ -1,0 +1,49 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Antibiotic_Resistance_Models: MRSA endocarditis PK/PD simulation code"
+abstract: >-
+  Dual-compartment pharmacokinetic/pharmacodynamic model of MRSA endocarditis
+  seeded from a bone reservoir, with Monte Carlo virtual-patient cohorts and
+  Brent's-method transition points for linezolid EC50, linezolid Emax, and
+  immune clearance.
+type: software
+authors:
+  - family-names: Kammer
+    given-names: Jacob W.
+    affiliation: "Department of Mathematics and Statistical Science, University of Idaho"
+    # orcid: "https://orcid.org/0000-0000-0000-0000"
+  - family-names: Udekwu
+    given-names: Klas
+    affiliation: "Department of Biological Science, University of Idaho"
+  - family-names: Hernandez-Vargas
+    given-names: Esteban A.
+    affiliation: "Department of Mathematics and Statistical Science, University of Idaho"
+repository-code: "https://github.com/jacobkammer/Antibiotic_Resistance_Models"
+license: MIT
+version: "1.0.0"
+date-released: "2026-11-24"
+# After Zenodo archives the GitHub release, add its version DOI:
+# doi: "10.5281/zenodo.XXXXXXX"
+keywords:
+  - MRSA
+  - infective endocarditis
+  - osteomyelitis
+  - pharmacokinetics
+  - pharmacodynamics
+  - linezolid
+  - vancomycin
+  - Monte Carlo simulation
+# Once the paper is published, add it here so GitHub suggests citing it:
+# preferred-citation:
+#   type: article
+#   title: "Virtual Clinical Trial Design for Infective Endocarditis: Evaluating Antibiotic Therapy"
+#   authors:
+#     - family-names: Kammer
+#       given-names: Jacob W.
+#     - family-names: Udekwu
+#       given-names: Klas
+#     - family-names: Hernandez-Vargas
+#       given-names: Esteban A.
+#   journal: "<journal>"
+#   year: <year>
+#   doi: "<paper DOI>"

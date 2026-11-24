@@ -8,10 +8,10 @@ ec50_terminal_burden_vs_ec50.png	5cce16e52c10	EC50_lzd_threshold_sweep.py	2026-0
 emax_lzd_threshold_sweep.png	8b4a66e17b3b	Emax_lzd_threshold_sweep.py	2026-10-03T15:00:47
 emax_terminal_burden_vs_emax.png	8b4a66e17b3b	Emax_lzd_threshold_sweep.py	2026-10-03T15:00:48
 immune_response_threshold_sweep.png	48669b29dbd4	ImmuneResponse_threshold_sweep.py	2026-09-30T17:58:12
-mc_ec50_lzd_sweep_kinetics.png	16b24922c022	MC_ec50_lzd.py	2026-11-07T10:24:27
-mc_ec50_lzd_switch.png	16b24922c022	MC_ec50_lzd.py	2026-11-07T10:24:28
-mc_emax_lzd_sweep_kinetics.png	a282f8079003	MC_emax_lzd.py	2026-11-07T10:24:02
-mc_emax_lzd_switch.png	a282f8079003	MC_emax_lzd.py	2026-11-07T10:24:03
-mc_immune_response.png	4aa52bd8d92d	MC_immune_response.py	2026-11-07T10:24:19
-mc_immune_response_switch.png	4aa52bd8d92d	MC_immune_response.py	2026-11-07T10:24:20
+mc_ec50_lzd_sweep_kinetics.png	9c0d33407ff3	MC_ec50_lzd.py	2026-11-24T12:14:42
+mc_ec50_lzd_switch.png	9c0d33407ff3	MC_ec50_lzd.py	2026-11-24T12:14:43
+mc_emax_lzd_sweep_kinetics.png	befb82d73c41	MC_emax_lzd.py	2026-11-24T12:14:31
+mc_emax_lzd_switch.png	befb82d73c41	MC_emax_lzd.py	2026-11-24T12:14:32
+mc_immune_response.png	2436b52ecd54	MC_immune_response.py	2026-11-24T12:14:37
+mc_immune_response_switch.png	2436b52ecd54	MC_immune_response.py	2026-11-24T12:14:38
 relapse_time_curve.png	eedc215473ba	study_summary_figures.py	2026-11-07T10:13:13
