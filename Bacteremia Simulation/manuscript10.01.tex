@@ -48,11 +48,29 @@ agreed with the simulated cohorts. In this study the problem of endocarditis rel
 \end{abstract}
 
 \section{Introduction}
-Infective endocarditis is a disease of the endocardial surface of the heart that involves the cardiac valves and the mural endothelium \cite{Li2024}. It is an indolent infection with Staphylococcus aureus (S. aureus) and Viridans streptococci as the most common pathogens \cite{HammondHaley2023}. It is an aggressive infection with an in hospital mortality rate of 15\% to 20\% and a one-year mortality rate of 40\% \cite{Taduru2023}. Complications include congestive heart failure, thromboembolic events, perivalvular and annular abscesses \cite{murdoch2009infective}, sepsis and septic shock. Methicillin-resistant Staphylococcus aureus (MRSA) is the most common cause of bacterial endocarditis in much of the world \cite{HammondHaley2023}.    
+Infective endocarditis is a disease of the endocardial surface of the heart that involves the cardiac valves and the mural
+endothelium \cite{Li2024}. It is an indolent infection with Staphylococcus aureus (S. aureus) and Viridans streptococci as the most
+common pathogens \cite{HammondHaley2023}. It is an aggressive infection with an in hospital mortality rate of 15\% to 20\% and
+a one-year mortality rate of 40\% \cite{Taduru2023}. Complications include congestive heart failure, thromboembolic events,
+perivalvular and annular abscesses \cite{murdoch2009infective}, sepsis and septic shock.
+Methicillin-resistant Staphylococcus aureus (MRSA) is the most common cause of bacterial
+endocarditis in much of the world and typically follows an acute, destructive course with a high mortality rate.
+Methicillin-resistant \textit{S. aureus} (MRSA) accounts for
+a substantial proportion of these cases, and because MRSA is
+resistant to $\beta$-lactam antibiotics, the therapeutic options for MRSA
+endocarditis are limited \cite{HammondHaley2023}.    
 
-Vancomycin has become the cornerstone of antibiotic treatment against MRSA infective endocarditis since the 1970s, and is the first line treatment against MRSA endocarditis \cite{Minter2023}. Vancomycin, a glycopeptide, inhibits cell wall synthesis by preventing polymerization of glycan strands and cross linking between the strands via transpeptidase (PBP) \cite{murray_glycopeptides_2019}. Increased reliance on treatment with vancomycin since the 1980s has led to the development of resistant forms \cite{mcguinness2017vancomycin}. Infections of the heart values have become mixtures of MRSA sensitive and resistant to vancomycin.  Compounding the problem of resistance is the challenge of treating the original source of infection, such as orthopedic hardware, central venous catheters and infection of the bone. It is well understood that S. aureus infections can be chronic and recurrent despite appropriate antibiotic treatment \cite{Kahl2016SCV}. overarching all of these issues is the pivotal role of the immune response in resolving infections. Depending on the clinical scenario treatment failure rates can be as high as 20 to 30 percent.  All of these factors in combination pose a significant clinical challenge that will require an improved understanding.  
 
-Since the end of the 20th century newer antibiotics, such as linezolid have been developed to target the antibiotic resistant S. aureus.  Linezolid, an oxazolidinone antibiotic, has become one of the second line agents used in the treatment of vancomycin resistant MRSA endocarditis \cite{Cong2020}.  Beyond simply adding linezolid to treatment protocols an improved understanding of the factors that lead to clinical resolution (bacteremia resolved) or failure (persistent or relapsing bacteremia) is needed. Understanding how bacterial phenotypic variability, antibiotic combinations, and host factors interact will lead to improved outcomes in bacterial endocarditis.  
+
+Vancomycin has become the cornerstone of antibiotic treatment against MRSA infective endocarditis since the 1970s,
+and is the first line treatment against MRSA endocarditis \citep{Minter2023}. Vancomycin, a glycopeptide,
+inhibits cell wall synthesis by preventing polymerization of glycan strands and cross linking between the strands via
+transpeptidase (PBP) \citep{murray_glycopeptides_2019}. Increased reliance on treatment with vancomycin since the 1980s has led to the development
+of resistant forms \citep{mcguinness2017vancomycin}. Infections of the heart valves are heterogeneous populations of MRSA sensitive and
+resistant to vancomycin \citep{}{}.  Compounding the problem of resistance is the challenge of treating the original source of infection,
+such as orthopedic hardware, central venous catheters and infection of the bone. It is well understood that S. aureus infections 
+can be chronic and recurrent despite appropriate antibiotic treatment \citep{Kahl2016SCV}. Underscoring all of these issues is the pivotal
+role of the immune response in resolving infections. Depending on the clinical scenario treatment failure rates can be as high as 20 to 30 percent.  All of these factors in combination pose a significant clinical challenge that will require an improved understanding.  
 
 Mikkaichi and colleagues \cite{Mikkaichi2019} developed a mathematical model to examine the interplay of phenotypic heterogeneity
 with host factors in the persistence of MRSA bacteremia.  Mikkaichi used ensemble modeling and other ML techniques to determine
@@ -212,16 +230,23 @@ the organs and throughout the body.  There is no attenuation of bacterial killin
 Carrying capacity is shared between sensitive and resistant bacteria and represents the maximum bacterial load that can be sustained within
 the vascular compartment. The carrying capacity is based on literature estimates from \cite{nieman2022bacterial}.
 The growth rate of sensitive SA is set to 1.47 $h^{-1}$, the in vitro estimate for MRSA reported by
-Vera-Yunca and colleagues \cite{VeraYunca2025}, treating well-mixed, nutrient-replete blood as in-vitro-like.
-This value corresponds to a doubling time of 28 minutes.  The resistant SA growth rate is scaled by a 10\% fitness cost to 1.323 $h^{-1}$, doubling time of 31 minutes.
-The microbiological parameters are detailed in \cref{tab:Comparsms}.
+\citet{VeraYunca2025}.
+This value corresponds to a doubling time of $t_d = \ln 2 / \rho_s^{b} = 0.47~\mathrm{h}^{-1}$ (28 minutes).
+This value was chosen These are maximum doubling times at low bacterial density in the absence of drug and immune clearance.
+Including baseline immune clearance ($k_{immune} = 0.18~\mathrm{h}^{-1}$) gives net growth rates of 1.29 and 1.14 ${h}^{-1}$,
+corresponding to doubling times of 32 and 36 minutes for the sensitive and resistant strains, respectively.
+As the combined blood burden approaches the carrying capacity, the effective doubling time lengthens.
 
+The resistant SA growth rate is scaled by a 10\% fitness cost to 1.323 $h^{-1}$, doubling time of 31 minutes. In their review of daptomycin
+resistance, Touati and colleagues \cite{touati2021fitness}, highlight several quantitative assessments of fitness costs.
+Mean generation times increased from 29 minutes in the parental strain to 47 and 62 minutes in laboratory-derived mutants.
+The authors reported relative fitness cost rates of 15.0\%, 19.2\%, and 34.8\% across mutant/parent pairs.  Despite these substantial observed reductions, the author ultimately chose 10\% as a conservative estimate for fitness cost.
 
 \begin{figure}
     \centering
-    \includegraphics[width=1.0\linewidth]{figures/graph.png}
+    \includegraphics[width=1.0\linewidth]{figures/PK_Model.png}
     \caption{Two Compartment Model} 
-    \label{fig:graph.png}
+    \label{fig:PK_Model.png}
 \end{figure}
 
 
@@ -579,9 +604,15 @@ The majority of the simulations the vancomycin resistant SA are eradicated in th
     \centering
     \includegraphics[width=1.0\linewidth]{figures/mc_ec50_lzd_sweep_kinetics.png}
     \caption{Monte Carlo sweep of $EC_{50, L}$ ($n = 1000$): full
-    time-course kinetics for $S_b$, $R_b$, $S_{res}$, and $R_{res}$, shown
-    as individual trajectories (light), median (solid), and 5th--95th
-    percentile envelope (shaded).}
+    time-course kinetics in the blood (left; $S_b$, $R_b$) and reservoir
+    (right; $S_{res}$, $R_{res}$) compartments, with sensitive populations in
+    blue and resistant populations in red. Shown are 20 individual simulated
+    trajectories (light), the relapsed-patient median (solid), and the
+    relapsed-patient 5th--95th percentile envelope (shaded). Values below the
+    $10~\mathrm{CFU/mL}$ LOD are not plotted. Before treatment,
+    the faster-growing sensitive population outcompetes the resistant
+    population for the shared reservoir carrying capacity, so $R_{res}$
+    declines while total reservoir burden remains at capacity.}
     \label{fig:ec50_kinetics}
 \end{figure}
 
@@ -591,7 +622,13 @@ $EC_{50,L} = 0.76~\mathrm{mg/L}$.  Treatment succeeded for $EC_{50,L}$ below $0.
 \begin{figure}[H]
     \centering
     \includegraphics[width=1.0\linewidth]{figures/mc_ec50_lzd_switch.png}
-    \caption{Upper panel: Final bacterial burden in each compartment, Lower panel: Distribution of $EC_{50,L}$ values color coded with final clinical outcome.}
+    \caption{Upper panel: final resistant burden in blood ($R_b$) and
+    reservoir ($R_{res}$) at the end of follow-up from a deterministic sweep
+    of $EC_{50,L}$ with all other parameters at baseline. The dashed line
+    marks the reservoir-persistence transition ($EC_{50,L} = 0.76~\mathrm{mg/L}$);
+    values below the LOD are drawn at $5~\mathrm{CFU/mL}$. Lower panel:
+    distribution of the $n = 1000$ Monte Carlo $EC_{50,L}$ samples, stacked
+    by each simulated patient's clinical outcome.}
     \label{fig:ec50_switch_population}
 \end{figure}
 The methodology for the calculation of the transition point is detailed in Section~\ref{sec:transition}.
@@ -610,7 +647,7 @@ Published $E_{max,L}$ linezolid estimates span two distinct ranges: $0.735$-$0.7
 \begin{figure}[H]
     \centering
     \includegraphics[width=1.0\linewidth]{figures/mc_emax_lzd_sweep_kinetics.png}
-    \caption{Monte Carlo sweep of $E_{\mathrm{max}, L}$: $S_b$, $R_b$, $S_{\mathrm{res}}$ and $R_{\mathrm{res}}$, with individual relapsed trajectories (light), the relapsed-patient median (solid), and relapsed-patient 5th--95th percentile envelope (shaded).}
+    \caption{Monte Carlo sweep of $E_{\mathrm{max}, L}$ ($n = 1000$): full time-course kinetics in the blood (left; $S_b$, $R_b$) and reservoir (right; $S_{\mathrm{res}}$, $R_{\mathrm{res}}$) compartments, with sensitive populations in blue and resistant populations in red. Shown are 20 individual simulated trajectories (light), the relapsed-patient median (solid), and the relapsed-patient 5th--95th percentile envelope (shaded). Values below the $10~\mathrm{CFU/mL}$ LOD are not plotted.}
     \label{fig:emax_kinetics}
 \end{figure}
 
@@ -618,7 +655,14 @@ Lower $E_{max,L}$ values represent weaker antibiotic effect. Bacteremia resoluti
 \begin{figure}[H]
     \centering
     \includegraphics[width=1.0\linewidth]{figures/mc_emax_lzd_switch.png}
-    \caption{Upper panel: Final bacterial burden in each compartment, Lower panel: Distribution of $E_{50,L}$ values color coded with final clinical outcome.}
+    \caption{Upper panel: final resistant burden in blood ($R_b$) and
+    reservoir ($R_{res}$) at the end of follow-up from a deterministic sweep
+    of $E_{max,L}$ with all other parameters at baseline. The dashed line
+    marks the reservoir-persistence transition
+    ($E_{max,L} = 1.85~\mathrm{h}^{-1}$); values below the LOD are drawn at
+    $5~\mathrm{CFU/mL}$. Lower panel: distribution of the $n = 1000$ Monte
+    Carlo $E_{max,L}$ samples, stacked by each simulated patient's clinical
+    outcome.}
     \label{fig:emax_switch_population}
 \end{figure}
 
@@ -640,9 +684,13 @@ bacterial subpopulations \cref{fig:immune_kinetics}.
     \centering
     \includegraphics[width=1.0\linewidth]{figures/mc_immune_response.png}
     \caption{Monte Carlo sweep of $k_{immune}$ ($n = 1000$): full
-    time-course kinetics for $S_b$, $R_b$, $S_{res}$, and $R_{res}$, shown
-    as individual trajectories (light), median (solid), and 5th--95th
-    percentile envelope (shaded).}
+    time-course kinetics in the blood (left; $S_b$, $R_b$) and reservoir
+    (right; $S_{res}$, $R_{res}$) compartments, with sensitive populations in
+    blue and resistant populations in red. Shown are 40 randomly selected
+    individual simulated trajectories (light), the median (solid), and the
+    5th--95th percentile envelope (shaded), computed at each time point over
+    all simulated patients with a detectable burden. Values below the
+    $10~\mathrm{CFU/mL}$ LOD are not plotted.}
     \label{fig:immune_kinetics}
 \end{figure}
 
@@ -654,7 +702,16 @@ $k_{\mathrm{immune}} = 0.093~\mathrm{h}^{-1}$
 \begin{figure}[H]
     \centering
     \includegraphics[width=1.0\linewidth]{figures/mc_immune_response_switch.png}
-    \caption{Upper panel: Final bacterial burden each compartment, Lower panel: Distribution of $k_{immune}$ values, color coded for final outcome.}
+    \caption{Upper panel: final resistant burden in blood ($R_b$) and
+    reservoir ($R_{res}$) at the end of follow-up from a deterministic sweep
+    of $k_{immune}$ with all other parameters at baseline. The dashed line
+    marks the reservoir-persistence transition
+    ($k_{immune} = 0.093~\mathrm{h}^{-1}$); values below the LOD are drawn
+    at $5~\mathrm{CFU/mL}$. Lower panel: distribution of the $n = 1000$
+    Monte Carlo $k_{immune}$ samples, stacked by each simulated patient's
+    clinical outcome. The horizontal axis is truncated at
+    $0.19~\mathrm{h}^{-1}$ (twice the transition value); samples above it
+    all resolved.}
     \label{fig:immune_switch_population}
 \end{figure}
 
@@ -708,7 +765,7 @@ For each parameter, the standardized log-space distance between the transition p
 Table~\ref{tab:current_summary} provides the cross-parameter comparison of
 the parameter distributions (mean and CV), the transition boundaries, and simulated Monte Carlo outcomes.
 
-\Cref{fig:distribution_to_switch} visualizes the distributional calculation
+\Cref{fig:distribution_to_switch_ec50,fig:distribution_to_switch_emax,fig:distribution_to_switch_immune} visualize the distributional calculation
 behind these outcomes. Although the parameters have different units and
 coefficients of variation, each calibration places approximately one-fifth to
 three-tenths of its probability mass on the no bacteremia resolution side of the transition point.
@@ -717,27 +774,84 @@ shown together so that finite-sample variation is visible.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1.0\linewidth]{figures/distribution_to_switch.png}
-    \caption{Parameter distributions relative to their
-    transition points. Histograms show the realized Monte
-    Carlo samples, solid curves show the probability densities,
-    and red shading identifies the persistence-side tail. The panels report
-    the log-space $z$ value and corresponding normal-CDF tail probability for
-    each mean-corrected log-normal distribution.}
-    \label{fig:distribution_to_switch}
+    \includegraphics[width=0.7\linewidth]{figures/distribution_to_switch_ec50.png}
+    \caption{Distribution of linezolid $EC_{50,L}$ relative to its
+    persistence transition ($0.76~\mathrm{mg/L}$). The histogram shows the
+    $n = 1000$ Monte Carlo samples and the solid curve the mean-corrected
+    log-normal density; red shading marks the persistence-side (upper) tail.
+    The dash-dot line marks the distribution mean and the dashed line the
+    transition. The inset reports the log-space $z$ value, the normal-CDF
+    (theoretical) tail probability, and the realized fraction of samples in
+    that tail.}
+    \label{fig:distribution_to_switch_ec50}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\linewidth]{figures/distribution_to_switch_emax.png}
+    \caption{Distribution of linezolid $E_{max,L}$ relative to its
+    persistence transition ($1.85~\mathrm{h}^{-1}$). Elements are as in
+    \cref{fig:distribution_to_switch_ec50}; here the persistence-side tail
+    is the lower tail.}
+    \label{fig:distribution_to_switch_emax}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\linewidth]{figures/distribution_to_switch_immune.png}
+    \caption{Distribution of $k_{immune}$ relative to its persistence
+    transition ($0.093~\mathrm{h}^{-1}$). Elements are as in
+    \cref{fig:distribution_to_switch_ec50}; here the persistence-side tail
+    is the lower tail.}
+    \label{fig:distribution_to_switch_immune}
 \end{figure}
 
 
 
 The cumulative incidence curves in \Cref{fig:relapse_time_curve} show that
-the return of the bacteremia in the blood compartment during the 14-day follow-up occur early in the post treatment phase of the simulation.
-All three curves reach their final cohort relapse percentages within approximately two
-days after linezolid completion. The denominator is the full 1,000-patient
-cohort for each curve.
+the return of the bacteremia in the blood compartment during the 14-day follow-up occurs early in the post treatment phase of the simulation.
+The denominator is the full 1,000-patient cohort for each curve, so each curve
+plateaus at its cohort relapse percentage: 22.0\% for $EC_{50,L}$, 22.6\% for
+$E_{max,L}$, and 27.8\% for $k_{immune}$. The median time from linezolid
+completion to the first detectable resistant blood burden was 18.0~h for the
+$EC_{50,L}$ cohort and 22.1~h for both the $E_{max,L}$ and $k_{immune}$
+cohorts. The earliest relapses occurred 4.6--7.3~h after the final dose, and
+the latest occurred at 38.2~h. By 24~h after linezolid completion, 86\%, 67\%,
+and 60\% of eventual relapses had occurred in the $EC_{50,L}$, $E_{max,L}$, and
+$k_{immune}$ cohorts, respectively, and all had occurred by 48~h. No relapse
+occurred during the remaining twelve days of follow-up.
+
+This timing follows from the model structure. Relapse occurred only in
+simulations in which the resistant reservoir population was still above the
+LOD at the end of linezolid therapy. As linezolid concentrations fell after
+the final dose (elimination half-life 5.2~h), the reservoir continued to seed
+resistant bacteria into the blood, where they regrew with a net doubling time
+of approximately 36 minutes. The time to a detectable blood burden therefore
+depended on the size of the residual reservoir population: the larger the
+reservoir burden at the end of therapy, the sooner the relapse (Spearman
+$\rho = -0.65$ to $-0.68$ across the three cohorts). The $EC_{50,L}$ cohort
+retained the largest median residual reservoir burden among relapsed patients
+($6.6 \times 10^{5}~\mathrm{CFU/mL}$, compared with
+$2.2 \times 10^{5}$ for $E_{max,L}$ and $8.2 \times 10^{4}$ for $k_{immune}$)
+and relapsed earliest. Simulations
+in which the reservoir was cleared below the LOD by the end of therapy did not
+relapse at any point during follow-up. Within the model, the outcome is
+therefore effectively determined at the end of linezolid therapy, and the
+absence of relapse within the first two days of follow-up predicts sustained
+resolution.
+
+The rapid relapse predicted here should be interpreted with caution. The
+model represents reseeding as a continuous, deterministic flux from the
+reservoir and does not include the delay between bacteremia and a positive
+blood culture, intermittent release of bacteria from biofilm, or stochastic
+extinction of small populations. Each of these would be expected to delay or
+spread out the onset of clinical relapse, so the predicted timing is better
+read as the earliest point at which relapse could become detectable than as
+the expected time of clinical presentation.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1.0\linewidth]{figures/relapse_time_curve.png}
+    \includegraphics[width=0.7\linewidth]{figures/relapse_time_curve.png}
     \caption{Cumulative incidence and timing of bacteremia relapse after
     linezolid completion. Each step marks the first post-treatment return of
     resistant blood bacteria to the $10~\mathrm{CFU/mL}$ LOD. Persistent
